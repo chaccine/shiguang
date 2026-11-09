@@ -631,25 +631,52 @@ impl State {
         let version = value
             .get("version")
             .and_then(Json::as_i64)
-            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version"))?;
+            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version 或不是整数"))?;
         if version != STATE_VERSION {
             return Err(CoreError::new(
                 "STATE_VERSION_UNSUPPORTED",
                 format!("不支持的状态版本：{version}"),
             ));
         }
-        let seq = value
-            .get("seq")
-            .and_then(Json::as_i64)
-            .unwrap_or(0)
-            .max(0) as u64;
+        let seq = match value.get("seq").and_then(Json::as_i64) {
+            Some(n) if n >= 0 => n as u64,
+            Some(n) => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    format!("状态文件 seq 必须为非负整数：{n}"),
+                ))
+            }
+            None => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件缺少 seq 或不是整数",
+                ))
+            }
+        };
+        if value.get("seed").and_then(Json::as_str).is_none() {
+            return Err(CoreError::new(
+                "STATE_CORRUPT",
+                "状态文件缺少 seed 或不是字符串",
+            ));
+        }
         let records = match value.get("records") {
             Some(Json::Arr(items)) => items
                 .iter()
                 .map(RecordRow::from_json)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
-            _ => Vec::new(),
+            Some(_) => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件 records 必须是数组",
+                ))
+            }
+            None => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件缺少 records",
+                ))
+            }
         };
         Ok(State {
             version,

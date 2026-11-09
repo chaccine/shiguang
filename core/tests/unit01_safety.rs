@@ -210,7 +210,6 @@ fn t_c1_truncated_state_rejected_and_file_untouched() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交04"]
 fn t_c2_missing_fields_no_silent_default() {
     let tmp = TempRoot::new("c2");
     let png = write_asset(&tmp.path().join("input"), "c2.png", "synthetic-u01-c2");
@@ -295,7 +294,6 @@ fn t_c2_missing_fields_no_silent_default() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交04"]
 fn t_c3_out_of_range_or_duplicate_rejected() {
     let tmp = TempRoot::new("c3");
     {

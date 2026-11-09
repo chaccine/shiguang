@@ -241,7 +241,11 @@ impl<'a> Parser<'a> {
         }
         loop {
             self.skip_ws();
+            let key_pos = self.pos;
             let key = self.string()?;
+            if entries.iter().any(|(existing, _)| existing == &key) {
+                return Err(format!("JSON 对象存在重复键 {key}（byte {key_pos}）"));
+            }
             self.skip_ws();
             self.expect(b':')?;
             let value = self.value()?;
@@ -392,5 +396,17 @@ mod tests {
         assert!(parse("1.5").is_err());
         assert!(parse("{} x").is_err());
         assert!(parse("{\"a\":}").is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_keys() {
+        let err = parse("{\"a\":1,\"a\":2}").unwrap_err();
+        assert!(err.contains("重复键"), "{err}");
+        assert!(err.contains('a'), "{err}");
+        assert!(err.contains("byte"), "{err}");
+        // 嵌套对象同样拒绝
+        assert!(parse("{\"a\":{\"b\":1,\"b\":2}}").is_err());
+        // 不同键不受影响
+        assert!(parse("{\"a\":1,\"b\":2}").is_ok());
     }
 }
