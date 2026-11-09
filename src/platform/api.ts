@@ -1,4 +1,4 @@
-import type { CommitResult, Durability, RecordRow } from "../domain/types.ts";
+import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus } from "../domain/types.ts";
 
 export interface DraftFields {
   title?: string;
@@ -20,6 +20,17 @@ export interface DiscardResult { row: RecordRow | null; durability: Durability }
 
 /** Rust 命令与浏览器预览共享的契约。所有错误均以 rejection 传给调用方。 */
 export interface ShiguangApi {
+  trashRecord(recordId: string): Promise<SaveResult>;
+  restoreRecord(recordId: string): Promise<SaveResult>;
+  purgeRecord(recordId: string): Promise<PurgeResult>;
+  emptyTrash(): Promise<PurgeResult>;
+  listTrash(): Promise<RecordRow[]>;
+  resolveConflict(recordId: string, choice: ConflictChoice): Promise<SaveResult>;
+  listConflictCopies(): Promise<ConflictCopy[]>;
+  restoreConflictCopy(conflictId: string): Promise<SaveResult>;
+  mediaReport(): Promise<MediaReport>;
+  photoStatus(assetId: string): Promise<PhotoStatus>;
+  storeStatus(): Promise<StoreStatus>;
   listDrafts(): Promise<RecordRow[]>;
   listFormalRecords(): Promise<RecordRow[]>;
   getRecord(recordId: string): Promise<RecordRow>;

@@ -1,4 +1,4 @@
-import type { CommitResult, Durability, RecordRow, Snapshot } from "../domain/types.ts";
+import type { CommitResult, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus } from "../domain/types.ts";
 import { isValidDate, isValidTime, validateForCommit } from "../domain/rules.ts";
 import type { AttachPhotoBytesInput, CreateDraftInput, DiscardResult, SaveDraftInput, SaveResult, ShiguangApi } from "./api.ts";
 import { base64, sha256, sniffMediaType } from "./bytes.ts";
@@ -18,6 +18,18 @@ const normalizeTime = (value: string | null | undefined) => value?.trim() || nul
 
 /** 仅供浏览器合成数据预览；storage 由调用方注入，不接触 DOM 全局。 */
 export class MemoryAdapter implements ShiguangApi {
+  // Unit-0.4 phase 1: typed stubs, intentionally failing behavioral tests.
+  async trashRecord(_recordId: string): Promise<SaveResult> { return fail("NOT_IMPLEMENTED"); }
+  async restoreRecord(_recordId: string): Promise<SaveResult> { return fail("NOT_IMPLEMENTED"); }
+  async purgeRecord(_recordId: string): Promise<PurgeResult> { return fail("NOT_IMPLEMENTED"); }
+  async emptyTrash(): Promise<PurgeResult> { return fail("NOT_IMPLEMENTED"); }
+  async listTrash(): Promise<RecordRow[]> { return fail("NOT_IMPLEMENTED"); }
+  async resolveConflict(_recordId: string, _choice: ConflictChoice): Promise<SaveResult> { return fail("NOT_IMPLEMENTED"); }
+  async listConflictCopies(): Promise<ConflictCopy[]> { return fail("NOT_IMPLEMENTED"); }
+  async restoreConflictCopy(_conflictId: string): Promise<SaveResult> { return fail("NOT_IMPLEMENTED"); }
+  async mediaReport(): Promise<MediaReport> { return fail("NOT_IMPLEMENTED"); }
+  async photoStatus(_assetId: string): Promise<PhotoStatus> { return fail("NOT_IMPLEMENTED"); }
+  async storeStatus(): Promise<StoreStatus> { return fail("NOT_IMPLEMENTED"); }
   durabilityMode: Durability = "durable";
   private state: MemoryState = { version: 1, seq: 0, records: [], assets: {} };
   private failures = new Map<Operation, string>();
@@ -110,7 +122,7 @@ export class MemoryAdapter implements ShiguangApi {
       if (!row.formal) fail("BASE_NOT_FORMAL");
       this.draft(row); row.updatedAt = now;
     } else {
-      row = { recordId: this.id(next, "rec"), contentRevision: 0, baseRevision: 0, createdAt: now, updatedAt: now,
+      row = { status: "active", trashedAt: null, recordId: this.id(next, "rec"), contentRevision: 0, baseRevision: 0, createdAt: now, updatedAt: now,
         committedAt: null, formal: null, draft: { ...blank(), title: input.title ?? "", body: input.body ?? "",
           eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime) } };
       next.records.push(row);

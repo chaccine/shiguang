@@ -53,8 +53,41 @@ fn run() -> Result<Json, CoreError> {
     }
 
     let root = data_dir.unwrap_or_else(|| PathBuf::from(".shiguang-data"));
-    let mut store = Store::open(root)?;
     let rest = &args[1..];
+    // Test driver: announce readiness only after the requested lock is held.
+    if command == "hold-lock" {
+        let ms = rest.first().and_then(|s| s.parse::<u64>().ok())
+            .ok_or_else(|| CoreError::new("USAGE", "hold-lock <ms> [--kind instance|write]"))?;
+        let opts = Options::parse(&rest[1..])?;
+        let kind = opts.get("kind").unwrap_or("instance");
+        if kind == "write" {
+            std::fs::create_dir_all(&root)?;
+            let lock = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true).open(root.join(".write.lock"))?;
+            lock.lock()?;
+            println!("{}", Json::obj(vec![("ready", Json::Bool(true))]).dump());
+            std::io::stdout().flush()?;
+            sleep(Duration::from_millis(ms));
+            drop(lock);
+        } else if kind == "instance" {
+            let held = Store::open_exclusive(&root)?;
+            println!("{}", Json::obj(vec![("ready", Json::Bool(true))]).dump());
+            std::io::stdout().flush()?;
+            sleep(Duration::from_millis(ms));
+            drop(held);
+        } else { return Err(CoreError::new("USAGE", "kind must be instance or write")); }
+        return Ok(Json::obj(vec![("ok", Json::Bool(true))]));
+    }
+    if command == "create-draft" {
+        let opts = Options::parse(rest)?;
+        if let Some(gate) = opts.get("start-file") {
+            let start = std::time::Instant::now();
+            while !std::path::Path::new(gate).exists() {
+                if start.elapsed() > Duration::from_secs(5) { return Err(CoreError::new("TEST_TIMEOUT", "start-file")); }
+                sleep(Duration::from_millis(5));
+            }
+        }
+    }
+    let mut store = Store::open(root)?;
 
     match command.as_str() {
         "init" => Ok(Json::obj(vec![
@@ -62,6 +95,20 @@ fn run() -> Result<Json, CoreError> {
             ("dataDir", Json::str(store.root().display().to_string())),
             ("seed", Json::str(store.seed())),
         ])),
+        "create-draft" => {
+            // Batch test driver; the underlying create_draft remains unchanged in phase 1.
+            let opts = Options::parse(rest)?;
+            let count = opts.get("count").unwrap_or("1").parse::<usize>()
+                .map_err(|_| CoreError::new("USAGE", "--count must be an integer"))?;
+            for _ in 0..count {
+                store.create_draft(None, opts.get("title").unwrap_or("合成标题"), opts.get("body").unwrap_or("合成正文"), opts.get("date").unwrap_or("2026-11-09"), None)?;
+            }
+            Ok(Json::obj(vec![("ok", Json::Bool(true)), ("created", Json::Num(count as i64))]))
+        }
+        "trash" | "restore" | "purge" | "empty-trash" | "list-trash" | "reconcile"
+        | "resolve-conflict" | "list-conflicts" | "restore-conflict-copy" => {
+            Err(CoreError::new("NOT_IMPLEMENTED", command))
+        }
         "draft-new" => {
             let opts = Options::parse(rest)?;
             let base = opts.get("base");
@@ -374,6 +421,11 @@ fn usage() -> String {
         "",
         "命令:",
         "  init                                    初始化数据目录",
+        "  trash ID / restore ID / purge ID / empty-trash / list-trash",
+        "  reconcile / resolve-conflict ID --choice keepMine|keepFormal / list-conflicts",
+        "  restore-conflict-copy ID",
+        "  hold-lock <ms> [--kind instance|write]   持锁测试驱动（stdout ready 后才持锁成功）",
+        "  create-draft [--count N] [--start-file FILE]  并发测试驱动",
         "  draft-new [--title T] [--body B] [--date YYYY-MM-DD] [--time HH:MM] [--base REC]",
         "  draft-save ID [--title T] [--body B] [--date D] [--time T] [--clear-time]",
         "  attach ID --asset FILE [--caption C] [--media-type M]",

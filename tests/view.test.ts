@@ -10,6 +10,8 @@ function snap(partial: Partial<Snapshot> = {}): Snapshot {
 
 function row(partial: Partial<RecordRow> = {}): RecordRow {
   return {
+    status: "active",
+    trashedAt: null,
     recordId: "rec-000001",
     contentRevision: 0,
     createdAt: "2026-11-09T10:00:00Z",

@@ -21,3 +21,8 @@ pub mod time;
 
 pub use model::{CoreError, PhotoUse, Snapshot};
 pub use store::{CommitOutcome, Store, StoreConfig};
+
+pub mod error_codes;
+pub mod schema;
+pub use schema::CURRENT_SCHEMA_VERSION;
+pub use model::{RecordRow, RecordStatus, DeletionMarker, ConflictCopy, ConflictChoice, QuarantinedMedia, MediaIssue, MediaReport, PhotoStatus, PurgeOutcome};

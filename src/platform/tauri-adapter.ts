@@ -13,6 +13,17 @@ export interface TauriApi extends ShiguangApi {
 
 export function createTauriApi(invoke: InvokeFn): TauriApi {
   return {
+    trashRecord: (recordId) => invoke("trash_record", { recordId }),
+    restoreRecord: (recordId) => invoke("restore_record", { recordId }),
+    purgeRecord: (recordId) => invoke("purge_record", { recordId }),
+    emptyTrash: () => invoke("empty_trash"),
+    listTrash: () => invoke("list_trash"),
+    resolveConflict: (recordId, choice) => invoke("resolve_conflict", { recordId, choice }),
+    listConflictCopies: () => invoke("list_conflict_copies"),
+    restoreConflictCopy: (conflictId) => invoke("restore_conflict_copy", { conflictId }),
+    mediaReport: () => invoke("media_report"),
+    photoStatus: (assetId) => invoke("photo_status", { assetId }),
+    storeStatus: () => invoke("store_status"),
     createDraft: (input) => invoke("create_draft", { input }),
     saveDraft: (input) => invoke("save_draft", {
       input: { ...input, clearEventTime: input.clearEventTime || input.eventTime === null },

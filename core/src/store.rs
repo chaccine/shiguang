@@ -1,7 +1,7 @@
 //! 本地持久化：状态文件原子写入 + media 原图目录 + 派生预览缓存。
 
 use crate::json::{self, Json};
-use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot};
+use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot, RecordStatus, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeOutcome};
 use crate::persist::{self, Durability};
 use crate::preview;
 use crate::sha256;
@@ -52,6 +52,41 @@ pub struct CommitOutcome {
 }
 
 impl Store {
+    // Phase 1 API stubs. Existing write paths retain their baseline behavior.
+    pub fn open_exclusive(_root: impl Into<PathBuf>) -> Result<Self, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "open_exclusive"))
+    }
+    pub fn trash_record(&mut self, _record_id: &str) -> Result<RecordRow, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "trash_record"))
+    }
+    pub fn restore_record(&mut self, _record_id: &str) -> Result<RecordRow, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "restore_record"))
+    }
+    pub fn list_trash(&self) -> Result<Vec<&RecordRow>, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "list_trash"))
+    }
+    pub fn purge_record(&mut self, _record_id: &str) -> Result<PurgeOutcome, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "purge_record"))
+    }
+    pub fn empty_trash(&mut self) -> Result<PurgeOutcome, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "empty_trash"))
+    }
+    pub fn reconcile_media(&mut self) -> Result<MediaReport, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "reconcile_media"))
+    }
+    pub fn photo_status(&self, _asset_id: &str) -> Result<PhotoStatus, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "photo_status"))
+    }
+    pub fn resolve_conflict(&mut self, _record_id: &str, _choice: ConflictChoice) -> Result<RecordRow, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "resolve_conflict"))
+    }
+    pub fn list_conflict_copies(&self) -> Result<Vec<ConflictCopy>, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "list_conflict_copies"))
+    }
+    pub fn restore_conflict_copy(&mut self, _conflict_id: &str) -> Result<RecordRow, CoreError> {
+        Err(CoreError::new("NOT_IMPLEMENTED", "restore_conflict_copy"))
+    }
+
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
         let root = root.into();
         fs::create_dir_all(root.join(MEDIA_DIR))?;
@@ -178,6 +213,8 @@ impl Store {
                 photos: Vec::new(),
             };
             let row = RecordRow {
+                status: RecordStatus::Active,
+                trashed_at: None,
                 record_id,
                 content_revision: 0,
                 created_at: now.clone(),

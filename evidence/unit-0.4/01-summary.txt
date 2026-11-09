@@ -1,0 +1,26 @@
+Unit-0.4 第 1 阶段：测试先行（只用合成数据，离线；未提交 git）
+
+新增测试（共 58 项）：
+core/tests/unit04_lock.rs: 2
+core/tests/unit04_trash.rs: 12
+core/tests/unit04_schema.rs: 5
+core/tests/unit04_media.rs: 6
+core/tests/unit04_conflict.rs: 5
+core/tests/unit04_faults.rs: 3（仅 fault-injection）
+cli/tests/unit04_multiprocess.rs: 5
+tests/unit04.test.ts: 20
+
+既有测试：默认 Rust 52 PASS；含 fault-injection 的 core 61 PASS；TS 59 PASS（7 文件）。
+新增测试：Rust 默认 35 FAIL；含 fault-injection 的 core 33 FAIL；TS 20 FAIL。
+按唯一用例去重：新增 Rust 38 FAIL（core 33 + CLI 5）、TS 20 FAIL，共 58 FAIL。
+新 API 的 NOT_IMPLEMENTED、旧路径尚无 schema/写锁/故障钩子、缺少新错误中文映射导致预期失败；并非所有失败都返回 NOT_IMPLEMENTED。
+
+规定命令已执行，输出见 01-tests-first.log。Cargo 默认遇首个失败测试目标后停止，故补跑 --no-fail-fast；完整输出见 01-workspace-all-targets.log 与 01-fault-all-targets.log。
+npm test 在当前 Node 环境按文件汇总（7 PASS / 1 FAIL），补用 node 逐文件运行获取用例数，输出见 01-ts-existing-details.log、01-ts-new-details.log。
+npm run typecheck: PASS；git diff --check: PASS。
+
+既有测试唯一改动：tests/view.test.ts 的 row() 夹具增加 status: active、trashedAt: null，适配 RecordRow 新必填字段；没有改任何断言，没有调整既有调用签名。
+CLI hold-lock 与 create-draft --count/--start-file 是子进程测试驱动；写锁持有使用 std File::lock，实例锁调用 open_exclusive 桩。生产写事务仍保持基线实现。
+没有实现第 2 阶段行为，没有修改规格文档或 .github/，无新增第三方依赖。
+跨备份防复活：NOT_RUN，依赖后续 G03 导入。
+后续需处理的规格兼容问题：既有 occupied-draft 用例断言整个 state.json 字节不变，而新规格要求同一次冲突写入 conflictCopies；本阶段保留所有旧断言并用新测试表达新要求。

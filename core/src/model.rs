@@ -233,6 +233,8 @@ fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
 /// 记录的持久化形态：正式快照与草稿分字段保存。
 #[derive(Clone, Debug, Default)]
 pub struct RecordRow {
+    pub status: RecordStatus,
+    pub trashed_at: Option<String>,
     pub record_id: String,
     pub content_revision: u32,
     pub created_at: String,
@@ -251,6 +253,8 @@ impl RecordRow {
 
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("status", Json::str(self.status.as_str())),
+            ("trashedAt", self.trashed_at.as_ref().map(Json::str).unwrap_or(Json::Null)),
             ("recordId", Json::str(self.record_id.clone())),
             ("contentRevision", Json::Num(self.content_revision as i64)),
             ("createdAt", Json::str(self.created_at.clone())),
@@ -294,6 +298,9 @@ impl RecordRow {
             Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
         };
         Ok(RecordRow {
+            // Phase 1: legacy/default placeholders; strict v2 decoding follows in phase 2.
+            status: RecordStatus::Active,
+            trashed_at: None,
             record_id: req_str(value, "recordId")?,
             content_revision: req_u32(value, "contentRevision")?,
             created_at: req_str(value, "createdAt")?,
@@ -304,4 +311,54 @@ impl RecordRow {
             draft,
         })
     }
+}
+
+/// Unit-0.4 public contracts. Behavior is intentionally deferred to phase 2.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RecordStatus { #[default] Active, Trashed }
+impl RecordStatus {
+    pub fn as_str(self) -> &'static str { match self { Self::Active => "active", Self::Trashed => "trashed" } }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeletionMarker {
+    pub record_id: String,
+    pub deleted_at: String,
+    pub last_content_revision: u32,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictCopy {
+    pub conflict_id: String,
+    pub record_id: String,
+    pub base_revision: u32,
+    pub snapshot: Snapshot,
+    pub created_at: String,
+    pub reason: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictChoice { KeepMine, KeepFormal }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QuarantinedMedia {
+    pub asset_id: Option<String>,
+    pub file: String,
+    pub moved_to: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaIssue {
+    pub record_id: String,
+    pub photo_use_id: String,
+    pub asset_id: String,
+}
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MediaReport {
+    pub quarantined: Vec<QuarantinedMedia>,
+    pub missing: Vec<MediaIssue>,
+    pub corrupt: Vec<MediaIssue>,
+    pub checked_at: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PhotoStatus { Available, Missing, Corrupt }
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PurgeOutcome {
+    pub deletion_markers: Vec<DeletionMarker>,
+    pub quarantined: Vec<QuarantinedMedia>,
 }
