@@ -93,6 +93,13 @@ pub fn tree(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
             if path.is_dir() {
                 result.extend(tree(&path));
             } else {
+                // Windows 上被 File::try_lock 持有的 .instance.lock / .write.lock
+                // 无法被另一把句柄读取（ERROR_LOCK_VIOLATION）。这两份文件只是锁标记，
+                // 内容不是用户数据；跳过它们才能在三端用同一套「目录未改写」断言。
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name == ".instance.lock" || name == ".write.lock" {
+                    continue;
+                }
                 result.push((path.clone(), fs::read(path).unwrap()));
             }
         }
