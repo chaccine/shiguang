@@ -12,7 +12,8 @@
     "acceptance": "bash scripts/run_acceptance.sh",
     "preview": "npm run build && node scripts/preview-server.mjs",
     "screenshots": "npm run build && node scripts/screenshots.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "screenshots:mobile": "npm run build && node scripts/screenshots-mobile.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
