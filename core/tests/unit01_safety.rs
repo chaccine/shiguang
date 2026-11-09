@@ -386,7 +386,6 @@ fn t_c4_future_version_refused() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交05"]
 fn t_d1_tampered_asset_blocks_commit() {
     let tmp = TempRoot::new("d1");
     let png = write_asset(&tmp.path().join("input"), "d1.png", "synthetic-u01-d1");
@@ -414,7 +413,6 @@ fn t_d1_tampered_asset_blocks_commit() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交05"]
 fn t_d2_truncated_asset_blocks_commit() {
     let tmp = TempRoot::new("d2");
     let png = write_asset(&tmp.path().join("input"), "d2.png", "synthetic-u01-d2");

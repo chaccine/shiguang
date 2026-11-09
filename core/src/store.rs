@@ -322,11 +322,43 @@ impl Store {
             })?;
         draft.validate_for_commit()?;
         for photo in &draft.photos {
-            if self.find_asset_path(&photo.asset_id).is_none() {
-                return Err(CoreError::new(
+            let asset_path = self.find_asset_path(&photo.asset_id).ok_or_else(|| {
+                CoreError::new(
                     "ASSET_MISSING",
                     format!(
                         "原图缺失，拒绝提交（{} / {}）；不会用缺失的媒体生成正式记录",
+                        photo.photo_use_id, photo.asset_id
+                    ),
+                )
+            })?;
+            let bytes = fs::read(&asset_path).map_err(|e| {
+                CoreError::new(
+                    "ASSET_READ_FAILED",
+                    format!(
+                        "读取原图失败（{} / {}，{}）：{e}；正式记录未改变，草稿已保留",
+                        photo.photo_use_id,
+                        photo.asset_id,
+                        asset_path.display()
+                    ),
+                )
+            })?;
+            if bytes.len() as u64 != photo.bytes {
+                return Err(CoreError::new(
+                    "ASSET_SIZE_MISMATCH",
+                    format!(
+                        "原图字节数与记录不一致（{} / {}）：记录 {} 字节，实际 {} 字节；正式记录未改变，草稿已保留",
+                        photo.photo_use_id,
+                        photo.asset_id,
+                        photo.bytes,
+                        bytes.len()
+                    ),
+                ));
+            }
+            if sha256::hex_digest(&bytes) != photo.sha256 {
+                return Err(CoreError::new(
+                    "ASSET_HASH_MISMATCH",
+                    format!(
+                        "原图 SHA-256 与记录不一致（{} / {}）；正式记录未改变，草稿已保留",
                         photo.photo_use_id, photo.asset_id
                     ),
                 ));
@@ -388,8 +420,12 @@ impl Store {
         let entries = fs::read_dir(dir).ok()?;
         for entry in entries.flatten() {
             let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name == asset_id || name.starts_with(&format!("{asset_id}.")) {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with('.') || !path.is_file() {
+                continue;
+            }
+            // 精确匹配 `{asset_id}.{ext}`：去掉最后一个扩展名后必须恰好等于 assetId。
+            if path.file_stem().and_then(|stem| stem.to_str()) == Some(asset_id) {
                 return Some(path);
             }
         }
@@ -418,7 +454,7 @@ impl Store {
             })?;
             let bytes = fs::read(&asset_path)?;
             let sha = sha256::hex_digest(&bytes);
-            if !photo.sha256.is_empty() && sha != photo.sha256 {
+            if sha != photo.sha256 {
                 return Err(CoreError::new(
                     "ASSET_HASH_MISMATCH",
                     format!("原图 SHA 与记录不一致：{}", photo.asset_id),
