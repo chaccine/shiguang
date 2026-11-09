@@ -451,7 +451,119 @@
         border: 1px solid rgba(138, 90, 56, 0.12);
         border-radius: 12px;
       }
-      .card-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+      .card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+      .button.danger { background: var(--danger); box-shadow: 0 5px 14px rgba(165, 67, 46, 0.18); }
+      .button.danger:hover { background: #8c3827; }
+      .button.ghost.danger {
+        background: transparent;
+        color: var(--danger);
+        border-color: #e0b3a8;
+        box-shadow: none;
+      }
+      .button.ghost.danger:hover { background: #fdeee9; }
+
+      .trash-note {
+        margin: -8px 0 14px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #9b8b7b;
+      }
+
+      .conflict-panel {
+        margin: 0 0 16px;
+        padding: 14px 16px;
+        border: 1px solid #e0a08f;
+        border-radius: 14px;
+        background: #fdeee9;
+      }
+      .conflict-panel .conflict-text {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #8c3827;
+      }
+      .conflict-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+
+      .conflict-copies { margin-top: 10px; }
+      .conflict-copies h2 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        font-weight: 650;
+        color: #4b3b2f;
+      }
+      .conflict-copies .conflict-hint {
+        margin: 0 0 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .conflict-copies .timeline-card + .timeline-card { margin-top: 12px; }
+
+      .store-blocked {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(24px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+        background: radial-gradient(circle at 20% 0%, #fbf6ef 0%, var(--paper) 55%, #f1e6d9 100%);
+      }
+      .store-blocked-card {
+        width: min(100%, 430px);
+        padding: 30px 26px;
+        border: 1px solid rgba(138, 90, 56, 0.14);
+        border-radius: 20px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+      }
+      .store-blocked-card h1 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        color: var(--wood-dark);
+      }
+      .store-blocked-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.8;
+        color: #6e5d4f;
+      }
+      .store-blocked-card .store-blocked-hint {
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .confirm-dialog {
+        width: min(100% - 40px, 390px);
+        padding: 22px;
+        border: 1px solid rgba(138, 90, 56, 0.16);
+        border-radius: 18px;
+        background: var(--card);
+        color: var(--ink);
+        box-shadow: 0 24px 60px rgba(60, 51, 45, 0.22);
+      }
+      .confirm-dialog::backdrop { background: rgba(60, 51, 45, 0.38); }
+      .confirm-dialog h2 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        font-weight: 650;
+        color: #43352a;
+      }
+      .confirm-dialog p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.8;
+        color: #7c6b5c;
+      }
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
 
       @media (max-width: 760px) {
         .app-shell {
@@ -487,7 +599,7 @@
     </style>
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" id="app-shell">
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-title">拾光</div>
@@ -499,6 +611,9 @@
           </button>
           <button type="button" class="tab" data-testid="timeline-tab" role="tab" aria-selected="false">
             <span class="tab-dot"></span>时光
+          </button>
+          <button type="button" class="tab" data-testid="trash-tab" role="tab" aria-selected="false">
+            <span class="tab-dot"></span>回收站
           </button>
         </nav>
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
@@ -530,6 +645,13 @@
                 <span id="editor-badge" class="pill is-modifying editor-badge" hidden>修改中</span>
               </div>
               <div data-testid="save-status" id="save-status" class="save-status" aria-live="polite"></div>
+            </div>
+            <div id="conflict-actions" data-testid="conflict-actions" class="conflict-panel" hidden>
+              <p class="conflict-text">先核对两个版本，再选择如何处理：</p>
+              <div class="conflict-buttons">
+                <button type="button" class="button" data-testid="keep-mine" id="keep-mine">以我的草稿为准</button>
+                <button type="button" class="button ghost" data-testid="keep-formal" id="keep-formal">保留现在的正式版</button>
+              </div>
             </div>
             <div class="editor-card">
               <input id="editor-title" data-testid="editor-title" class="editor-title" type="text" maxlength="120" placeholder="给这段时光起个名字（可留空）" autocomplete="off" />
@@ -566,9 +688,39 @@
             </header>
             <div id="timeline-list" class="timeline-list"></div>
           </section>
+
+          <section id="view-trash" class="view" hidden>
+            <header class="view-head">
+              <div>
+                <h1>回收站</h1>
+                <p class="view-sub">删除的时光会先留在这里。</p>
+              </div>
+              <button type="button" class="button danger" data-testid="empty-trash-button" id="empty-trash-button">清空回收站</button>
+            </header>
+            <p class="trash-note">回收站不会自动清空，只有你手动操作才会永久删除。</p>
+            <div id="trash-list" class="timeline-list"></div>
+          </section>
         </div>
       </main>
     </div>
+
+    <div id="store-blocked" data-testid="store-blocked" class="store-blocked" hidden>
+      <div class="store-blocked-card">
+        <h1 id="store-blocked-title"></h1>
+        <p id="store-blocked-detail"></p>
+        <p class="store-blocked-hint">这里不会写入或改动任何数据。请按上面的提示处理后再重新打开拾光。</p>
+      </div>
+    </div>
+
+    <dialog id="confirm-dialog" data-testid="confirm-dialog" class="confirm-dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="button ghost" data-testid="confirm-cancel" id="confirm-cancel">取消</button>
+        <button type="button" class="button danger" data-testid="confirm-ok" id="confirm-ok">确定</button>
+      </div>
+    </dialog>
+
     <script type="module" src="./ui/main.js"></script>
   </body>
 </html>
