@@ -1,4 +1,4 @@
-import { durabilityLabel, formatEventWhen, formalHeadline } from "../domain/format.ts";
+import { conflictMessage, durabilityLabel, formatEventWhen, formalHeadline } from "../domain/format.ts";
 import { validateForCommit } from "../domain/rules.ts";
 import { formalItems } from "../domain/view.ts";
 import type { RecordRow, Snapshot } from "../domain/types.ts";
@@ -94,7 +94,7 @@ commitButton.addEventListener("click", async () => {
       eventDate: draft.eventDate,
       eventTime: draft.eventTime,
     });
-    const committed = await api.commitRecord(created.recordId);
+    const committed = await api.commitRecord(created.recordId, created.baseRevision);
     banner.hidden = false;
     banner.textContent = durabilityLabel(committed.durability);
     titleInput.value = "";
@@ -102,7 +102,7 @@ commitButton.addEventListener("click", async () => {
     timeInput.value = "";
     await refresh();
   } catch (error) {
-    errorBox.textContent = `存入失败：${errorMessage(error)}`;
+    errorBox.textContent = conflictMessage(error) ?? `存入失败：${errorMessage(error)}`;
   } finally {
     commitButton.disabled = false;
   }

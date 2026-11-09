@@ -23,7 +23,7 @@ export interface ShiguangApi {
     caption: string;
     mediaType?: string | null;
   }): Promise<RecordRow>;
-  commitRecord(recordId: string): Promise<CommitResult>;
+  commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult>;
   listFormalRecords(): Promise<RecordRow[]>;
   getRecord(recordId: string): Promise<RecordRow>;
   exportManifest(outPath: string): Promise<{ out: string; records: number }>;
@@ -36,7 +36,8 @@ export function createTauriApi(invoke: InvokeFn): ShiguangApi {
     createDraft: (input) => invoke<RecordRow>("create_draft", { input }),
     saveDraft: (input) => invoke<RecordRow>("save_draft", { input }),
     attachPhoto: (input) => invoke<RecordRow>("attach_photo", { input }),
-    commitRecord: (recordId) => invoke<CommitResult>("commit_record", { recordId }),
+    commitRecord: (recordId, expectedBaseRevision) =>
+      invoke<CommitResult>("commit_record", { recordId, expectedBaseRevision }),
     listFormalRecords: () => invoke<RecordRow[]>("list_formal_records"),
     getRecord: (recordId) => invoke<RecordRow>("get_record", { recordId }),
     exportManifest: (outPath) => invoke("export_manifest", { outPath }),

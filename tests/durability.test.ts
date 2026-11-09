@@ -15,7 +15,7 @@ test("uncertain 提交结果保留目录同步未确认提示", async () => {
     assert.equal(command, "commit_record");
     return result as T;
   });
-  const committed = await api.commitRecord(result.recordId);
+  const committed = await api.commitRecord(result.recordId, 0);
   const status = durabilityLabel(committed.durability);
   assert.equal(status, "已保存，但系统未确认写入磁盘");
   assert.notEqual(status, "已安全保存");

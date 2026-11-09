@@ -1,5 +1,11 @@
 import type { Durability, Snapshot } from "./types.ts";
 
+export function conflictMessage(error: unknown): string | null {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "REVISION_CONFLICT"
+    ? "正文已在别处更新，本地草稿已保留，未覆盖正式版"
+    : null;
+}
+
 export function durabilityLabel(d: Durability): string {
   switch (d) {
     case "durable": return "已保存";

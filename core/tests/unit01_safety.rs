@@ -1,35 +1,58 @@
 //! Unit-0.1 数据安全失败测试：断言修复后的正确行为。
 //!
-//! 当前代码上尚未修复的用例标注 `#[ignore = "U01: 修于提交NN"]`。
-//! b/f 组（提交 03）与 e 组（提交 06）需要新增 API，将在对应提交补充。
+//! b/f 组的故障注入用例见 unit01_faults.rs。
 
 use shiguang_core::json::{self, Json};
 use shiguang_core::{preview, sha256, Store};
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 
-struct TempRoot(PathBuf);
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+struct TempRoot {
+    path: PathBuf,
+    seed: Option<OsString>,
+    clock: Option<OsString>,
+    _env_guard: MutexGuard<'static, ()>,
+}
 
 impl TempRoot {
     fn new(name: &str) -> Self {
+        // 所有用例在整个生命周期共享锁，避免 e2 改时钟与其它用例读写环境竞争。
+        let guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let seed = std::env::var_os("SHIGUANG_SEED");
+        let clock = std::env::var_os("SHIGUANG_CLOCK");
         std::env::set_var("SHIGUANG_SEED", "20261109");
         std::env::set_var("SHIGUANG_CLOCK", "2026-11-09T10:00:00Z");
-        let path = std::env::temp_dir().join(format!(
-            "shiguang-u01-{}-{}",
-            std::process::id(),
-            name
-        ));
+        let path =
+            std::env::temp_dir().join(format!("shiguang-u01-{}-{}", std::process::id(), name));
         let _ = fs::remove_dir_all(&path);
-        TempRoot(path)
+        TempRoot {
+            path,
+            seed,
+            clock,
+            _env_guard: guard,
+        }
     }
     fn path(&self) -> &Path {
-        &self.0
+        &self.path
     }
 }
 
 impl Drop for TempRoot {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        let _ = fs::remove_dir_all(&self.path);
+        for (key, value) in [
+            ("SHIGUANG_SEED", &self.seed),
+            ("SHIGUANG_CLOCK", &self.clock),
+        ] {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
     }
 }
 
@@ -147,7 +170,7 @@ fn t_a2_failed_edit_draft_does_not_materialize_draft() {
         .create_draft(None, "原标题", "正式正文", "2026-11-09", None)
         .unwrap();
     let id = row.record_id.clone();
-    store.commit(&id).unwrap();
+    store.commit(&id, 0).unwrap();
 
     let err = store
         .save_draft(&id, Some("x"), None, None, Some(Some("25:99")))
@@ -221,7 +244,7 @@ fn t_c2_missing_fields_no_silent_default() {
         store
             .attach_photo(&row.record_id, &png, "c2 caption", None)
             .unwrap();
-        store.commit(&row.record_id).unwrap();
+        store.commit(&row.record_id, 0).unwrap();
     }
     let path = tmp.path().join("state.json");
     let original = fs::read_to_string(&path).unwrap();
@@ -301,7 +324,7 @@ fn t_c3_out_of_range_or_duplicate_rejected() {
         let row = store
             .create_draft(None, "", "c3 正式内容", "2026-11-09", None)
             .unwrap();
-        store.commit(&row.record_id).unwrap();
+        store.commit(&row.record_id, 0).unwrap();
     }
     let path = tmp.path().join("state.json");
     let original = fs::read_to_string(&path).unwrap();
@@ -404,7 +427,7 @@ fn t_d1_tampered_asset_blocks_commit() {
     bytes[mid] ^= 0xff;
     fs::write(&media, &bytes).unwrap();
 
-    let err = store.commit(&id).unwrap_err();
+    let err = store.commit(&id, 0).unwrap_err();
     assert_eq!(err.code, "ASSET_HASH_MISMATCH");
 
     let row = store.row(&id).unwrap();
@@ -430,10 +453,163 @@ fn t_d2_truncated_asset_blocks_commit() {
     let truncated = bytes[..bytes.len() / 2].to_vec();
     fs::write(&media, &truncated).unwrap();
 
-    let err = store.commit(&id).unwrap_err();
+    let err = store.commit(&id, 0).unwrap_err();
     assert_eq!(err.code, "ASSET_SIZE_MISMATCH");
 
     let row = store.row(&id).unwrap();
     assert!(row.formal.is_none(), "校验失败不得产生正式记录");
     assert!(row.draft.is_some(), "草稿必须保留");
+}
+
+// A 保留旧草稿，B 在磁盘上先完成下一版提交。
+fn competing_stores(root: &Path, clocks: Option<(&str, &str)>) -> (Store, Store, String) {
+    let mut a = Store::open(root).unwrap();
+    let row = a
+        .create_draft(None, "", "第一版", "2026-11-09", None)
+        .unwrap();
+    let id = row.record_id;
+    a.commit(&id, 0).unwrap();
+    a.create_draft(Some(&id), "", "", "", None).unwrap();
+    if let Some((a_clock, _)) = clocks {
+        std::env::set_var("SHIGUANG_CLOCK", a_clock);
+    }
+    a.save_draft(&id, None, Some("A版"), None, None).unwrap();
+    let mut b = Store::open(root).unwrap();
+    if let Some((_, b_clock)) = clocks {
+        std::env::set_var("SHIGUANG_CLOCK", b_clock);
+    }
+    b.save_draft(&id, None, Some("B版"), None, None).unwrap();
+    assert_eq!(b.commit(&id, 1).unwrap().content_revision, 2);
+    if let Some((a_clock, _)) = clocks {
+        std::env::set_var("SHIGUANG_CLOCK", a_clock);
+    }
+    (a, b, id)
+}
+
+fn assert_b_formal_a_draft(root: &Path, id: &str) {
+    let reopened = Store::open(root).unwrap();
+    let row = reopened.row(id).unwrap();
+    assert_eq!(row.formal.as_ref().unwrap().body, "B版");
+    assert_eq!(row.content_revision, 2);
+    assert_eq!(row.draft.as_ref().unwrap().body, "A版");
+    assert_eq!(row.base_revision, 1);
+}
+
+#[test]
+fn t_e1_stale_base_revision_conflict() {
+    let tmp = TempRoot::new("e1");
+    let (mut a, _b, id) = competing_stores(tmp.path(), None);
+    let error = a.commit(&id, 1).unwrap_err();
+    assert_eq!(error.code, "REVISION_CONFLICT");
+    assert_eq!(error.stage, Some("commit"));
+    assert!(error.message.contains("期望正式版本 1"));
+    assert!(error.message.contains("实际正式版本 2"));
+    assert_b_formal_a_draft(tmp.path(), &id);
+    let bytes = fs::read(tmp.path().join("state.json")).unwrap();
+    assert_eq!(a.commit(&id, 2).unwrap_err().code, "REVISION_CONFLICT");
+    assert_eq!(fs::read(tmp.path().join("state.json")).unwrap(), bytes);
+    assert_b_formal_a_draft(tmp.path(), &id);
+    // 重开也不能把保留下来的旧草稿升级为新基线。
+    let mut reopened = Store::open(tmp.path()).unwrap();
+    assert_eq!(
+        reopened.commit(&id, 2).unwrap_err().code,
+        "REVISION_CONFLICT"
+    );
+    assert_b_formal_a_draft(tmp.path(), &id);
+}
+
+#[test]
+fn t_e2_clock_does_not_pick_winner() {
+    for (name, a_clock, b_clock) in [
+        ("e2-a-later", "2026-11-10T10:00:00Z", "2026-11-08T10:00:00Z"),
+        ("e2-b-later", "2026-11-08T10:00:00Z", "2026-11-10T10:00:00Z"),
+    ] {
+        let tmp = TempRoot::new(name);
+        let (mut a, b, id) = competing_stores(tmp.path(), Some((a_clock, b_clock)));
+        assert_eq!(a.row(&id).unwrap().updated_at, a_clock);
+        assert_eq!(b.row(&id).unwrap().committed_at.as_deref(), Some(b_clock));
+        assert_eq!(a.commit(&id, 1).unwrap_err().code, "REVISION_CONFLICT");
+        assert_b_formal_a_draft(tmp.path(), &id);
+    }
+}
+
+#[test]
+fn t_e3_expected_base_mismatch_rejected() {
+    let tmp = TempRoot::new("e3");
+    let mut store = Store::open(tmp.path()).unwrap();
+    let row = store
+        .create_draft(None, "", "正式正文", "2026-11-09", None)
+        .unwrap();
+    let id = row.record_id;
+    store.commit(&id, 0).unwrap();
+    store.create_draft(Some(&id), "", "", "", None).unwrap();
+    store
+        .save_draft(&id, None, Some("修改草稿"), None, None)
+        .unwrap();
+    let before = store.state_json().dump();
+    let bytes = fs::read(tmp.path().join("state.json")).unwrap();
+    let error = store.commit(&id, 0).unwrap_err();
+    assert_eq!(error.code, "REVISION_CONFLICT");
+    assert_eq!(error.stage, Some("commit"));
+    assert!(error.message.contains("期望正式版本 0"));
+    assert!(error.message.contains("实际正式版本 1"));
+    assert_eq!(store.state_json().dump(), before);
+    assert_eq!(fs::read(tmp.path().join("state.json")).unwrap(), bytes);
+    let reopened = Store::open(tmp.path()).unwrap();
+    let row = reopened.row(&id).unwrap();
+    assert_eq!(row.formal.as_ref().unwrap().body, "正式正文");
+    assert_eq!(row.content_revision, 1);
+    assert_eq!(row.draft.as_ref().unwrap().body, "修改草稿");
+    assert_eq!(row.base_revision, 1);
+}
+
+#[test]
+fn conflict_with_occupied_draft_keeps_disk_and_local_memory() {
+    let tmp = TempRoot::new("e-occupied");
+    let (mut a, mut b, id) = competing_stores(tmp.path(), None);
+    b.save_draft(&id, None, Some("B的下一份草稿"), None, None)
+        .unwrap();
+    let before = a.state_json().dump();
+    let bytes = fs::read(tmp.path().join("state.json")).unwrap();
+    assert_eq!(a.commit(&id, 1).unwrap_err().code, "REVISION_CONFLICT");
+    assert_eq!(a.state_json().dump(), before);
+    assert_eq!(a.row(&id).unwrap().draft.as_ref().unwrap().body, "A版");
+    assert_eq!(fs::read(tmp.path().join("state.json")).unwrap(), bytes);
+    let reopened = Store::open(tmp.path()).unwrap();
+    let row = reopened.row(&id).unwrap();
+    assert_eq!(row.formal.as_ref().unwrap().body, "B版");
+    assert_eq!(row.draft.as_ref().unwrap().body, "B的下一份草稿");
+    assert_eq!(row.base_revision, 2);
+}
+
+#[test]
+fn transactions_reload_disk_and_reject_corruption_without_changes() {
+    let tmp = TempRoot::new("reload");
+    let mut a = Store::open(tmp.path()).unwrap();
+    let mut b = Store::open(tmp.path()).unwrap();
+    let first = a.create_draft(None, "", "A", "2026-11-09", None).unwrap();
+    let second = b.create_draft(None, "", "B", "2026-11-09", None).unwrap();
+    assert_ne!(first.record_id, second.record_id);
+    assert_eq!(
+        b.row(&first.record_id)
+            .unwrap()
+            .draft
+            .as_ref()
+            .unwrap()
+            .body,
+        "A"
+    );
+    let before = b.state_json().dump();
+    let path = tmp.path().join("state.json");
+    // 合法 JSON，但缺少严格解析所需字段。
+    let corrupt = br#"{"version":1,"seed":"20261109","records":[]}"#;
+    fs::write(&path, corrupt).unwrap();
+    assert_eq!(
+        b.save_draft(&second.record_id, None, Some("不可保存"), None, None)
+            .unwrap_err()
+            .code,
+        "STATE_CORRUPT"
+    );
+    assert_eq!(b.state_json().dump(), before);
+    assert_eq!(fs::read(&path).unwrap(), corrupt);
 }

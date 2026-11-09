@@ -184,16 +184,19 @@ fn attach_photo(
     record_value(row)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 fn commit_record(
     record_id: String,
+    expected_base_revision: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
     let mut store = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
-    let outcome = store.commit(&record_id).map_err(CommandError::from)?;
+    let outcome = store
+        .commit(&record_id, expected_base_revision)
+        .map_err(CommandError::from)?;
     to_value(Json::obj(vec![
         ("recordId", Json::str(outcome.record_id)),
         (

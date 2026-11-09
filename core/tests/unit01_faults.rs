@@ -53,7 +53,7 @@ fn t_b1_commit_replace_failure_keeps_memory_equal_disk() {
     let durability = store.last_durability().clone();
 
     fault::set(FaultPoint::Replace);
-    let err = store.commit(&id).unwrap_err();
+    let err = store.commit(&id, 0).unwrap_err();
     fault::clear();
     assert_eq!(err.code, "PERSIST_REPLACE_FAILED");
     assert_eq!(err.stage, Some("replace"));
@@ -179,7 +179,7 @@ fn commit_parent_sync_failure_keeps_committed_state() {
         .create_draft(None, "标题", "正文", "2026-11-09", None)
         .unwrap();
     fault::set(FaultPoint::ParentSync);
-    let outcome = store.commit(&row.record_id).unwrap();
+    let outcome = store.commit(&row.record_id, 0).unwrap();
     fault::clear();
     assert!(matches!(outcome.durability, Durability::Uncertain { .. }));
     assert_eq!(&outcome.durability, store.last_durability());

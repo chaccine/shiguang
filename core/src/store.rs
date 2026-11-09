@@ -114,12 +114,29 @@ impl Store {
         &mut self,
         op: impl FnOnce(&mut State) -> Result<T, CoreError>,
     ) -> Result<(T, Durability), CoreError> {
-        let mut candidate = self.state.clone();
+        let mut candidate = self.candidate_state()?;
         let value = op(&mut candidate)?;
+        let durability = self.apply_candidate(candidate)?;
+        Ok((value, durability))
+    }
+
+    fn candidate_state(&self) -> Result<State, CoreError> {
+        // 写前重载缩小跨进程丢失更新的窗口；单写者文件锁留到 g（后续阶段），
+        // 当前读取、比较、替换之间仍可能发生竞争。
+        match fs::read_to_string(self.root.join(STATE_FILE)) {
+            Ok(text) => State::from_json(&json::parse(&text).map_err(|e| {
+                CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}"))
+            })?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(self.state.clone()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn apply_candidate(&mut self, candidate: State) -> Result<Durability, CoreError> {
         let durability = self.persist_state(&candidate)?;
         self.state = candidate;
         self.last_durability = durability.clone();
-        Ok((value, durability))
+        Ok(durability)
     }
 
     /// 新建草稿；base 指向已有正式记录时，草稿从正式快照派生（正式快照保持不变）。
@@ -310,11 +327,17 @@ impl Store {
     }
 
     /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。
-    pub fn commit(&mut self, record_id: &str) -> Result<CommitOutcome, CoreError> {
+    /// 调用方预期版本和本地草稿基线均须匹配磁盘正式版本；冲突时保留本地草稿。
+    pub fn commit(
+        &mut self,
+        record_id: &str,
+        expected_base_revision: u32,
+    ) -> Result<CommitOutcome, CoreError> {
         // 校验先于任何修改：内容合法，且所有原图仍在磁盘上。
-        let draft = self
-            .state
-            .row(record_id)?
+        // 提交调用方的本地草稿及原始基线，不能用磁盘草稿替换它。
+        let local_row = self.state.row(record_id)?;
+        let base_revision = local_row.base_revision;
+        let draft = local_row
             .draft
             .clone()
             .ok_or_else(|| {
@@ -364,17 +387,39 @@ impl Store {
                 ));
             }
         }
+        let mut candidate = self.candidate_state()?;
+        let row = candidate.row_mut(record_id)?;
+        if row.content_revision != expected_base_revision || base_revision != row.content_revision {
+            let conflict = CoreError::with_stage(
+                "REVISION_CONFLICT",
+                "commit",
+                format!(
+                    "版本冲突：期望正式版本 {expected_base_revision}，实际正式版本 {}，本地草稿基于版本 {base_revision}；正式版未覆盖，本地草稿已保留",
+                    row.content_revision
+                ),
+            );
+            if row.draft.is_none() {
+                row.draft = Some(draft);
+                // 必须保留旧基线，不能让陈旧草稿被下一次提交自动升级为正式版。
+                row.base_revision = base_revision;
+                self.apply_candidate(candidate)?;
+            }
+            // 磁盘已有（不同）草稿时不写入，也不替换本地内存中的草稿。
+            // 已知限制：第二份草稿只在当前实例内存中；冲突副本存储/UI 留到后续阶段。
+            // updatedAt / committedAt / SHIGUANG_CLOCK 均不参与胜负判断。
+            return Err(conflict);
+        }
         let now = time::now_rfc3339();
-        let ((record_id, content_revision, committed_at), durability) = self.transact(|state| {
-            let row = state.row_mut(record_id)?;
-            row.content_revision = row.content_revision.saturating_add(1);
-            row.formal = Some(draft);
-            row.committed_at = Some(now.clone());
-            row.updated_at = now.clone();
-            row.draft = None;
-            row.base_revision = row.content_revision;
-            Ok((row.record_id.clone(), row.content_revision, now))
-        })?;
+        row.content_revision = row.content_revision.saturating_add(1);
+        row.formal = Some(draft);
+        row.committed_at = Some(now.clone());
+        row.updated_at = now.clone();
+        row.draft = None;
+        row.base_revision = row.content_revision;
+        let record_id = row.record_id.clone();
+        let content_revision = row.content_revision;
+        let committed_at = now;
+        let durability = self.apply_candidate(candidate)?;
         Ok(CommitOutcome {
             record_id,
             content_revision,
@@ -826,7 +871,7 @@ mod tests {
             .create_draft(None, "标题", "正文", "2026-11-09", None)
             .unwrap();
         assert_eq!(store.last_durability(), &Durability::Durable);
-        let outcome = store.commit(&row.record_id).unwrap();
+        let outcome = store.commit(&row.record_id, 0).unwrap();
         assert_eq!(outcome.durability, Durability::Durable);
         assert_eq!(outcome.durability.as_str(), "durable");
         assert_eq!(store.persist().unwrap(), Durability::Durable);

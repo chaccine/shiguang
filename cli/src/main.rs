@@ -117,8 +117,17 @@ fn run() -> Result<Json, CoreError> {
             ]))
         }
         "commit" => {
-            let (id, _) = first_positional(rest)?;
-            let outcome = store.commit(&id)?;
+            let (id, opts) = first_positional(rest)?;
+            let expected_base_revision = match opts.get("expect-base") {
+                Some(value) => value.parse::<u32>().map_err(|_| {
+                    CoreError::new("USAGE", "--expect-base 需要 u32 版本号")
+                })?,
+                None if opts.has("expect-base") => {
+                    return Err(CoreError::new("USAGE", "--expect-base 需要 u32 版本号"));
+                }
+                None => store.row(&id)?.base_revision,
+            };
+            let outcome = store.commit(&id, expected_base_revision)?;
             Ok(Json::obj(vec![
                 ("ok", Json::Bool(true)),
                 ("recordId", Json::str(outcome.record_id)),
@@ -368,7 +377,7 @@ fn usage() -> String {
         "  draft-new [--title T] [--body B] [--date YYYY-MM-DD] [--time HH:MM] [--base REC]",
         "  draft-save ID [--title T] [--body B] [--date D] [--time T] [--clear-time]",
         "  attach ID --asset FILE [--caption C] [--media-type M]",
-        "  commit ID                               存入时光（正式提交）",
+        "  commit ID [--expect-base N]             存入时光（默认使用草稿基线版本）",
         "  list                                    正式列表（不含草稿）",
         "  get ID                                  读取记录（含草稿）",
         "  dump                                    原始状态",

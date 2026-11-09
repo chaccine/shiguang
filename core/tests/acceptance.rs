@@ -54,7 +54,7 @@ fn ac_u0_02_title_only_draft_cannot_be_committed() {
     let row = store
         .create_draft(None, "只有标题", "", "2026-11-09", None)
         .unwrap();
-    let err = store.commit(&row.record_id).unwrap_err();
+    let err = store.commit(&row.record_id, 0).unwrap_err();
     assert_eq!(err.code, "EMPTY_CONTENT");
     assert!(err.message.contains("缺少正文或照片"));
     assert!(formal_ids(&store).is_empty());
@@ -71,17 +71,17 @@ fn ac_u0_02b_missing_or_invalid_date_is_rejected() {
     let tmp = TempRoot::new("bad-date");
     let mut store = Store::open(tmp.path()).unwrap();
     let row = store.create_draft(None, "", "正文", "", None).unwrap();
-    assert_eq!(store.commit(&row.record_id).unwrap_err().code, "MISSING_EVENT_DATE");
+    assert_eq!(store.commit(&row.record_id, 0).unwrap_err().code, "MISSING_EVENT_DATE");
 
     let row2 = store
         .create_draft(None, "", "正文", "2026-02-30", None)
         .unwrap();
-    assert_eq!(store.commit(&row2.record_id).unwrap_err().code, "INVALID_EVENT_DATE");
+    assert_eq!(store.commit(&row2.record_id, 0).unwrap_err().code, "INVALID_EVENT_DATE");
 
     let row3 = store
         .create_draft(None, "", "正文", "2026-11-09", Some("25:00"))
         .unwrap();
-    assert_eq!(store.commit(&row3.record_id).unwrap_err().code, "INVALID_EVENT_TIME");
+    assert_eq!(store.commit(&row3.record_id, 0).unwrap_err().code, "INVALID_EVENT_TIME");
     assert!(formal_ids(&store).is_empty());
 }
 
@@ -115,7 +115,7 @@ fn ac_u0_04_commit_creates_formal_record_and_increments_revision() {
         .create_draft(None, "", "第一次正式内容", "2026-11-08", None)
         .unwrap();
     assert_eq!(row.content_revision, 0);
-    let outcome = store.commit(&row.record_id).unwrap();
+    let outcome = store.commit(&row.record_id, 0).unwrap();
     assert_eq!(outcome.record_id, row.record_id);
     assert_eq!(outcome.content_revision, 1);
 
@@ -134,7 +134,7 @@ fn ac_u0_05_formal_list_excludes_drafts() {
     let formal = store
         .create_draft(None, "", "正式一", "2026-11-07", None)
         .unwrap();
-    store.commit(&formal.record_id).unwrap();
+    store.commit(&formal.record_id, 0).unwrap();
     let draft = store
         .create_draft(None, "", "纯草稿二", "2026-11-09", None)
         .unwrap();
@@ -182,7 +182,7 @@ fn ac_u0_06_two_photos_independent_captions_and_sha_verifiable() {
         assert_eq!(bytes.len() as u64, use_ref.bytes);
     }
 
-    let outcome = store.commit(&row.record_id).unwrap();
+    let outcome = store.commit(&row.record_id, 0).unwrap();
     assert_eq!(outcome.content_revision, 1);
     let formal = store.formal(&row.record_id).unwrap();
     assert_eq!(formal.photos.len(), 2);
@@ -209,7 +209,7 @@ fn ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically() {
         let use_ref = store
             .attach_photo(&row.record_id, &png, "独立 caption", None)
             .unwrap();
-        store.commit(&row.record_id).unwrap();
+        store.commit(&row.record_id, 0).unwrap();
         store.ensure_previews().unwrap();
         (row.record_id, use_ref.asset_id, store.assets_on_disk().unwrap())
     };
@@ -254,7 +254,7 @@ fn ac_u0_07b_missing_original_blocks_commit() {
         .unwrap();
     let stored = store.asset_path(&use_ref.asset_id).unwrap();
     fs::remove_file(stored).unwrap();
-    let err = store.commit(&row.record_id).unwrap_err();
+    let err = store.commit(&row.record_id, 0).unwrap_err();
     assert_eq!(err.code, "ASSET_MISSING");
     assert!(store.formal(&row.record_id).is_none());
 }
@@ -266,7 +266,7 @@ fn ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view() {
     let row = store
         .create_draft(None, "原标题", "原始正式正文", "2026-11-03", Some("09:30"))
         .unwrap();
-    store.commit(&row.record_id).unwrap();
+    store.commit(&row.record_id, 0).unwrap();
 
     // 基于正式记录生成修改草稿，但不提交
     store
@@ -292,13 +292,13 @@ fn ac_u0_09_edit_commit_updates_single_entry_with_stable_id() {
         .create_draft(None, "", "第一版", "2026-11-02", None)
         .unwrap();
     let id = row.record_id.clone();
-    store.commit(&id).unwrap();
+    store.commit(&id, 0).unwrap();
 
     store.create_draft(Some(&id), "", "", "", None).unwrap();
     store
         .save_draft(&id, None, Some("第二版正文"), None, None)
         .unwrap();
-    let outcome = store.commit(&id).unwrap();
+    let outcome = store.commit(&id, 1).unwrap();
     assert_eq!(outcome.record_id, id);
     assert_eq!(outcome.content_revision, 2);
 
@@ -318,13 +318,13 @@ fn ac_u0_10_future_date_without_time_keeps_null_time() {
     let row = store
         .create_draft(None, "", "未来的日期，不伪造时刻", "2099-12-31", None)
         .unwrap();
-    store.commit(&row.record_id).unwrap();
+    store.commit(&row.record_id, 0).unwrap();
     // 空白时刻也应保持 None
     store.create_draft(Some(&row.record_id), "", "", "", None).unwrap();
     store
         .save_draft(&row.record_id, None, Some("补一句"), None, Some(Some("   ")))
         .unwrap();
-    store.commit(&row.record_id).unwrap();
+    store.commit(&row.record_id, 1).unwrap();
 
     let reloaded = Store::open(tmp.path()).unwrap();
     let formal = reloaded.formal(&row.record_id).unwrap();
@@ -360,7 +360,7 @@ fn ac_u0_11_manifest_lists_formal_records_and_media_sha() {
     let use_ref = store
         .attach_photo(&row.record_id, &png, "manifest caption", None)
         .unwrap();
-    store.commit(&row.record_id).unwrap();
+    store.commit(&row.record_id, 0).unwrap();
     // 纯草稿不得进入 manifest
     store
         .create_draft(None, "", "不应出现", "2026-11-09", None)
@@ -407,7 +407,7 @@ fn s0_guard_formal_state_never_references_missing_asset() {
     store.ensure_previews().unwrap();
     // 清预览不影响提交
     store.clear_previews().unwrap();
-    store.commit(&row.record_id).unwrap();
+    store.commit(&row.record_id, 0).unwrap();
     assert!(store.asset_path(&use_ref.asset_id).is_some());
     assert!(formal_ids(&store).contains(&row.record_id));
 }
