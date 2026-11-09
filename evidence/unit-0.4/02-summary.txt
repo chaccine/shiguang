@@ -1,0 +1,36 @@
+2026-11-09T18:59:24+08:00
+第 2 阶段 Rust 实现验收记录
+
+环境：rustc 1.90.0；所有 Cargo 命令 --locked，CARGO_NET_OFFLINE=true；未联网、未 git commit。
+本任务仅编辑 core/src/{store,model,schema,persist}.rs 与 cli/src/main.rs，以及 evidence/unit-0.4/ 下日志。
+未编辑 src/、src-tauri/、tests/*.ts、.github/；这些目录中的并发任务改动未触碰。
+core 无第三方依赖；文件锁使用标准库 File::try_lock，CLI hold-lock 写锁使用 File::lock。
+没有修改新旧测试断言，也没有调整既有调用签名。
+
+分项（按要求顺序实现并运行后，已逐项追加 02-progress.txt）：
+1. 写锁 + open_exclusive：PASS 7（unit04_lock 2 + CLI multiprocess 5）。
+2. schemaVersion 迁移：PASS 7（unit04_schema 5 + 迁移故障注入 2）。
+3. 回收站/删除标记/隔离区：PASS 12（unit04_trash）。
+4. reconcile_media：PASS 9（unit04_media 6 + unit04_faults 全部 3；其中迁移 2 为重复验证）。
+5. 冲突副本：PASS 5（unit04_conflict）。
+新增测试去重合计：38 PASS / 0 FAIL（核心常规 30 + 核心故障 3 + CLI 5）。
+CLI 新增命令冒烟：PASS 7 项校验，见 02-cli-smoke.log。
+
+全量回归：
+- cargo test --locked：FAIL；默认在 unit01_safety 失败后停止，原样保存于 02-cargo-test.log。
+- cargo test --locked -p shiguang_core --features fault-injection：FAIL；原样保存于 02-cargo-fault.log。
+- 为执行所有目标，补跑 --no-fail-fast：工作区 86 PASS / 1 FAIL（共 87），见 02-workspace-all-targets.log；
+  核心 fault-injection 93 PASS / 1 FAIL（共 94），见 02-fault-all-targets.log。
+- cargo build --locked -p shiguang：PASS，见 02-cargo-build.log。
+- cargo clippy --locked -p shiguang_core -p shiguang：PASS，有 1 条既有 warning（preview.rs:19 manual_is_multiple_of），见 02-cargo-clippy.log。
+- git diff --check -- core cli：PASS。
+
+唯一遗留的失败：
+core/tests/unit01_safety.rs::conflict_with_occupied_draft_keeps_disk_and_local_memory
+旧断言要求冲突时整个 state_json 内存与 state.json 字节都不变，并只在原实例内保留 A 草稿。
+SPEC 第 5 节明确要求：REVISION_CONFLICT 且磁盘草稿槽已占用时，将本地草稿持久化进顶层 conflictCopies；
+unit04_conflict::occupied_disk_draft_preserves_local_copy_durably_without_overwriting_slot 则检查重启后该副本存在。
+因此，旧测试关于 state.json 字节完全不变的断言与新 SPEC 及新增测试无法同时成立；当前按 SPEC 持久化副本，保留所有旧断言。
+当前同次写入后内存同步到磁盘状态，原本地待处理草稿另有会话缓存与持久化副本保护。
+没有发现与 SPEC 矛盾的新增测试。
+跨备份防复活：NOT_RUN，按 SPEC 依赖后续 G03 导入。

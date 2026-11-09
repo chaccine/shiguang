@@ -66,6 +66,7 @@ pub struct CommitOutcome {
 impl Store {
     pub fn open_exclusive(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
         let root = root.into();
+        preflight(&root)?;
         fs::create_dir_all(&root)?;
         let lock = lock_file(&root, ".instance.lock")?;
         match lock.try_lock() {
@@ -423,6 +424,10 @@ impl Store {
                 let durability = persist::write_atomic(&backup, text.as_bytes())
                     .map_err(|e| backup_error(e.to_string()))?;
                 if let Durability::Uncertain { error } = durability {
+                    return Err(backup_error(error));
+                }
+                // backups/ 可能刚创建；同步根目录后才允许替换原状态。
+                if let Durability::Uncertain { error } = persist::parent_sync(&root) {
                     return Err(backup_error(error));
                 }
                 let migration_error = |e| {

@@ -13,6 +13,7 @@ export interface TauriApi extends ShiguangApi {
 
 export function createTauriApi(invoke: InvokeFn): TauriApi {
   return {
+    // 原样传递结构化错误及 durability，不把启动/迁移失败转为成功。
     trashRecord: (recordId) => invoke("trash_record", { recordId }),
     restoreRecord: (recordId) => invoke("restore_record", { recordId }),
     purgeRecord: (recordId) => invoke("purge_record", { recordId }),

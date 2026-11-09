@@ -18,7 +18,7 @@ export interface FormalListItem {
  */
 export function formalItems(rows: readonly RecordRow[]): FormalListItem[] {
   return rows
-    .filter((row): row is RecordRow & { formal: Snapshot } => row.formal !== null)
+    .filter((row): row is RecordRow & { formal: Snapshot } => row.status === "active" && row.formal !== null)
     .sort((a, b) => {
       if (a.formal.eventDate !== b.formal.eventDate) {
         return b.formal.eventDate.localeCompare(a.formal.eventDate);

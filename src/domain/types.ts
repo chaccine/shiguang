@@ -57,11 +57,11 @@ export interface ConflictCopy {
   snapshot: Snapshot; createdAt: string; reason: string;
 }
 export type ConflictChoice = "keepMine" | "keepFormal";
-export interface QuarantinedMedia { assetId?: string; file: string; movedTo: string }
+export interface QuarantinedMedia { assetId?: string | null; file: string; movedTo: string }
 export interface MediaIssue { recordId: string; photoUseId: string; assetId: string }
 export interface MediaReport {
   quarantined: QuarantinedMedia[]; missing: MediaIssue[]; corrupt: MediaIssue[]; checkedAt: string;
 }
 export type PhotoStatus = "available" | "missing" | "corrupt";
-export interface PurgeResult { deletionMarkers: DeletionMarker[]; quarantined: QuarantinedMedia[] }
+export interface PurgeResult { deletionMarkers: DeletionMarker[]; quarantined: QuarantinedMedia[]; durability: Durability }
 export type StoreStatus = { ok: true } | { ok: false; code: string; message: string };

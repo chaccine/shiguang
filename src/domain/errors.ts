@@ -19,6 +19,13 @@ const validation: Record<string, string> = {
   NOT_FOUND: "找不到这条记录，请重新打开草稿列表。当前编辑内容仍保留。",
   NO_DRAFT: "没有待保存或提交的草稿，请先打开或编辑一条草稿。",
   BASE_NOT_FORMAL: "只能基于已存入时光的记录创建修改草稿。",
+  RECORD_TRASHED: "这条记录已在回收站，请先恢复后再编辑或存入时光。",
+  RECORD_DELETED: "这条记录已被永久删除，不能再次编辑或恢复。",
+  RECORD_NOT_TRASHED: "只有回收站中的记录可以永久删除，请先移到回收站。",
+  RECORD_NOT_FORMAL: "这条记录还是草稿，只有存入时光的正式记录可以移到回收站。",
+  DRAFT_OCCUPIED: "这条记录已有草稿，请先处理现有草稿，再恢复冲突副本。",
+  CONFLICT_NOT_FOUND: "找不到这份冲突副本，请重新打开冲突副本列表。",
+  INVALID_CONFLICT_CHOICE: "请选择以我的草稿为准，或保留当前正式版。",
 };
 
 /** 保留原始错误码/阶段以便排查；未知错误也明确展示，绝不转为成功。 */
@@ -37,6 +44,20 @@ export function describeError(error: unknown): ErrorDescription {
     return { kind: "conflict", title: "这段回忆已在别处更新", detail: `本地草稿已保留，未覆盖正式版。请核对两个版本后再决定如何处理。${diagnostic}` };
   }
   if (validation[code]) return { kind: "validation", title: "还需要调整一下", detail: validation[code] + diagnostic };
+  const storeErrors: Record<string, string> = {
+    STORE_LOCKED: "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。",
+    STORE_BUSY: "另一个拾光窗口正在写入，请稍后重试；你的输入未丢失。",
+    SCHEMA_TOO_NEW: "这份数据由更新版本的拾光写入，当前版本无法安全读取。请升级拾光；原数据未改动。",
+    SCHEMA_CHANGED_ON_DISK: "数据结构已被另一个程序更改，请重新打开拾光；原数据未改动。",
+    STORE_NOT_EXCLUSIVE: "请先关闭其他拾光窗口，再重新打开以检查照片；原数据未改动。",
+  };
+  if (storeErrors[code]) return { kind: "io", title: "暂时无法打开或写入数据", detail: storeErrors[code] + diagnostic };
+  if (code.startsWith("MIGRATION_")) {
+    const detail = code === "MIGRATION_BACKUP_FAILED"
+      ? "迁移前备份未完成，原数据未改动。请检查可用空间与目录权限后重新打开。"
+      : "数据迁移未完成，原数据未改动。请保留数据目录与迁移备份，检查后重新打开。";
+    return { kind: "io", title: "数据升级没有完成", detail: `${detail}${diagnostic} ${raw}` };
+  }
   if (code === "STATE_CORRUPT" || code === "STATE_VERSION_UNSUPPORTED") {
     return { kind: "io", title: "暂时无法读取保存的数据", detail: `原文件没有被覆盖，请保留数据目录以便检查。当前编辑内容仍保留。${diagnostic}` };
   }
