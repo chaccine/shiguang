@@ -36,6 +36,7 @@ pub struct Store {
     state: State,
 }
 
+#[derive(Clone)]
 struct State {
     version: i64,
     seq: u64,
@@ -84,24 +85,20 @@ impl Store {
     }
 
     pub fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
-        self.state
-            .records
-            .iter()
-            .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+        self.state.row(record_id)
     }
 
-    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
-        self.state
-            .records
-            .iter_mut()
-            .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
-    }
-
-    fn allocate_id(&mut self, prefix: &str) -> String {
-        self.state.seq += 1;
-        format!("{}-{:06}", prefix, self.state.seq)
+    /// 事务：在候选状态上执行操作，序列化成功后再替换内存状态。
+    /// 任一环节失败，`self.state` 保持不变。
+    fn transact<T>(
+        &mut self,
+        op: impl FnOnce(&mut State) -> Result<T, CoreError>,
+    ) -> Result<T, CoreError> {
+        let mut candidate = self.state.clone();
+        let value = op(&mut candidate)?;
+        self.persist_state(&candidate)?;
+        self.state = candidate;
+        Ok(value)
     }
 
     /// 新建草稿；base 指向已有正式记录时，草稿从正式快照派生（正式快照保持不变）。
@@ -115,44 +112,45 @@ impl Store {
     ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
         if let Some(base_id) = base {
-            let row = self.row_mut(base_id)?;
-            let formal = row.formal.clone().ok_or_else(|| {
-                CoreError::new(
-                    "BASE_NOT_FORMAL",
-                    format!("只能基于正式记录创建修改草稿：{base_id}"),
-                )
-            })?;
-            if row.draft.is_none() {
-                row.draft = Some(formal);
-                row.base_revision = row.content_revision;
-            }
-            row.updated_at = now;
-            let out = row.clone();
-            self.persist()?;
-            return Ok(out);
+            return self.transact(|state| {
+                let row = state.row_mut(base_id)?;
+                let formal = row.formal.clone().ok_or_else(|| {
+                    CoreError::new(
+                        "BASE_NOT_FORMAL",
+                        format!("只能基于正式记录创建修改草稿：{base_id}"),
+                    )
+                })?;
+                if row.draft.is_none() {
+                    row.draft = Some(formal);
+                    row.base_revision = row.content_revision;
+                }
+                row.updated_at = now.clone();
+                Ok(row.clone())
+            });
         }
 
-        let record_id = self.allocate_id("rec");
-        let snapshot = Snapshot {
-            title: title.to_string(),
-            body: body.to_string(),
-            event_date: event_date.to_string(),
-            event_time: normalize_time(event_time),
-            photos: Vec::new(),
-        };
-        let row = RecordRow {
-            record_id,
-            content_revision: 0,
-            created_at: now.clone(),
-            updated_at: now.clone(),
-            committed_at: None,
-            base_revision: 0,
-            formal: None,
-            draft: Some(snapshot),
-        };
-        self.state.records.push(row.clone());
-        self.persist()?;
-        Ok(row)
+        self.transact(|state| {
+            let record_id = state.allocate_id("rec");
+            let snapshot = Snapshot {
+                title: title.to_string(),
+                body: body.to_string(),
+                event_date: event_date.to_string(),
+                event_time: normalize_time(event_time),
+                photos: Vec::new(),
+            };
+            let row = RecordRow {
+                record_id,
+                content_revision: 0,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+                committed_at: None,
+                base_revision: 0,
+                formal: None,
+                draft: Some(snapshot),
+            };
+            state.records.push(row.clone());
+            Ok(row)
+        })
     }
 
     /// 保存/更新草稿字段；草稿允许不完整（日期可暂空），但有值时校验格式。
@@ -165,12 +163,35 @@ impl Store {
         event_time: Option<Option<&str>>,
     ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
-        {
-            let row = self.row_mut(record_id)?;
-            if row.draft.is_none() {
-                let formal = row.formal.clone().ok_or_else(|| {
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            // 草稿缺失时先从正式快照派生；此处只读取，暂不物化。
+            let materialized = if row.draft.is_none() {
+                Some(row.formal.clone().ok_or_else(|| {
                     CoreError::new("NO_DRAFT", format!("记录没有草稿可保存：{record_id}"))
-                })?;
+                })?)
+            } else {
+                None
+            };
+            // 先校验日期/时刻，失败时不留下任何修改。
+            if let Some(v) = event_date {
+                if !v.trim().is_empty() && !time::is_valid_date(v) {
+                    return Err(CoreError::new(
+                        "INVALID_EVENT_DATE",
+                        format!("事件日期无效：{v}（需为真实的 YYYY-MM-DD）"),
+                    ));
+                }
+            }
+            if let Some(Some(raw)) = event_time {
+                if !raw.trim().is_empty() && !time::is_valid_time(raw) {
+                    return Err(CoreError::new(
+                        "INVALID_EVENT_TIME",
+                        format!("事件时刻无效：{raw}（需为 HH:MM，可留空）"),
+                    ));
+                }
+            }
+            // 校验通过后再物化草稿并赋值。
+            if let Some(formal) = materialized {
                 row.draft = Some(formal);
                 row.base_revision = row.content_revision;
             }
@@ -182,29 +203,14 @@ impl Store {
                 draft.body = v.to_string();
             }
             if let Some(v) = event_date {
-                if !v.trim().is_empty() && !time::is_valid_date(v) {
-                    return Err(CoreError::new(
-                        "INVALID_EVENT_DATE",
-                        format!("事件日期无效：{v}（需为真实的 YYYY-MM-DD）"),
-                    ));
-                }
                 draft.event_date = v.to_string();
             }
             if let Some(v) = event_time {
-                if let Some(raw) = v {
-                    if !raw.trim().is_empty() && !time::is_valid_time(raw) {
-                        return Err(CoreError::new(
-                            "INVALID_EVENT_TIME",
-                            format!("事件时刻无效：{raw}（需为 HH:MM，可留空）"),
-                        ));
-                    }
-                }
                 draft.event_time = normalize_time(v);
             }
             row.updated_at = now;
-        }
-        self.persist()?;
-        Ok(self.row(record_id)?.clone())
+            Ok(row.clone())
+        })
     }
 
     /// 附加一张合成图：复制原图到 media/，assetId 由内容 SHA 决定，photoUse 独立 caption。
@@ -248,18 +254,19 @@ impl Store {
             atomic_write(&dest, &bytes)?;
         }
 
-        let photo_use_id = self.allocate_id("pu");
-        let use_ref = PhotoUse {
-            photo_use_id,
-            asset_id,
-            caption: caption.to_string(),
-            sha256: sha,
-            bytes: bytes.len() as u64,
-            media_type,
-        };
-
-        {
-            let row = self.row_mut(record_id)?;
+        self.transact(|state| {
+            // 先在候选状态确认记录存在，成功后才分配 photoUseId，失败不推进 seq。
+            state.row(record_id)?;
+            let photo_use_id = state.allocate_id("pu");
+            let use_ref = PhotoUse {
+                photo_use_id,
+                asset_id,
+                caption: caption.to_string(),
+                sha256: sha,
+                bytes: bytes.len() as u64,
+                media_type,
+            };
+            let row = state.row_mut(record_id)?;
             if row.draft.is_none() {
                 let formal = row.formal.clone().ok_or_else(|| {
                     CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
@@ -273,19 +280,21 @@ impl Store {
                 .photos
                 .push(use_ref.clone());
             row.updated_at = time::now_rfc3339();
-        }
-        self.persist()?;
-        Ok(use_ref)
+            Ok(use_ref)
+        })
     }
 
     /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。
     pub fn commit(&mut self, record_id: &str) -> Result<CommitOutcome, CoreError> {
-        let draft = {
-            let row = self.row(record_id)?;
-            row.draft.clone().ok_or_else(|| {
+        // 校验先于任何修改：内容合法，且所有原图仍在磁盘上。
+        let draft = self
+            .state
+            .row(record_id)?
+            .draft
+            .clone()
+            .ok_or_else(|| {
                 CoreError::new("NO_DRAFT", format!("没有待提交的草稿：{record_id}"))
-            })?
-        };
+            })?;
         draft.validate_for_commit()?;
         for photo in &draft.photos {
             if self.find_asset_path(&photo.asset_id).is_none() {
@@ -299,22 +308,20 @@ impl Store {
             }
         }
         let now = time::now_rfc3339();
-        let outcome = {
-            let row = self.row_mut(record_id)?;
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
             row.content_revision = row.content_revision.saturating_add(1);
             row.formal = Some(draft);
             row.committed_at = Some(now.clone());
             row.updated_at = now.clone();
             row.draft = None;
             row.base_revision = row.content_revision;
-            CommitOutcome {
+            Ok(CommitOutcome {
                 record_id: row.record_id.clone(),
                 content_revision: row.content_revision,
                 committed_at: now,
-            }
-        };
-        self.persist()?;
-        Ok(outcome)
+            })
+        })
     }
 
     /// 正式列表只包含正式快照；带未提交修改草稿的记录仍显示旧正式内容。
@@ -532,8 +539,12 @@ impl Store {
     }
 
     pub fn persist(&self) -> Result<(), CoreError> {
+        self.persist_state(&self.state)
+    }
+
+    fn persist_state(&self, state: &State) -> Result<(), CoreError> {
         let path = self.root.join(STATE_FILE);
-        let text = self.state.to_json(&self.seed).pretty();
+        let text = state.to_json(&self.seed).pretty();
         atomic_write(&path, text.as_bytes())
     }
 }
@@ -547,6 +558,25 @@ pub struct AssetInfo {
 }
 
 impl State {
+    fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
+        self.records
+            .iter()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+        self.records
+            .iter_mut()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn allocate_id(&mut self, prefix: &str) -> String {
+        self.seq += 1;
+        format!("{}-{:06}", prefix, self.seq)
+    }
+
     fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
             ("version", Json::Num(self.version)),

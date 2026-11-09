@@ -104,7 +104,6 @@ fn value_mut<'a>(value: &'a mut Json, path: &[Step]) -> Option<&'a mut Json> {
 }
 
 #[test]
-#[ignore = "U01: 修于提交02"]
 fn t_a1_invalid_date_does_not_mutate_title_body() {
     let tmp = TempRoot::new("a1");
     let mut store = Store::open(tmp.path()).unwrap();
@@ -141,7 +140,6 @@ fn t_a1_invalid_date_does_not_mutate_title_body() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交02"]
 fn t_a2_failed_edit_draft_does_not_materialize_draft() {
     let tmp = TempRoot::new("a2");
     let mut store = Store::open(tmp.path()).unwrap();
@@ -163,7 +161,6 @@ fn t_a2_failed_edit_draft_does_not_materialize_draft() {
 }
 
 #[test]
-#[ignore = "U01: 修于提交02"]
 fn t_a3_attach_missing_record_does_not_bump_seq() {
     let tmp = TempRoot::new("a3");
     let png = write_asset(&tmp.path().join("input"), "a3.png", "synthetic-u01-a3");
