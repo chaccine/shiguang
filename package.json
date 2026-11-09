@@ -11,7 +11,8 @@
     "verify:evidence": "node scripts/verify-evidence.mjs",
     "acceptance": "bash scripts/run_acceptance.sh",
     "preview": "npm run build && node scripts/preview-server.mjs",
-    "screenshots": "npm run build && node scripts/screenshots.mjs"
+    "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
