@@ -146,6 +146,10 @@ jobs:
           if [ ! -d src-tauri/gen/android ]; then
             npx tauri android init --ci 2>&1 | tee ci-logs/android-init.log
           fi
+          # 覆盖模板：MainActivity 处理系统栏 insets（Android 15+ 强制 edge-to-edge）；去掉不需要的 INTERNET 权限（应用离线）。
+          cp android-overrides/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/shiguang/unit0/MainActivity.kt
+          sed -i '/android.permission.INTERNET/d' src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          ! grep -n "android.permission.INTERNET" src-tauri/gen/android/app/src/main/AndroidManifest.xml
           # Gradle wrapper 默认 10s 网络超时，services.gradle.org 在 runner 上偶发读超时：放宽到 120s。
           sed -i 's/^networkTimeout=.*/networkTimeout=120000/' src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
           cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties | tee -a ci-logs/android-init.log
@@ -158,6 +162,10 @@ jobs:
           key: gradle-android-v1-${{ hashFiles('src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
       - name: tauri android build（debug 签名 APK，arm64）
         shell: bash
+        env:
+          # 侧载用 debug APK：去掉调试符号（否则 .so 约 110MB）。只作用于本 job。
+          CARGO_PROFILE_DEV_DEBUG: "false"
+          CARGO_PROFILE_DEV_STRIP: "true"
         run: |
           set -o pipefail
           # Gradle 发行包/依赖下载偶发超时：最多重试 3 次（已编译的 Rust 部分会复用）。
