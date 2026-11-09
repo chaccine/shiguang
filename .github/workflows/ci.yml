@@ -65,6 +65,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: 缓存 Tauri 打包工具（WiX / NSIS）
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/tauri
+          key: tauri-bundler-tools-windows-v1
       - name: Tauri 打包（未签名安装包；Windows msi+nsis / macOS app+dmg / Linux deb）
         shell: bash
         run: |
@@ -76,7 +82,15 @@ jobs:
             *)       BUNDLES="deb" ;;
           esac
           rustc --version | tee ci-logs/tauri-bundle-${{ runner.os }}.log
-          npx tauri build --ci --bundles "$BUNDLES" -- --locked 2>&1 | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log
+          # 打包工具（WiX/NSIS）从 GitHub Releases 下载，偶发 5xx：最多重试 3 次（已编译部分会复用）。
+          for attempt in 1 2 3; do
+            echo "== tauri build attempt $attempt ==" | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log
+            if npx tauri build --ci --bundles "$BUNDLES" -- --locked 2>&1 | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log; then
+              ok=1; break
+            fi
+            ok=0; sleep $((attempt * 45))
+          done
+          [ "$ok" = 1 ]
           ls -R src-tauri/target/release/bundle | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log
       - name: 上传构建日志
         if: always()
