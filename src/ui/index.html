@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>拾光</title>
     <style>
       :root {
@@ -465,7 +465,8 @@
           flex-direction: row;
           align-items: center;
           gap: 16px;
-          padding: 14px 16px;
+          /* 安全区：支持 env() 的 WebView/浏览器生效；Android 由原生 padding 处理（此时 env 为 0），桌面为 0 不变。 */
+          padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 14px calc(16px + env(safe-area-inset-left, 0px));
           border-right: none;
           border-bottom: 1px solid rgba(138, 90, 56, 0.12);
         }
@@ -475,7 +476,7 @@
         .tabs { flex-direction: row; margin-left: auto; }
         .tab { padding: 8px 12px; }
         .sidebar-foot { display: none; }
-        .main { padding: 20px 18px 32px; overflow: visible; }
+        .main { padding: 20px 18px calc(32px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
         .when-row { grid-template-columns: 1fr; }
         .editor-card { padding: 16px; }
         .editor-title { font-size: 21px; }

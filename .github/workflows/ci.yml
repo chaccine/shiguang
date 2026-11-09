@@ -111,3 +111,89 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
           retention-days: 14
+
+  android:
+    name: tauri android apk (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK（runner 预装）+ NDK 路径
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "SDK=$ANDROID_SDK_ROOT NDK=$ANDROID_NDK_LATEST_HOME"
+      - name: Rust 1.90.0 + Android 目标
+        shell: bash
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          rustup target add --toolchain 1.90.0 aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          rustc --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: tauri android init（gen/android 未提交时生成）
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          if [ ! -d src-tauri/gen/android ]; then
+            npx tauri android init --ci 2>&1 | tee ci-logs/android-init.log
+          fi
+          # 覆盖模板：MainActivity 处理系统栏 insets（Android 15+ 强制 edge-to-edge）；去掉不需要的 INTERNET 权限（应用离线）。
+          cp android-overrides/MainActivity.kt src-tauri/gen/android/app/src/main/java/com/shiguang/unit0/MainActivity.kt
+          sed -i '/android.permission.INTERNET/d' src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          ! grep -n "android.permission.INTERNET" src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          # Gradle wrapper 默认 10s 网络超时，services.gradle.org 在 runner 上偶发读超时：放宽到 120s。
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+          cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties | tee -a ci-logs/android-init.log
+      - name: 缓存 Gradle（wrapper 发行包与依赖）
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: gradle-android-v1-${{ hashFiles('src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - name: tauri android build（debug 签名 APK，arm64）
+        shell: bash
+        env:
+          # 侧载用 debug APK：去掉调试符号（否则 .so 约 110MB）。只作用于本 job。
+          CARGO_PROFILE_DEV_DEBUG: "false"
+          CARGO_PROFILE_DEV_STRIP: "true"
+        run: |
+          set -o pipefail
+          # Gradle 发行包/依赖下载偶发超时：最多重试 3 次（已编译的 Rust 部分会复用）。
+          for attempt in 1 2 3; do
+            echo "== android build attempt $attempt ==" | tee -a ci-logs/android-build.log
+            if npx tauri android build --ci --debug --apk --target aarch64 2>&1 | tee -a ci-logs/android-build.log; then
+              ok=1; break
+            fi
+            ok=0; sleep $((attempt * 30))
+          done
+          [ "$ok" = 1 ]
+          find src-tauri/gen/android/app/build/outputs -name '*.apk' -exec ls -l {} \; | tee -a ci-logs/android-build.log
+      - name: 上传日志与生成的 gen/android 工程
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-log
+          path: |
+            ci-logs/
+            src-tauri/gen/android/
+            !src-tauri/gen/android/**/build/
+            !src-tauri/gen/android/.gradle/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: 上传 APK（debug 签名，仅侧载测试）
+        uses: actions/upload-artifact@v4
+        with:
+          name: shiguang-Android-arm64-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
