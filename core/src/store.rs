@@ -13,7 +13,7 @@ use crate::{
     fault::{self, FaultPoint},
     schema,
 };
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -42,7 +42,7 @@ pub struct Store {
     seed: String,
     state: State,
     last_durability: Durability,
-    instance_lock: Option<File>,
+    instance_lock: Option<crate::lock::LockGuard>,
     pending_conflicts: std::collections::BTreeMap<String, (Snapshot, u32)>,
 }
 
@@ -68,12 +68,10 @@ impl Store {
         let root = root.into();
         preflight(&root)?;
         fs::create_dir_all(&root)?;
-        let lock = lock_file(&root, ".instance.lock")?;
-        match lock.try_lock() {
-            Ok(()) => {},
-            Err(std::fs::TryLockError::WouldBlock) => return Err(CoreError::new("STORE_LOCKED", "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。")),
-            Err(std::fs::TryLockError::Error(e)) => return Err(e.into()),
-        }
+        let lock = match crate::lock::try_acquire(&root, ".instance.lock")? {
+            crate::lock::Acquire::Held(guard) => guard,
+            crate::lock::Acquire::Busy => return Err(CoreError::new("STORE_LOCKED", "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。")),
+        };
         let mut store = Self::open(root)?;
         store.instance_lock = Some(lock);
         Ok(store)
@@ -1475,22 +1473,12 @@ fn unique_path(dir: &Path, stem: &str, suffix: &str) -> PathBuf {
     }
 }
 
-fn lock_file(root: &Path, name: &str) -> Result<File, CoreError> {
-    Ok(OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(root.join(name))?)
-}
-
-fn write_lock(root: &Path) -> Result<File, CoreError> {
-    let lock = lock_file(root, ".write.lock")?;
+fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
     let start = Instant::now();
     loop {
-        match lock.try_lock() {
-            Ok(()) => return Ok(lock),
-            Err(std::fs::TryLockError::WouldBlock) => {
+        match crate::lock::try_acquire(root, ".write.lock")? {
+            crate::lock::Acquire::Held(guard) => return Ok(guard),
+            crate::lock::Acquire::Busy => {
                 if start.elapsed() >= Duration::from_secs(3) {
                     return Err(CoreError::new(
                         "STORE_BUSY",
@@ -1499,7 +1487,6 @@ fn write_lock(root: &Path) -> Result<File, CoreError> {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            Err(std::fs::TryLockError::Error(e)) => return Err(e.into()),
         }
     }
 }

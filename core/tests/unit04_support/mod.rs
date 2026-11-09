@@ -29,6 +29,8 @@ impl Drop for TempRoot {
     fn drop(&mut self) {
         #[cfg(feature = "fault-injection")]
         shiguang_core::fault::clear();
+        #[cfg(feature = "fault-injection")]
+        shiguang_core::lock::force_unsupported(false);
         let _ = fs::remove_dir_all(&self.0);
     }
 }
@@ -97,7 +99,7 @@ pub fn tree(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
                 // 无法被另一把句柄读取（ERROR_LOCK_VIOLATION）。这两份文件只是锁标记，
                 // 内容不是用户数据；跳过它们才能在三端用同一套「目录未改写」断言。
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if name == ".instance.lock" || name == ".write.lock" {
+                if name == ".instance.lock" || name == ".write.lock" || name.ends_with(".lock.owner") {
                     continue;
                 }
                 result.push((path.clone(), fs::read(path).unwrap()));

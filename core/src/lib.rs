@@ -12,6 +12,7 @@ pub mod fault;
 #[cfg(not(feature = "fault-injection"))]
 mod fault;
 pub mod json;
+pub mod lock;
 pub mod model;
 pub mod persist;
 pub mod preview;
