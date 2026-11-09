@@ -1,6 +1,8 @@
 {
   "ok": true,
   "record": {
+    "status": "active",
+    "trashedAt": null,
     "recordId": "rec-000004",
     "contentRevision": 0,
     "createdAt": "2026-11-09T10:00:00Z",

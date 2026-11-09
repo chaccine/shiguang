@@ -2,10 +2,15 @@
   "ok": true,
   "state": {
     "version": 1,
+    "schemaVersion": 2,
+    "deletionMarkers": [],
+    "conflictCopies": [],
     "seed": "20261109",
     "seq": 9,
     "records": [
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000001",
         "contentRevision": 0,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -22,6 +27,8 @@
         }
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000002",
         "contentRevision": 0,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -38,6 +45,8 @@
         }
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000003",
         "contentRevision": 1,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -54,6 +63,8 @@
         "draft": null
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000004",
         "contentRevision": 0,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -70,6 +81,8 @@
         }
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000005",
         "contentRevision": 1,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -103,6 +116,8 @@
         "draft": null
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000008",
         "contentRevision": 2,
         "createdAt": "2026-11-09T10:00:00Z",
@@ -119,6 +134,8 @@
         "draft": null
       },
       {
+        "status": "active",
+        "trashedAt": null,
         "recordId": "rec-000009",
         "contentRevision": 1,
         "createdAt": "2026-11-09T10:00:00Z",
