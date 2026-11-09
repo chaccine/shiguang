@@ -268,62 +268,157 @@ impl Store {
                 format!("读取图片失败（{}）：{e}", source.display()),
             )
         })?;
+        let file_name = source
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| CoreError::new("INVALID_ASSET_NAME", "图片文件名无效"))?;
+        self.attach_photo_data(record_id, file_name, &bytes, caption, media_type)
+    }
+
+    /// 字节通道与路径通道共享校验、asset / photoUse 分配及原子状态写入。
+    /// file_name 仅参与类型嗅探，绝不作为文件路径使用；同时拒绝两种平台的路径分隔符。
+    pub fn attach_photo_bytes(
+        &mut self,
+        record_id: &str,
+        file_name: &str,
+        bytes: &[u8],
+        caption: &str,
+        media_type: Option<&str>,
+    ) -> Result<PhotoUse, CoreError> {
+        self.attach_photo_data(record_id, file_name, bytes, caption, media_type)
+    }
+
+    fn attach_photo_data(
+        &mut self,
+        record_id: &str,
+        file_name: &str,
+        bytes: &[u8],
+        caption: &str,
+        media_type: Option<&str>,
+    ) -> Result<PhotoUse, CoreError> {
+        if file_name.is_empty()
+            || file_name == "."
+            || file_name == ".."
+            || file_name.contains(['/', '\\', ':', '\0'])
+        {
+            return Err(CoreError::new(
+                "INVALID_ASSET_NAME",
+                "请只提供图片文件名，不含路径",
+            ));
+        }
         if bytes.is_empty() {
             return Err(CoreError::new("EMPTY_ASSET", "图片文件为空，拒绝附加"));
         }
-        let sha = sha256::hex_digest(&bytes);
+        if bytes.len() > 25 * 1024 * 1024 {
+            return Err(CoreError::new("ASSET_TOO_LARGE", "图片超过 25MB，拒绝附加"));
+        }
+        let source = Path::new(file_name);
+        let sha = sha256::hex_digest(bytes);
         let media_type = media_type
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| sniff_media_type(source, &bytes));
+            .unwrap_or_else(|| sniff_media_type(source, bytes));
         let ext = extension_for(&media_type, source);
         let asset_id = format!("ast-{}", &sha[..16]);
-        let dest = self
-            .root
-            .join(MEDIA_DIR)
-            .join(format!("{asset_id}.{ext}"));
+        let dest = self.root.join(MEDIA_DIR).join(format!("{asset_id}.{ext}"));
 
-        if dest.exists() {
+        // 所有领域校验先在候选状态完成，非法请求不产生原图或推进序号。
+        let mut candidate = self.candidate_state()?;
+        let row = candidate.row_mut(record_id)?;
+        if row.draft.is_none() {
+            row.draft = Some(row.formal.clone().ok_or_else(|| {
+                CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
+            })?);
+            row.base_revision = row.content_revision;
+        }
+        let use_ref = PhotoUse {
+            photo_use_id: candidate.allocate_id("pu"),
+            asset_id,
+            caption: caption.to_string(),
+            sha256: sha.clone(),
+            bytes: bytes.len() as u64,
+            media_type,
+        };
+        let row = candidate.row_mut(record_id)?;
+        row.draft
+            .as_mut()
+            .expect("draft just ensured")
+            .photos
+            .push(use_ref.clone());
+        row.updated_at = time::now_rfc3339();
+
+        let asset_durability = if dest.exists() {
             let existing = fs::read(&dest)?;
             if sha256::hex_digest(&existing) != sha {
-                return Err(CoreError::new(
-                    "ASSET_CONFLICT",
-                    format!("assetId 冲突且内容不一致：{asset_id}"),
-                ));
+                return Err(CoreError::new("ASSET_CONFLICT", "assetId 冲突且内容不一致"));
             }
+            None
         } else {
-            persist::write_atomic(&dest, &bytes)?;
+            Some(persist::write_atomic(&dest, bytes)?)
+        };
+        self.apply_candidate(candidate)?;
+        // 原图写入也需要目录同步；不能用状态文件的确认掩盖原图的不确定性。
+        if let Some(d @ Durability::Uncertain { .. }) = asset_durability {
+            self.last_durability = d;
         }
+        Ok(use_ref)
+    }
 
+    /// 只移除草稿中的使用关系，原图及正式快照保持不变。
+    pub fn remove_draft_photo(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+    ) -> Result<RecordRow, CoreError> {
         self.transact(|state| {
-            // 先在候选状态确认记录存在，成功后才分配 photoUseId，失败不推进 seq。
-            state.row(record_id)?;
-            let photo_use_id = state.allocate_id("pu");
-            let use_ref = PhotoUse {
-                photo_use_id,
-                asset_id,
-                caption: caption.to_string(),
-                sha256: sha,
-                bytes: bytes.len() as u64,
-                media_type,
-            };
             let row = state.row_mut(record_id)?;
-            if row.draft.is_none() {
-                let formal = row.formal.clone().ok_or_else(|| {
-                    CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
-                })?;
-                row.draft = Some(formal);
-                row.base_revision = row.content_revision;
-            }
-            row.draft
+            let draft = row
+                .draft
                 .as_mut()
-                .expect("draft just ensured")
+                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
+            let index = draft
                 .photos
-                .push(use_ref.clone());
+                .iter()
+                .position(|p| p.photo_use_id == photo_use_id)
+                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
+            draft.photos.remove(index);
             row.updated_at = time::now_rfc3339();
-            Ok(use_ref)
+            Ok(row.clone())
         })
-        .map(|(photo, _)| photo)
+        .map(|(row, _)| row)
+    }
+
+    /// 仅丢弃草稿槽，从未提交的记录整行移除；不清理 media。
+    pub fn discard_draft(&mut self, record_id: &str) -> Result<Option<RecordRow>, CoreError> {
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            if row.formal.is_none() {
+                state.records.retain(|r| r.record_id != record_id);
+                Ok(None)
+            } else {
+                row.draft = None;
+                row.base_revision = row.content_revision;
+                row.updated_at = time::now_rfc3339();
+                Ok(Some(row.clone()))
+            }
+        })
+        .map(|(row, _)| row)
+    }
+
+    /// 全部未提交草稿，最近更新优先；同一时刻按 recordId 倒序。
+    pub fn list_drafts(&self) -> Vec<&RecordRow> {
+        let mut rows: Vec<_> = self
+            .state
+            .records
+            .iter()
+            .filter(|r| r.draft.is_some())
+            .collect();
+        rows.sort_by(|a, b| {
+            b.updated_at
+                .cmp(&a.updated_at)
+                .then_with(|| b.record_id.cmp(&a.record_id))
+        });
+        rows
     }
 
     /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。

@@ -6,6 +6,7 @@
 //! - 原图 asset 不可变、无删除接口；预览是派生缓存，可删除并重建。
 //! - photoUse 与 asset 分离：同一原图可被多次引用，各自拥有 caption。
 
+pub mod base64;
 #[cfg(feature = "fault-injection")]
 pub mod fault;
 #[cfg(not(feature = "fault-injection"))]

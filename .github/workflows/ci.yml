@@ -43,7 +43,7 @@ jobs:
       - run: npm run typecheck
 
   tauri:
-    name: tauri desktop build (${{ matrix.os }})
+    name: tauri bundle (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -65,22 +65,49 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: cargo build --locked（src-tauri，仅编译桌面二进制，不打包）
+      - name: 缓存 Tauri 打包工具（WiX / NSIS）
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/tauri
+          key: tauri-bundler-tools-windows-v1
+      - name: Tauri 打包（未签名安装包；Windows msi / macOS app+dmg / Linux deb）
         shell: bash
-        working-directory: src-tauri
         run: |
           set -o pipefail
-          mkdir -p ../ci-logs
-          rustc --version | tee ../ci-logs/tauri-build-${{ runner.os }}.log
-          cargo build --locked --release 2>&1 | tee -a ../ci-logs/tauri-build-${{ runner.os }}.log
-      - name: 上传日志与构建产物
+          mkdir -p ci-logs
+          case "${{ runner.os }}" in
+            Windows) BUNDLES="msi" ;;  # NSIS：nsis_tauri_utils.dll（GitHub Releases）持续 504，暂只出 MSI
+            macOS)   BUNDLES="app,dmg" ;;
+            *)       BUNDLES="deb" ;;
+          esac
+          rustc --version | tee ci-logs/tauri-bundle-${{ runner.os }}.log
+          # 打包工具（WiX/NSIS）从 GitHub Releases 下载，偶发 5xx：最多重试 3 次（已编译部分会复用）。
+          for attempt in 1 2 3; do
+            echo "== tauri build attempt $attempt ==" | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log
+            if npx tauri build --ci --bundles "$BUNDLES" -- --locked 2>&1 | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log; then
+              ok=1; break
+            fi
+            ok=0; sleep $((attempt * 45))
+          done
+          [ "$ok" = 1 ]
+          ls -R src-tauri/target/release/bundle | tee -a ci-logs/tauri-bundle-${{ runner.os }}.log
+      - name: 上传构建日志
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-${{ runner.os }}
-          path: |
-            ci-logs/
-            src-tauri/target/release/shiguang-desktop
-            src-tauri/target/release/shiguang-desktop.exe
+          name: tauri-log-${{ runner.os }}
+          path: ci-logs/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
+      - name: 上传安装包（未签名）
+        uses: actions/upload-artifact@v4
+        with:
+          name: shiguang-${{ runner.os }}-unsigned
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14

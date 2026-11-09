@@ -9,10 +9,14 @@
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json && node scripts/copy-ui.mjs",
     "verify:evidence": "node scripts/verify-evidence.mjs",
-    "acceptance": "bash scripts/run_acceptance.sh"
+    "acceptance": "bash scripts/run_acceptance.sh",
+    "preview": "npm run build && node scripts/preview-server.mjs",
+    "screenshots": "npm run build && node scripts/screenshots.mjs"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.10.1",
+    "playwright-core": "^1.65.0",
     "typescript": "^5.9.3"
   }
 }
