@@ -58,7 +58,7 @@ fn unsupported_lock_second_instance_on_other_thread_is_rejected() {
     })
     .join()
     .unwrap();
-    assert_eq!(code.as_deref(), Some("STORE_LOCKED"));
+    assert_eq!(code, Some("STORE_LOCKED"));
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn unsupported_write_lock_held_elsewhere_blocks_commit_without_changes() {
         panic!("test must hold write lock");
     };
     assert!(guard.is_portable());
-    let e = s.commit(&id, 0).err().expect("commit must wait then fail");
+    let e = s.commit(&id, 0).expect_err("commit must wait then fail");
     assert_eq!(e.code, "STORE_BUSY");
     assert_eq!(tree(t.path()), before);
     drop(guard);
