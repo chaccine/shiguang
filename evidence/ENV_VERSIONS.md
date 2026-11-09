@@ -1,6 +1,6 @@
 # ENV_VERSIONS（Unit-0 / 桌面 Linux box）
 
-- 采集时间（UTC）：2026-11-09T06:56:25Z
+- 采集时间（UTC）：2026-11-09T07:15:18Z
 - OS：Linux 6.12.113+ x86_64
 - rustc：rustc 1.90.0 (1159e78c4 2025-09-14)
 - cargo：cargo 1.90.0 (840b83a10 2025-07-30)
