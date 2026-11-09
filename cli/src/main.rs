@@ -4,7 +4,7 @@
 
 use shiguang_core::json::Json;
 use shiguang_core::model::RecordRow;
-use shiguang_core::{preview, CoreError, Store};
+use shiguang_core::{preview, ConflictChoice, CoreError, Store};
 use std::io::Write as IoWrite;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -31,9 +31,9 @@ fn run() -> Result<Json, CoreError> {
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--data-dir" {
-            let value = args.get(i + 1).ok_or_else(|| {
-                CoreError::new("USAGE", "--data-dir 需要目录参数")
-            })?;
+            let value = args
+                .get(i + 1)
+                .ok_or_else(|| CoreError::new("USAGE", "--data-dir 需要目录参数"))?;
             data_dir = Some(PathBuf::from(value));
             i += 2;
         } else {
@@ -56,13 +56,20 @@ fn run() -> Result<Json, CoreError> {
     let rest = &args[1..];
     // Test driver: announce readiness only after the requested lock is held.
     if command == "hold-lock" {
-        let ms = rest.first().and_then(|s| s.parse::<u64>().ok())
+        let ms = rest
+            .first()
+            .and_then(|s| s.parse::<u64>().ok())
             .ok_or_else(|| CoreError::new("USAGE", "hold-lock <ms> [--kind instance|write]"))?;
         let opts = Options::parse(&rest[1..])?;
         let kind = opts.get("kind").unwrap_or("instance");
         if kind == "write" {
             std::fs::create_dir_all(&root)?;
-            let lock = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true).open(root.join(".write.lock"))?;
+            let lock = std::fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(root.join(".write.lock"))?;
             lock.lock()?;
             println!("{}", Json::obj(vec![("ready", Json::Bool(true))]).dump());
             std::io::stdout().flush()?;
@@ -74,7 +81,9 @@ fn run() -> Result<Json, CoreError> {
             std::io::stdout().flush()?;
             sleep(Duration::from_millis(ms));
             drop(held);
-        } else { return Err(CoreError::new("USAGE", "kind must be instance or write")); }
+        } else {
+            return Err(CoreError::new("USAGE", "kind must be instance or write"));
+        }
         return Ok(Json::obj(vec![("ok", Json::Bool(true))]));
     }
     if command == "create-draft" {
@@ -82,12 +91,18 @@ fn run() -> Result<Json, CoreError> {
         if let Some(gate) = opts.get("start-file") {
             let start = std::time::Instant::now();
             while !std::path::Path::new(gate).exists() {
-                if start.elapsed() > Duration::from_secs(5) { return Err(CoreError::new("TEST_TIMEOUT", "start-file")); }
+                if start.elapsed() > Duration::from_secs(5) {
+                    return Err(CoreError::new("TEST_TIMEOUT", "start-file"));
+                }
                 sleep(Duration::from_millis(5));
             }
         }
     }
-    let mut store = Store::open(root)?;
+    let mut store = if command == "reconcile" {
+        Store::open_exclusive(root)?
+    } else {
+        Store::open(root)?
+    };
 
     match command.as_str() {
         "init" => Ok(Json::obj(vec![
@@ -96,18 +111,97 @@ fn run() -> Result<Json, CoreError> {
             ("seed", Json::str(store.seed())),
         ])),
         "create-draft" => {
-            // Batch test driver; the underlying create_draft remains unchanged in phase 1.
+            // 长生命周期并发测试驱动：每次 create_draft 都使用独立写事务。
             let opts = Options::parse(rest)?;
-            let count = opts.get("count").unwrap_or("1").parse::<usize>()
+            let count = opts
+                .get("count")
+                .unwrap_or("1")
+                .parse::<usize>()
                 .map_err(|_| CoreError::new("USAGE", "--count must be an integer"))?;
             for _ in 0..count {
-                store.create_draft(None, opts.get("title").unwrap_or("合成标题"), opts.get("body").unwrap_or("合成正文"), opts.get("date").unwrap_or("2026-11-09"), None)?;
+                store.create_draft(
+                    None,
+                    opts.get("title").unwrap_or("合成标题"),
+                    opts.get("body").unwrap_or("合成正文"),
+                    opts.get("date").unwrap_or("2026-11-09"),
+                    None,
+                )?;
             }
-            Ok(Json::obj(vec![("ok", Json::Bool(true)), ("created", Json::Num(count as i64))]))
+            Ok(Json::obj(vec![
+                ("ok", Json::Bool(true)),
+                ("created", Json::Num(count as i64)),
+            ]))
         }
-        "trash" | "restore" | "purge" | "empty-trash" | "list-trash" | "reconcile"
-        | "resolve-conflict" | "list-conflicts" | "restore-conflict-copy" => {
-            Err(CoreError::new("NOT_IMPLEMENTED", command))
+        "trash" | "restore" => {
+            let (id, _) = first_positional(rest)?;
+            let row = if command == "trash" {
+                store.trash_record(&id)?
+            } else {
+                store.restore_record(&id)?
+            };
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
+        }
+        "purge" | "empty-trash" => {
+            let outcome = if command == "purge" {
+                let (id, _) = first_positional(rest)?;
+                store.purge_record(&id)?
+            } else {
+                store.empty_trash()?
+            };
+            Ok(Json::obj(vec![
+                ("ok", Json::Bool(true)),
+                ("outcome", outcome.to_json()),
+            ]))
+        }
+        "list-trash" => Ok(Json::obj(vec![
+            ("ok", Json::Bool(true)),
+            (
+                "records",
+                Json::Arr(
+                    store
+                        .list_trash()?
+                        .into_iter()
+                        .map(RecordRow::to_json)
+                        .collect(),
+                ),
+            ),
+        ])),
+        "reconcile" => Ok(Json::obj(vec![
+            ("ok", Json::Bool(true)),
+            ("report", store.reconcile_media()?.to_json()),
+        ])),
+        "resolve-conflict" => {
+            let (id, opts) = first_positional(rest)?;
+            let choice = match opts.get("choice") {
+                Some("keepMine") => ConflictChoice::KeepMine,
+                Some("keepFormal") => ConflictChoice::KeepFormal,
+                _ => {
+                    return Err(CoreError::new(
+                        "USAGE",
+                        "--choice 需要 keepMine 或 keepFormal",
+                    ))
+                }
+            };
+            let row = store.resolve_conflict(&id, choice)?;
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
+        }
+        "list-conflicts" => Ok(Json::obj(vec![
+            ("ok", Json::Bool(true)),
+            (
+                "conflictCopies",
+                Json::Arr(
+                    store
+                        .list_conflict_copies()?
+                        .iter()
+                        .map(|c| c.to_json())
+                        .collect(),
+                ),
+            ),
+        ])),
+        "restore-conflict-copy" => {
+            let (id, _) = first_positional(rest)?;
+            let row = store.restore_conflict_copy(&id)?;
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
         }
         "draft-new" => {
             let opts = Options::parse(rest)?;
@@ -166,9 +260,9 @@ fn run() -> Result<Json, CoreError> {
         "commit" => {
             let (id, opts) = first_positional(rest)?;
             let expected_base_revision = match opts.get("expect-base") {
-                Some(value) => value.parse::<u32>().map_err(|_| {
-                    CoreError::new("USAGE", "--expect-base 需要 u32 版本号")
-                })?,
+                Some(value) => value
+                    .parse::<u32>()
+                    .map_err(|_| CoreError::new("USAGE", "--expect-base 需要 u32 版本号"))?,
                 None if opts.has("expect-base") => {
                     return Err(CoreError::new("USAGE", "--expect-base 需要 u32 版本号"));
                 }
@@ -178,7 +272,10 @@ fn run() -> Result<Json, CoreError> {
             Ok(Json::obj(vec![
                 ("ok", Json::Bool(true)),
                 ("recordId", Json::str(outcome.record_id)),
-                ("contentRevision", Json::Num(outcome.content_revision as i64)),
+                (
+                    "contentRevision",
+                    Json::Num(outcome.content_revision as i64),
+                ),
                 ("committedAt", Json::str(outcome.committed_at)),
                 ("durability", Json::str(outcome.durability.as_str())),
             ]))
@@ -275,7 +372,10 @@ fn run() -> Result<Json, CoreError> {
             Ok(Json::obj(vec![
                 ("ok", Json::Bool(true)),
                 ("out", Json::str(out)),
-                ("sha256", Json::str(shiguang_core::sha256::hex_digest(&bytes))),
+                (
+                    "sha256",
+                    Json::str(shiguang_core::sha256::hex_digest(&bytes)),
+                ),
                 ("bytes", Json::Num(bytes.len() as i64)),
             ]))
         }
@@ -316,10 +416,13 @@ fn ok_record(row: &RecordRow, durability: Option<&str>) -> Json {
     ];
     if let Some(formal) = &row.formal {
         entries.push(("formalEventDate", Json::str(formal.event_date.clone())));
-        entries.push(("formalEventTime", match &formal.event_time {
-            Some(v) => Json::str(v.clone()),
-            None => Json::Null,
-        }));
+        entries.push((
+            "formalEventTime",
+            match &formal.event_time {
+                Some(v) => Json::str(v.clone()),
+                None => Json::Null,
+            },
+        ));
     }
     if let Some(durability) = durability {
         entries.push(("durability", Json::str(durability)));
@@ -335,19 +438,31 @@ fn formal_view(store: &Store, row: &RecordRow) -> Json {
         ("title", Json::str(formal.title.clone())),
         ("body", Json::str(formal.body.clone())),
         ("eventDate", Json::str(formal.event_date.clone())),
-        ("eventTime", match &formal.event_time {
-            Some(v) => Json::str(v.clone()),
-            None => Json::Null,
-        }),
-        ("bodySha256", Json::str(shiguang_core::sha256::hex_digest(formal.body.as_bytes()))),
+        (
+            "eventTime",
+            match &formal.event_time {
+                Some(v) => Json::str(v.clone()),
+                None => Json::Null,
+            },
+        ),
+        (
+            "bodySha256",
+            Json::str(shiguang_core::sha256::hex_digest(formal.body.as_bytes())),
+        ),
         (
             "photos",
             Json::Arr(formal.photos.iter().map(|p| p.to_json()).collect()),
         ),
         ("hasPendingDraft", Json::Bool(row.draft.is_some())),
-        ("previewExists", Json::Bool(formal.photos.iter().all(|p| {
-            store.preview_path(&p.asset_id).exists()
-        }))),
+        (
+            "previewExists",
+            Json::Bool(
+                formal
+                    .photos
+                    .iter()
+                    .all(|p| store.preview_path(&p.asset_id).exists()),
+            ),
+        ),
     ])
 }
 
