@@ -586,6 +586,15 @@ editorTime.addEventListener("input", () => {
 window.addEventListener("beforeunload", () => {
   void session.flush().catch((error: unknown) => { showError(error); });
 });
+// 移动端（Android）切到后台/被系统回收前通常不触发 beforeunload：隐藏时也立即 flush。
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    void session.flush().catch((error: unknown) => { showError(error); });
+  }
+});
+window.addEventListener("pagehide", () => {
+  void session.flush().catch((error: unknown) => { showError(error); });
+});
 
 async function boot(): Promise<void> {
   if (memory !== null) {
