@@ -94,7 +94,7 @@ commitButton.addEventListener("click", async () => {
       eventDate: draft.eventDate,
       eventTime: draft.eventTime,
     });
-    const committed = await api.commitRecord(created.recordId, created.baseRevision);
+    const committed = await api.commitRecord(created.row.recordId, created.row.baseRevision);
     banner.hidden = false;
     banner.textContent = durabilityLabel(committed.durability);
     titleInput.value = "";

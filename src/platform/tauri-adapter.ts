@@ -1,53 +1,36 @@
-import type { CommitResult, RecordRow } from "../domain/types.ts";
-
-/** Tauri v2 命令契约；命令实现在 src-tauri/src/lib.rs，领域权威在 Rust core。 */
-export interface ShiguangApi {
-  createDraft(input: {
-    title?: string;
-    body?: string;
-    eventDate?: string;
-    eventTime?: string | null;
-    baseRecordId?: string | null;
-  }): Promise<RecordRow>;
-  saveDraft(input: {
-    recordId: string;
-    title?: string;
-    body?: string;
-    eventDate?: string;
-    eventTime?: string | null;
-    clearEventTime?: boolean;
-  }): Promise<RecordRow>;
-  attachPhoto(input: {
-    recordId: string;
-    sourcePath: string;
-    caption: string;
-    mediaType?: string | null;
-  }): Promise<RecordRow>;
-  commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult>;
-  listFormalRecords(): Promise<RecordRow[]>;
-  getRecord(recordId: string): Promise<RecordRow>;
-  exportManifest(outPath: string): Promise<{ out: string; records: number }>;
-}
+import type { RecordRow } from "../domain/types.ts";
+import type { ShiguangApi } from "./api.ts";
+export type { ShiguangApi, SaveResult } from "./api.ts";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-export function createTauriApi(invoke: InvokeFn): ShiguangApi {
+/** 保留已有路径附加命令；浏览器预览只支持字节通道。 */
+export interface TauriApi extends ShiguangApi {
+  attachPhoto(input: {
+    recordId: string; sourcePath: string; caption: string; mediaType?: string | null;
+  }): Promise<RecordRow>;
+}
+
+export function createTauriApi(invoke: InvokeFn): TauriApi {
   return {
-    createDraft: (input) => invoke<RecordRow>("create_draft", { input }),
-    saveDraft: (input) => invoke<RecordRow>("save_draft", { input }),
-    attachPhoto: (input) => invoke<RecordRow>("attach_photo", { input }),
-    commitRecord: (recordId, expectedBaseRevision) =>
-      invoke<CommitResult>("commit_record", { recordId, expectedBaseRevision }),
-    listFormalRecords: () => invoke<RecordRow[]>("list_formal_records"),
-    getRecord: (recordId) => invoke<RecordRow>("get_record", { recordId }),
+    createDraft: (input) => invoke("create_draft", { input }),
+    saveDraft: (input) => invoke("save_draft", {
+      input: { ...input, clearEventTime: input.clearEventTime || input.eventTime === null },
+    }),
+    attachPhoto: (input) => invoke("attach_photo", { input }),
+    attachPhotoBytes: (input) => invoke("attach_photo_bytes", { input: { ...input, bytes: Array.from(input.bytes) } }),
+    removeDraftPhoto: (recordId, photoUseId) => invoke("remove_draft_photo", { recordId, photoUseId }),
+    discardDraft: (recordId) => invoke("discard_draft", { recordId }),
+    commitRecord: (recordId, expectedBaseRevision) => invoke("commit_record", { recordId, expectedBaseRevision }),
+    listDrafts: () => invoke("list_drafts"),
+    listFormalRecords: () => invoke("list_formal_records"),
+    getRecord: (recordId) => invoke("get_record", { recordId }),
+    photoDataUrl: (assetId) => invoke("photo_data_url", { assetId }),
     exportManifest: (outPath) => invoke("export_manifest", { outPath }),
   };
 }
 
-/** 从 window 上解析 Tauri v2 注入的 invoke；不存在则表示桌面壳未运行。 */
 export function tauriInvokeFromWindow(): InvokeFn | null {
-  const w = window as unknown as {
-    __TAURI__?: { core?: { invoke?: InvokeFn } };
-  };
+  const w = window as unknown as { __TAURI__?: { core?: { invoke?: InvokeFn } } };
   return w.__TAURI__?.core?.invoke ?? null;
 }
