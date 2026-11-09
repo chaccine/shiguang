@@ -205,6 +205,7 @@ export class MemoryAdapter implements ShiguangApi {
     this.check("resolveConflict");
     if (choice !== "keepMine" && choice !== "keepFormal") fail("INVALID_CONFLICT_CHOICE");
     const next = this.reload(), row = this.active(this.row(next, recordId));
+    if (row.formal === null) fail("RECORD_NOT_FORMAL", "这条记录还没有正式版，不存在需要选择的冲突");
     const pending = this.pendingConflicts.get(recordId);
     const snapshot = pending?.snapshot ?? row.draft ?? fail("NO_DRAFT");
     const baseRevision = pending?.baseRevision ?? row.baseRevision;

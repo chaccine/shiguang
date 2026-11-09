@@ -308,6 +308,12 @@ impl Store {
     ) -> Result<RecordRow, CoreError> {
         let local = self.state.row(record_id)?;
         ensure_active(local)?;
+        if local.formal.is_none() {
+            return Err(CoreError::new(
+                "RECORD_NOT_FORMAL",
+                "这条记录还没有正式版，不存在需要选择的冲突",
+            ));
+        }
         let (snapshot, base_revision) = self
             .pending_conflicts
             .get(record_id)
