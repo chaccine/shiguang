@@ -71,13 +71,13 @@ jobs:
         with:
           path: ~/AppData/Local/tauri
           key: tauri-bundler-tools-windows-v1
-      - name: Tauri 打包（未签名安装包；Windows msi+nsis / macOS app+dmg / Linux deb）
+      - name: Tauri 打包（未签名安装包；Windows msi / macOS app+dmg / Linux deb）
         shell: bash
         run: |
           set -o pipefail
           mkdir -p ci-logs
           case "${{ runner.os }}" in
-            Windows) BUNDLES="msi,nsis" ;;
+            Windows) BUNDLES="msi" ;;  # NSIS：nsis_tauri_utils.dll（GitHub Releases）持续 504，暂只出 MSI
             macOS)   BUNDLES="app,dmg" ;;
             *)       BUNDLES="deb" ;;
           esac
