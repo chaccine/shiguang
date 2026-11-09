@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000005",
+    "contentRevision": 1,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": "2026-11-09T10:00:00Z",
+    "baseRevision": 1,
+    "formal": {
+      "title": "",
+      "body": "两张合成图，各自 caption",
+      "eventDate": "2026-11-06",
+      "eventTime": null,
+      "photos": [
+        {
+          "photoUseId": "pu-000006",
+          "assetId": "ast-8e5d11e6a9495325",
+          "caption": "第一张：窗外的光",
+          "sha256": "8e5d11e6a94953258174d7f3c17564f510c7f281f58fb3778225af454b959d46",
+          "bytes": 27812,
+          "mediaType": "image/png"
+        },
+        {
+          "photoUseId": "pu-000007",
+          "assetId": "ast-5a03b2eb4e0e3775",
+          "caption": "第二张：桌上的茶",
+          "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
+          "bytes": 27812,
+          "mediaType": "image/png"
+        }
+      ]
+    },
+    "draft": null
+  },
+  "draftContentHash": null,
+  "formalContentHash": "8927e16a2e6ee4b9b6e797f5bfa556d4568d1796df0e16ae588cd8ad399fe93a",
+  "formalEventDate": "2026-11-06",
+  "formalEventTime": null
+}
+

@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000003",
+    "contentRevision": 1,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": "2026-11-09T10:00:00Z",
+    "baseRevision": 1,
+    "formal": {
+      "title": "重启测试",
+      "body": "强杀前的正文（已落盘）",
+      "eventDate": "2026-11-08",
+      "eventTime": null,
+      "photos": []
+    },
+    "draft": null
+  },
+  "draftContentHash": null,
+  "formalContentHash": "ea017b1fea0ffe08a0bd11d42e9df20f62a5a37fe840486d2778a50afef7ed38",
+  "formalEventDate": "2026-11-08",
+  "formalEventTime": null
+}
+

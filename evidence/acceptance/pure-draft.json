@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000004",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "只是草稿",
+      "body": "绝不应出现在时间轴",
+      "eventDate": "2026-11-09",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "9693a0b0c3071916ce6cf35168f6e5fa46ed2019caa17e00e110a7203b07591a",
+  "formalContentHash": null
+}
+

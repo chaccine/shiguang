@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "拾光 Unit-0 默认能力：仅核心命令，不开放文件系统/网络插件",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

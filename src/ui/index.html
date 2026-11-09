@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>拾光 · Unit-0</title>
+    <style>
+      :root { color-scheme: light dark; font-family: "Noto Sans SC", system-ui, sans-serif; }
+      body { margin: 0; padding: 24px; max-width: 880px; margin-inline: auto; background: #faf7f2; color: #2b2622; }
+      h1 { font-size: 22px; letter-spacing: 0.08em; }
+      h2 { font-size: 15px; margin: 0 0 8px; }
+      .banner { background: #fff3cd; border: 1px solid #e0c56a; padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; }
+      .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+      @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+      section { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+      article { border-bottom: 1px solid #eee; padding: 10px 0; }
+      article:last-child { border-bottom: none; }
+      .meta { color: #7a7068; font-size: 12px; }
+      .badge { background: #eee6da; border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+      label { display: block; font-size: 12px; color: #6b625b; margin-top: 10px; }
+      input, textarea { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border: 1px solid #d8cec2; border-radius: 6px; font: inherit; }
+      textarea { min-height: 120px; resize: vertical; }
+      button { margin-top: 12px; padding: 9px 14px; border: none; border-radius: 8px; background: #8a6a4f; color: #fff; font: inherit; cursor: pointer; }
+      button:disabled { background: #c9beb2; cursor: not-allowed; }
+      .error { color: #a12d1f; font-size: 13px; margin-top: 10px; }
+      .hint { color: #7a7068; font-size: 12px; margin-top: 6px; }
+      .empty { color: #8d837a; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>拾光</h1>
+    <div id="banner" class="banner" hidden></div>
+    <div class="layout">
+      <section>
+        <h2>正式时光</h2>
+        <div id="timeline" class="empty">还没有正式记录。</div>
+      </section>
+      <section>
+        <h2>记录此刻</h2>
+        <label>标题<input id="title" maxlength="120" placeholder="例如：傍晚的窗台" /></label>
+        <label>正文<textarea id="body" placeholder="写点什么，或附加一张照片"></textarea></label>
+        <label>事件日期<input id="event-date" type="date" /></label>
+        <label>事件时刻（可留空）<input id="event-time" type="time" /></label>
+        <button id="commit" disabled>存入时光</button>
+        <div id="error" class="error" role="alert"></div>
+        <div class="hint">仅正文或照片至少其一才可存入；时刻留空就不会显示时间。</div>
+      </section>
+    </div>
+    <script type="module" src="./ui/main.js"></script>
+  </body>
+</html>

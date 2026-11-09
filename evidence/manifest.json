@@ -1,0 +1,84 @@
+{
+  "platform": {
+    "os": "linux",
+    "arch": "x86_64",
+    "unit": "UNIT0",
+    "seed": "20261109",
+    "generatedAt": "2026-11-09T10:00:00Z",
+    "rustc": "rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)",
+    "node": "v24.22.1",
+    "npm": "11.21.1",
+    "tauri": "BLOCKED: 见 evidence/tauri-cargo-check.log"
+  },
+  "records": [
+    {
+      "recordId": "rec-000009",
+      "contentRevision": 1,
+      "committedAt": "2026-11-09T10:00:00Z",
+      "eventDate": "2099-12-31",
+      "eventTime": null,
+      "bodySha256": "fe7c11660055052cc3073a2e5d829f398bc5b1ead70b07ee9216435102d62410",
+      "titleSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "photos": []
+    },
+    {
+      "recordId": "rec-000003",
+      "contentRevision": 1,
+      "committedAt": "2026-11-09T10:00:00Z",
+      "eventDate": "2026-11-08",
+      "eventTime": null,
+      "bodySha256": "c9341444dfa6c0f071be3e613411657d613b61ab098cb4787915e9a48dfba9bd",
+      "titleSha256": "75f8c660316150e65a4329946832916d35076b0d22331be8c066e0408dffe3b7",
+      "photos": []
+    },
+    {
+      "recordId": "rec-000005",
+      "contentRevision": 1,
+      "committedAt": "2026-11-09T10:00:00Z",
+      "eventDate": "2026-11-06",
+      "eventTime": null,
+      "bodySha256": "532317aeade1b97842dd89996d4b420178f4dcc1310f0a2fa6ded89d9190c5db",
+      "titleSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "photos": [
+        {
+          "photoUseId": "pu-000006",
+          "assetId": "ast-8e5d11e6a9495325",
+          "caption": "第一张：窗外的光",
+          "sha256": "8e5d11e6a94953258174d7f3c17564f510c7f281f58fb3778225af454b959d46",
+          "bytes": 27812
+        },
+        {
+          "photoUseId": "pu-000007",
+          "assetId": "ast-5a03b2eb4e0e3775",
+          "caption": "第二张：桌上的茶",
+          "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
+          "bytes": 27812
+        }
+      ]
+    },
+    {
+      "recordId": "rec-000008",
+      "contentRevision": 2,
+      "committedAt": "2026-11-09T10:00:00Z",
+      "eventDate": "2026-11-05",
+      "eventTime": "19:20",
+      "bodySha256": "3c44aacb543a0335f2b886d09c9009bd369f13ae923f3908467f5f58f0e31a0e",
+      "titleSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "photos": []
+    }
+  ],
+  "assets": [
+    {
+      "assetId": "ast-5a03b2eb4e0e3775",
+      "file": "media/ast-5a03b2eb4e0e3775.png",
+      "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
+      "bytes": 27812
+    },
+    {
+      "assetId": "ast-8e5d11e6a9495325",
+      "file": "media/ast-8e5d11e6a9495325.png",
+      "sha256": "8e5d11e6a94953258174d7f3c17564f510c7f281f58fb3778225af454b959d46",
+      "bytes": 27812
+    }
+  ]
+}

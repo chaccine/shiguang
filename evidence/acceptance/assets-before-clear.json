@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "assets": [
+    {
+      "assetId": "ast-5a03b2eb4e0e3775",
+      "file": "media/ast-5a03b2eb4e0e3775.png",
+      "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
+      "bytes": 27812
+    },
+    {
+      "assetId": "ast-8e5d11e6a9495325",
+      "file": "media/ast-8e5d11e6a9495325.png",
+      "sha256": "8e5d11e6a94953258174d7f3c17564f510c7f281f58fb3778225af454b959d46",
+      "bytes": 27812
+    }
+  ]
+}
+

@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "MISSING_EVENT_DATE",
+  "message": "缺少事件日期：eventDate 为必填项（YYYY-MM-DD）"
+}
+

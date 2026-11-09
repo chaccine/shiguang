@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "count": 1,
+  "records": [
+    {
+      "recordId": "rec-000003",
+      "contentRevision": 1,
+      "title": "重启测试",
+      "body": "强杀前的正文（已落盘）",
+      "eventDate": "2026-11-08",
+      "eventTime": null,
+      "bodySha256": "c9341444dfa6c0f071be3e613411657d613b61ab098cb4787915e9a48dfba9bd",
+      "photos": [],
+      "hasPendingDraft": false,
+      "previewExists": true
+    }
+  ]
+}
+

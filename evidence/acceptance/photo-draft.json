@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000005",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "",
+      "body": "两张合成图，各自 caption",
+      "eventDate": "2026-11-06",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "3eb6bdb99f7581ce1e459ac605736481c5f9b684733400ddf0db3ab6c07aa436",
+  "formalContentHash": null
+}
+

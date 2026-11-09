@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000001",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "只有标题",
+      "body": "",
+      "eventDate": "2026-11-09",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "339e1523bc7da934c02a6833051e05ee3283c160b2cdbc1728bb6646272ced30",
+  "formalContentHash": null
+}
+

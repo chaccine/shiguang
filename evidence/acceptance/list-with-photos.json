@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "count": 2,
+  "records": [
+    {
+      "recordId": "rec-000003",
+      "contentRevision": 1,
+      "title": "重启测试",
+      "body": "强杀前的正文（已落盘）",
+      "eventDate": "2026-11-08",
+      "eventTime": null,
+      "bodySha256": "c9341444dfa6c0f071be3e613411657d613b61ab098cb4787915e9a48dfba9bd",
+      "photos": [],
+      "hasPendingDraft": false,
+      "previewExists": true
+    },
+    {
+      "recordId": "rec-000005",
+      "contentRevision": 1,
+      "title": "",
+      "body": "两张合成图，各自 caption",
+      "eventDate": "2026-11-06",
+      "eventTime": null,
+      "bodySha256": "532317aeade1b97842dd89996d4b420178f4dcc1310f0a2fa6ded89d9190c5db",
+      "photos": [
+        {
+          "photoUseId": "pu-000006",
+          "assetId": "ast-8e5d11e6a9495325",
+          "caption": "第一张：窗外的光",
+          "sha256": "8e5d11e6a94953258174d7f3c17564f510c7f281f58fb3778225af454b959d46",
+          "bytes": 27812,
+          "mediaType": "image/png"
+        },
+        {
+          "photoUseId": "pu-000007",
+          "assetId": "ast-5a03b2eb4e0e3775",
+          "caption": "第二张：桌上的茶",
+          "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
+          "bytes": 27812,
+          "mediaType": "image/png"
+        }
+      ],
+      "hasPendingDraft": false,
+      "previewExists": true
+    }
+  ]
+}
+

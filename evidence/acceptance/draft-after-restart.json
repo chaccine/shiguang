@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000003",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "重启测试",
+      "body": "重启前写入的正文",
+      "eventDate": "2026-11-08",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "cbf2f58d93b8fd241cac1ad8eb60ef888539c1eb52e4e9c5f635f95c7567041a",
+  "formalContentHash": null
+}
+

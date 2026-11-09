@@ -1,0 +1,3 @@
+# 本机 rustc 1.85：让解析器优先选择兼容 MSRV 的依赖版本。
+[resolver]
+incompatible-rust-versions = "fallback"

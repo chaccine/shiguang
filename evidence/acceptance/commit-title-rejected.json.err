@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "EMPTY_CONTENT",
+  "message": "缺少正文或照片，无法存入时光（仅标题不能提交）"
+}
+

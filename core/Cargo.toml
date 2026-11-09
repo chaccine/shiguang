@@ -1,0 +1,12 @@
+[package]
+name = "shiguang_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "拾光 Unit-0 领域核心：草稿/正式记录、媒体 asset 与 photoUse 分离、原子持久化"
+
+[lib]
+name = "shiguang_core"
+path = "src/lib.rs"
+
+[dependencies]

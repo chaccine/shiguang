@@ -1,0 +1,13 @@
+[package]
+name = "shiguang"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "拾光 Unit-0 命令行验收驱动（合成数据）"
+
+[[bin]]
+name = "shiguang"
+path = "src/main.rs"
+
+[dependencies]
+shiguang_core = { path = "../core" }

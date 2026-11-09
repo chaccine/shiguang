@@ -1,0 +1,715 @@
+//! 本地持久化：状态文件原子写入 + media 原图目录 + 派生预览缓存。
+
+use crate::json::{self, Json};
+use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot};
+use crate::preview;
+use crate::sha256;
+use crate::time;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+const STATE_FILE: &str = "state.json";
+const MEDIA_DIR: &str = "media";
+const PREVIEW_DIR: &str = "previews";
+const STATE_VERSION: i64 = 1;
+
+pub struct StoreConfig {
+    pub root: PathBuf,
+    pub seed: String,
+}
+
+impl StoreConfig {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
+        Self {
+            root: root.into(),
+            seed,
+        }
+    }
+}
+
+pub struct Store {
+    root: PathBuf,
+    seed: String,
+    state: State,
+}
+
+struct State {
+    version: i64,
+    seq: u64,
+    records: Vec<RecordRow>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CommitOutcome {
+    pub record_id: String,
+    pub content_revision: u32,
+    pub committed_at: String,
+}
+
+impl Store {
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
+        let root = root.into();
+        fs::create_dir_all(root.join(MEDIA_DIR))?;
+        fs::create_dir_all(root.join(PREVIEW_DIR))?;
+        let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
+        let state_path = root.join(STATE_FILE);
+        let state = if state_path.exists() {
+            let text = fs::read_to_string(&state_path)?;
+            State::from_json(&json::parse(&text).map_err(|e| {
+                CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}"))
+            })?)?
+        } else {
+            State {
+                version: STATE_VERSION,
+                seq: 0,
+                records: Vec::new(),
+            }
+        };
+        Ok(Store { root, seed, state })
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn seed(&self) -> &str {
+        &self.seed
+    }
+
+    pub fn state_json(&self) -> Json {
+        self.state.to_json(&self.seed)
+    }
+
+    pub fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
+        self.state
+            .records
+            .iter()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+        self.state
+            .records
+            .iter_mut()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn allocate_id(&mut self, prefix: &str) -> String {
+        self.state.seq += 1;
+        format!("{}-{:06}", prefix, self.state.seq)
+    }
+
+    /// 新建草稿；base 指向已有正式记录时，草稿从正式快照派生（正式快照保持不变）。
+    pub fn create_draft(
+        &mut self,
+        base: Option<&str>,
+        title: &str,
+        body: &str,
+        event_date: &str,
+        event_time: Option<&str>,
+    ) -> Result<RecordRow, CoreError> {
+        let now = time::now_rfc3339();
+        if let Some(base_id) = base {
+            let row = self.row_mut(base_id)?;
+            let formal = row.formal.clone().ok_or_else(|| {
+                CoreError::new(
+                    "BASE_NOT_FORMAL",
+                    format!("只能基于正式记录创建修改草稿：{base_id}"),
+                )
+            })?;
+            if row.draft.is_none() {
+                row.draft = Some(formal);
+                row.base_revision = row.content_revision;
+            }
+            row.updated_at = now;
+            let out = row.clone();
+            self.persist()?;
+            return Ok(out);
+        }
+
+        let record_id = self.allocate_id("rec");
+        let snapshot = Snapshot {
+            title: title.to_string(),
+            body: body.to_string(),
+            event_date: event_date.to_string(),
+            event_time: normalize_time(event_time),
+            photos: Vec::new(),
+        };
+        let row = RecordRow {
+            record_id,
+            content_revision: 0,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            committed_at: None,
+            base_revision: 0,
+            formal: None,
+            draft: Some(snapshot),
+        };
+        self.state.records.push(row.clone());
+        self.persist()?;
+        Ok(row)
+    }
+
+    /// 保存/更新草稿字段；草稿允许不完整（日期可暂空），但有值时校验格式。
+    pub fn save_draft(
+        &mut self,
+        record_id: &str,
+        title: Option<&str>,
+        body: Option<&str>,
+        event_date: Option<&str>,
+        event_time: Option<Option<&str>>,
+    ) -> Result<RecordRow, CoreError> {
+        let now = time::now_rfc3339();
+        {
+            let row = self.row_mut(record_id)?;
+            if row.draft.is_none() {
+                let formal = row.formal.clone().ok_or_else(|| {
+                    CoreError::new("NO_DRAFT", format!("记录没有草稿可保存：{record_id}"))
+                })?;
+                row.draft = Some(formal);
+                row.base_revision = row.content_revision;
+            }
+            let draft = row.draft.as_mut().expect("draft just ensured");
+            if let Some(v) = title {
+                draft.title = v.to_string();
+            }
+            if let Some(v) = body {
+                draft.body = v.to_string();
+            }
+            if let Some(v) = event_date {
+                if !v.trim().is_empty() && !time::is_valid_date(v) {
+                    return Err(CoreError::new(
+                        "INVALID_EVENT_DATE",
+                        format!("事件日期无效：{v}（需为真实的 YYYY-MM-DD）"),
+                    ));
+                }
+                draft.event_date = v.to_string();
+            }
+            if let Some(v) = event_time {
+                if let Some(raw) = v {
+                    if !raw.trim().is_empty() && !time::is_valid_time(raw) {
+                        return Err(CoreError::new(
+                            "INVALID_EVENT_TIME",
+                            format!("事件时刻无效：{raw}（需为 HH:MM，可留空）"),
+                        ));
+                    }
+                }
+                draft.event_time = normalize_time(v);
+            }
+            row.updated_at = now;
+        }
+        self.persist()?;
+        Ok(self.row(record_id)?.clone())
+    }
+
+    /// 附加一张合成图：复制原图到 media/，assetId 由内容 SHA 决定，photoUse 独立 caption。
+    pub fn attach_photo(
+        &mut self,
+        record_id: &str,
+        source: &Path,
+        caption: &str,
+        media_type: Option<&str>,
+    ) -> Result<PhotoUse, CoreError> {
+        let bytes = fs::read(source).map_err(|e| {
+            CoreError::new(
+                "ASSET_READ_FAILED",
+                format!("读取图片失败（{}）：{e}", source.display()),
+            )
+        })?;
+        if bytes.is_empty() {
+            return Err(CoreError::new("EMPTY_ASSET", "图片文件为空，拒绝附加"));
+        }
+        let sha = sha256::hex_digest(&bytes);
+        let media_type = media_type
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| sniff_media_type(source, &bytes));
+        let ext = extension_for(&media_type, source);
+        let asset_id = format!("ast-{}", &sha[..16]);
+        let dest = self
+            .root
+            .join(MEDIA_DIR)
+            .join(format!("{asset_id}.{ext}"));
+
+        if dest.exists() {
+            let existing = fs::read(&dest)?;
+            if sha256::hex_digest(&existing) != sha {
+                return Err(CoreError::new(
+                    "ASSET_CONFLICT",
+                    format!("assetId 冲突且内容不一致：{asset_id}"),
+                ));
+            }
+        } else {
+            atomic_write(&dest, &bytes)?;
+        }
+
+        let photo_use_id = self.allocate_id("pu");
+        let use_ref = PhotoUse {
+            photo_use_id,
+            asset_id,
+            caption: caption.to_string(),
+            sha256: sha,
+            bytes: bytes.len() as u64,
+            media_type,
+        };
+
+        {
+            let row = self.row_mut(record_id)?;
+            if row.draft.is_none() {
+                let formal = row.formal.clone().ok_or_else(|| {
+                    CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
+                })?;
+                row.draft = Some(formal);
+                row.base_revision = row.content_revision;
+            }
+            row.draft
+                .as_mut()
+                .expect("draft just ensured")
+                .photos
+                .push(use_ref.clone());
+            row.updated_at = time::now_rfc3339();
+        }
+        self.persist()?;
+        Ok(use_ref)
+    }
+
+    /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。
+    pub fn commit(&mut self, record_id: &str) -> Result<CommitOutcome, CoreError> {
+        let draft = {
+            let row = self.row(record_id)?;
+            row.draft.clone().ok_or_else(|| {
+                CoreError::new("NO_DRAFT", format!("没有待提交的草稿：{record_id}"))
+            })?
+        };
+        draft.validate_for_commit()?;
+        for photo in &draft.photos {
+            if self.find_asset_path(&photo.asset_id).is_none() {
+                return Err(CoreError::new(
+                    "ASSET_MISSING",
+                    format!(
+                        "原图缺失，拒绝提交（{} / {}）；不会用缺失的媒体生成正式记录",
+                        photo.photo_use_id, photo.asset_id
+                    ),
+                ));
+            }
+        }
+        let now = time::now_rfc3339();
+        let outcome = {
+            let row = self.row_mut(record_id)?;
+            row.content_revision = row.content_revision.saturating_add(1);
+            row.formal = Some(draft);
+            row.committed_at = Some(now.clone());
+            row.updated_at = now.clone();
+            row.draft = None;
+            row.base_revision = row.content_revision;
+            CommitOutcome {
+                record_id: row.record_id.clone(),
+                content_revision: row.content_revision,
+                committed_at: now,
+            }
+        };
+        self.persist()?;
+        Ok(outcome)
+    }
+
+    /// 正式列表只包含正式快照；带未提交修改草稿的记录仍显示旧正式内容。
+    pub fn list_formal(&self) -> Vec<&RecordRow> {
+        let mut rows: Vec<&RecordRow> = self
+            .state
+            .records
+            .iter()
+            .filter(|r| r.formal.is_some())
+            .collect();
+        rows.sort_by(|a, b| {
+            let left = a.formal.as_ref().expect("filtered formal");
+            let right = b.formal.as_ref().expect("filtered formal");
+            right
+                .event_date
+                .cmp(&left.event_date)
+                .then_with(|| b.committed_at.cmp(&a.committed_at))
+                .then_with(|| b.record_id.cmp(&a.record_id))
+        });
+        rows
+    }
+
+    pub fn formal(&self, record_id: &str) -> Option<&Snapshot> {
+        self.state
+            .records
+            .iter()
+            .find(|r| r.record_id == record_id)
+            .and_then(|r| r.formal.as_ref())
+    }
+
+    pub fn asset_path(&self, asset_id: &str) -> Option<PathBuf> {
+        self.find_asset_path(asset_id)
+    }
+
+    fn find_asset_path(&self, asset_id: &str) -> Option<PathBuf> {
+        let dir = self.root.join(MEDIA_DIR);
+        let entries = fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name == asset_id || name.starts_with(&format!("{asset_id}.")) {
+                return Some(path);
+            }
+        }
+        None
+    }
+
+    pub fn preview_path(&self, asset_id: &str) -> PathBuf {
+        self.root
+            .join(PREVIEW_DIR)
+            .join(format!("{asset_id}.preview.png"))
+    }
+
+    /// 生成缺失的预览；已有预览不重复写。返回本次生成的 assetId。
+    pub fn ensure_previews(&self) -> Result<Vec<String>, CoreError> {
+        let mut created = Vec::new();
+        for photo in self.all_photos() {
+            let preview_path = self.preview_path(&photo.asset_id);
+            if preview_path.exists() {
+                continue;
+            }
+            let asset_path = self.find_asset_path(&photo.asset_id).ok_or_else(|| {
+                CoreError::new(
+                    "ASSET_MISSING",
+                    format!("原图缺失，无法重建预览：{}", photo.asset_id),
+                )
+            })?;
+            let bytes = fs::read(&asset_path)?;
+            let sha = sha256::hex_digest(&bytes);
+            if !photo.sha256.is_empty() && sha != photo.sha256 {
+                return Err(CoreError::new(
+                    "ASSET_HASH_MISMATCH",
+                    format!("原图 SHA 与记录不一致：{}", photo.asset_id),
+                ));
+            }
+            let png = preview::preview_bytes(&sha);
+            atomic_write(&preview_path, &png)?;
+            created.push(photo.asset_id.clone());
+        }
+        Ok(created)
+    }
+
+    /// 删除派生预览缓存；绝不触碰 media/ 原图。
+    pub fn clear_previews(&self) -> Result<Vec<String>, CoreError> {
+        let mut removed = Vec::new();
+        let dir = self.root.join(PREVIEW_DIR);
+        if dir.exists() {
+            for entry in fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    removed.push(entry.file_name().to_string_lossy().to_string());
+                    fs::remove_file(&path)?;
+                }
+            }
+        }
+        Ok(removed)
+    }
+
+    pub fn all_photos(&self) -> Vec<PhotoUse> {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut photos = Vec::new();
+        for row in &self.state.records {
+            for snapshot in [row.formal.as_ref(), row.draft.as_ref()].into_iter().flatten() {
+                for photo in &snapshot.photos {
+                    if seen.insert(photo.photo_use_id.clone()) {
+                        photos.push(photo.clone());
+                    }
+                }
+            }
+        }
+        photos
+    }
+
+    /// 磁盘上的原图清单（用于 AC-U0-07 前后对比，不依赖任何记录引用）。
+    pub fn assets_on_disk(&self) -> Result<Vec<AssetInfo>, CoreError> {
+        let mut assets = Vec::new();
+        let dir = self.root.join(MEDIA_DIR);
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let bytes = fs::read(&path)?;
+            assets.push(AssetInfo {
+                file: format!(
+                    "{}/{}",
+                    MEDIA_DIR,
+                    entry.file_name().to_string_lossy()
+                ),
+                asset_id: entry
+                    .file_name()
+                    .to_string_lossy()
+                    .split('.')
+                    .next()
+                    .unwrap_or_default()
+                    .to_string(),
+                sha256: sha256::hex_digest(&bytes),
+                bytes: bytes.len() as u64,
+            });
+        }
+        assets.sort_by(|a, b| a.file.cmp(&b.file));
+        Ok(assets)
+    }
+
+    pub fn manifest_json(&self, versions: &[(String, String)]) -> Result<Json, CoreError> {
+        let records = self
+            .list_formal()
+            .into_iter()
+            .map(|row| {
+                let formal = row.formal.as_ref().expect("formal row");
+                Json::obj(vec![
+                    ("recordId", Json::str(row.record_id.clone())),
+                    ("contentRevision", Json::Num(row.content_revision as i64)),
+                    ("committedAt", opt_str(&row.committed_at)),
+                    ("eventDate", Json::str(formal.event_date.clone())),
+                    ("eventTime", opt_str(&formal.event_time)),
+                    (
+                        "bodySha256",
+                        Json::str(sha256::hex_digest(formal.body.as_bytes())),
+                    ),
+                    ("titleSha256", Json::str(sha256::hex_digest(formal.title.as_bytes()))),
+                    (
+                        "photos",
+                        Json::Arr(
+                            formal
+                                .photos
+                                .iter()
+                                .map(|p| {
+                                    Json::obj(vec![
+                                        ("photoUseId", Json::str(p.photo_use_id.clone())),
+                                        ("assetId", Json::str(p.asset_id.clone())),
+                                        ("caption", Json::str(p.caption.clone())),
+                                        ("sha256", Json::str(p.sha256.clone())),
+                                        ("bytes", Json::Num(p.bytes as i64)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
+                ])
+            })
+            .collect();
+
+        let assets = self
+            .assets_on_disk()?
+            .into_iter()
+            .map(|a| {
+                Json::obj(vec![
+                    ("assetId", Json::str(a.asset_id)),
+                    ("file", Json::str(a.file)),
+                    ("sha256", Json::str(a.sha256)),
+                    ("bytes", Json::Num(a.bytes as i64)),
+                ])
+            })
+            .collect();
+
+        let mut platform = vec![
+            ("os", Json::str(std::env::consts::OS)),
+            ("arch", Json::str(std::env::consts::ARCH)),
+            ("unit", Json::str("UNIT0")),
+            ("seed", Json::str(self.seed.clone())),
+            ("generatedAt", Json::str(time::now_rfc3339())),
+        ];
+        for (k, v) in versions {
+            platform.push((k.as_str(), Json::str(v.clone())));
+        }
+
+        Ok(Json::obj(vec![
+            ("platform", Json::obj(platform)),
+            ("records", Json::Arr(records)),
+            ("assets", Json::Arr(assets)),
+        ]))
+    }
+
+    pub fn persist(&self) -> Result<(), CoreError> {
+        let path = self.root.join(STATE_FILE);
+        let text = self.state.to_json(&self.seed).pretty();
+        atomic_write(&path, text.as_bytes())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AssetInfo {
+    pub asset_id: String,
+    pub file: String,
+    pub sha256: String,
+    pub bytes: u64,
+}
+
+impl State {
+    fn to_json(&self, seed: &str) -> Json {
+        Json::obj(vec![
+            ("version", Json::Num(self.version)),
+            ("seed", Json::str(seed)),
+            ("seq", Json::Num(self.seq as i64)),
+            (
+                "records",
+                Json::Arr(self.records.iter().map(RecordRow::to_json).collect()),
+            ),
+        ])
+    }
+
+    fn from_json(value: &Json) -> Result<Self, CoreError> {
+        let version = value
+            .get("version")
+            .and_then(Json::as_i64)
+            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version"))?;
+        if version != STATE_VERSION {
+            return Err(CoreError::new(
+                "STATE_VERSION_UNSUPPORTED",
+                format!("不支持的状态版本：{version}"),
+            ));
+        }
+        let seq = value
+            .get("seq")
+            .and_then(Json::as_i64)
+            .unwrap_or(0)
+            .max(0) as u64;
+        let records = match value.get("records") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(RecordRow::from_json)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
+            _ => Vec::new(),
+        };
+        Ok(State {
+            version,
+            seq,
+            records,
+        })
+    }
+}
+
+fn opt_str(value: &Option<String>) -> Json {
+    match value {
+        Some(v) => Json::str(v.clone()),
+        None => Json::Null,
+    }
+}
+
+fn normalize_time(value: Option<&str>) -> Option<String> {
+    match value {
+        Some(v) if !v.trim().is_empty() => Some(v.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn sniff_media_type(source: &Path, bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return "image/png".to_string();
+    }
+    if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        return "image/jpeg".to_string();
+    }
+    if bytes.starts_with(b"GIF8") {
+        return "image/gif".to_string();
+    }
+    if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return "image/webp".to_string();
+    }
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+fn extension_for(media_type: &str, source: &Path) -> String {
+    match media_type {
+        "image/png" => "png".to_string(),
+        "image/jpeg" => "jpg".to_string(),
+        "image/gif" => "gif".to_string(),
+        "image/webp" => "webp".to_string(),
+        _ => source
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| "bin".to_string()),
+    }
+}
+
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// 原子写入：同目录临时文件 -> fsync -> rename -> fsync 目录。
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
+    let dir = path
+        .parent()
+        .ok_or_else(|| CoreError::io("写入路径缺少父目录"))?;
+    fs::create_dir_all(dir)?;
+    let counter = TMP_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let tmp = dir.join(format!(
+        ".tmp-{}-{}-{}",
+        std::process::id(),
+        counter,
+        time::now_rfc3339().replace(':', "")
+    ));
+    {
+        let mut file = File::create(&tmp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+    fs::rename(&tmp, path)?;
+    if let Ok(handle) = File::open(dir) {
+        let _ = handle.sync_all();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "shiguang-store-test-{}-{}",
+            std::process::id(),
+            name
+        ));
+        let _ = fs::remove_dir_all(&root);
+        root
+    }
+
+    #[test]
+    fn draft_round_trip_and_atomic_state() {
+        let root = temp_root("roundtrip");
+        let mut store = Store::open(&root).unwrap();
+        let row = store
+            .create_draft(None, "标题", "正文", "2026-11-09", None)
+            .unwrap();
+        let id = row.record_id.clone();
+        drop(store);
+
+        let reopened = Store::open(&root).unwrap();
+        let row = reopened.row(&id).unwrap();
+        assert_eq!(row.draft.as_ref().unwrap().body, "正文");
+        assert!(row.formal.is_none());
+        assert_eq!(row.content_revision, 0);
+        // 无临时文件残留
+        let leftovers: Vec<_> = fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with(".tmp-"))
+            .collect();
+        assert!(leftovers.is_empty());
+    }
+}

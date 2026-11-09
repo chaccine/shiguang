@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "record": {
+    "recordId": "rec-000009",
+    "contentRevision": 1,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": "2026-11-09T10:00:00Z",
+    "baseRevision": 1,
+    "formal": {
+      "title": "",
+      "body": "未来的日期，不伪造时刻",
+      "eventDate": "2099-12-31",
+      "eventTime": null,
+      "photos": []
+    },
+    "draft": null
+  },
+  "draftContentHash": null,
+  "formalContentHash": "30a47928d9105cdcd16dc116c9cb287c3543e63545f88aa8358a9211248ab53c",
+  "formalEventDate": "2099-12-31",
+  "formalEventTime": null
+}
+
