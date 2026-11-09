@@ -8,6 +8,7 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoreError {
     pub code: &'static str,
+    pub stage: Option<&'static str>,
     pub message: String,
 }
 
@@ -15,6 +16,18 @@ impl CoreError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
+            stage: None,
+            message: message.into(),
+        }
+    }
+    pub fn with_stage(
+        code: &'static str,
+        stage: &'static str,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            stage: Some(stage),
             message: message.into(),
         }
     }
@@ -22,11 +35,15 @@ impl CoreError {
         Self::new("IO_ERROR", message)
     }
     pub fn to_json(&self) -> Json {
-        Json::obj(vec![
+        let mut entries = vec![
             ("ok", Json::Bool(false)),
             ("code", Json::str(self.code)),
             ("message", Json::str(self.message.clone())),
-        ])
+        ];
+        if let Some(stage) = self.stage {
+            entries.push(("stage", Json::str(stage)));
+        }
+        Json::obj(entries)
     }
 }
 

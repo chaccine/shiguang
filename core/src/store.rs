@@ -2,13 +2,12 @@
 
 use crate::json::{self, Json};
 use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot};
+use crate::persist::{self, Durability};
 use crate::preview;
 use crate::sha256;
 use crate::time;
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 const STATE_FILE: &str = "state.json";
 const MEDIA_DIR: &str = "media";
@@ -34,6 +33,7 @@ pub struct Store {
     root: PathBuf,
     seed: String,
     state: State,
+    last_durability: Durability,
 }
 
 #[derive(Clone)]
@@ -48,6 +48,7 @@ pub struct CommitOutcome {
     pub record_id: String,
     pub content_revision: u32,
     pub committed_at: String,
+    pub durability: Durability,
 }
 
 impl Store {
@@ -55,6 +56,13 @@ impl Store {
         let root = root.into();
         fs::create_dir_all(root.join(MEDIA_DIR))?;
         fs::create_dir_all(root.join(PREVIEW_DIR))?;
+        if let Ok(entries) = fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().starts_with(".tmp-") {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
         let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
         let state_path = root.join(STATE_FILE);
         let state = if state_path.exists() {
@@ -69,7 +77,14 @@ impl Store {
                 records: Vec::new(),
             }
         };
-        Ok(Store { root, seed, state })
+        Ok(Store {
+            root,
+            seed,
+            state,
+            last_durability: Durability::Uncertain {
+                error: "当前实例尚未写入状态".to_string(),
+            },
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -84,6 +99,11 @@ impl Store {
         self.state.to_json(&self.seed)
     }
 
+    /// 最近一次成功状态写入的耐久性；本实例尚未写入时为 Uncertain。
+    pub fn last_durability(&self) -> &Durability {
+        &self.last_durability
+    }
+
     pub fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
         self.state.row(record_id)
     }
@@ -93,12 +113,13 @@ impl Store {
     fn transact<T>(
         &mut self,
         op: impl FnOnce(&mut State) -> Result<T, CoreError>,
-    ) -> Result<T, CoreError> {
+    ) -> Result<(T, Durability), CoreError> {
         let mut candidate = self.state.clone();
         let value = op(&mut candidate)?;
-        self.persist_state(&candidate)?;
+        let durability = self.persist_state(&candidate)?;
         self.state = candidate;
-        Ok(value)
+        self.last_durability = durability.clone();
+        Ok((value, durability))
     }
 
     /// 新建草稿；base 指向已有正式记录时，草稿从正式快照派生（正式快照保持不变）。
@@ -126,7 +147,8 @@ impl Store {
                 }
                 row.updated_at = now.clone();
                 Ok(row.clone())
-            });
+            })
+            .map(|(row, _)| row);
         }
 
         self.transact(|state| {
@@ -151,6 +173,7 @@ impl Store {
             state.records.push(row.clone());
             Ok(row)
         })
+        .map(|(row, _)| row)
     }
 
     /// 保存/更新草稿字段；草稿允许不完整（日期可暂空），但有值时校验格式。
@@ -211,6 +234,7 @@ impl Store {
             row.updated_at = now;
             Ok(row.clone())
         })
+        .map(|(row, _)| row)
     }
 
     /// 附加一张合成图：复制原图到 media/，assetId 由内容 SHA 决定，photoUse 独立 caption。
@@ -251,7 +275,7 @@ impl Store {
                 ));
             }
         } else {
-            atomic_write(&dest, &bytes)?;
+            persist::write_atomic(&dest, &bytes)?;
         }
 
         self.transact(|state| {
@@ -282,6 +306,7 @@ impl Store {
             row.updated_at = time::now_rfc3339();
             Ok(use_ref)
         })
+        .map(|(photo, _)| photo)
     }
 
     /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。
@@ -308,7 +333,7 @@ impl Store {
             }
         }
         let now = time::now_rfc3339();
-        self.transact(|state| {
+        let ((record_id, content_revision, committed_at), durability) = self.transact(|state| {
             let row = state.row_mut(record_id)?;
             row.content_revision = row.content_revision.saturating_add(1);
             row.formal = Some(draft);
@@ -316,11 +341,13 @@ impl Store {
             row.updated_at = now.clone();
             row.draft = None;
             row.base_revision = row.content_revision;
-            Ok(CommitOutcome {
-                record_id: row.record_id.clone(),
-                content_revision: row.content_revision,
-                committed_at: now,
-            })
+            Ok((row.record_id.clone(), row.content_revision, now))
+        })?;
+        Ok(CommitOutcome {
+            record_id,
+            content_revision,
+            committed_at,
+            durability,
         })
     }
 
@@ -398,7 +425,7 @@ impl Store {
                 ));
             }
             let png = preview::preview_bytes(&sha);
-            atomic_write(&preview_path, &png)?;
+            persist::write_atomic(&preview_path, &png)?;
             created.push(photo.asset_id.clone());
         }
         Ok(created)
@@ -538,14 +565,25 @@ impl Store {
         ]))
     }
 
-    pub fn persist(&self) -> Result<(), CoreError> {
-        self.persist_state(&self.state)
+    pub fn persist(&mut self) -> Result<Durability, CoreError> {
+        let durability = self.persist_state(&self.state)?;
+        self.last_durability = durability.clone();
+        Ok(durability)
     }
 
-    fn persist_state(&self, state: &State) -> Result<(), CoreError> {
+    fn persist_state(&self, state: &State) -> Result<Durability, CoreError> {
         let path = self.root.join(STATE_FILE);
-        let text = state.to_json(&self.seed).pretty();
-        atomic_write(&path, text.as_bytes())
+        let value = state.to_json(&self.seed);
+        let text = value.pretty();
+        let serialize_error = |message| {
+            CoreError::with_stage("STATE_SERIALIZE_FAILED", "serialize", message)
+        };
+        let parsed = json::parse(&text).map_err(serialize_error)?;
+        let round_trip = State::from_json(&parsed).map_err(|e| serialize_error(e.to_string()))?;
+        if round_trip.to_json(&self.seed).dump() != value.dump() {
+            return Err(serialize_error("状态序列化往返不一致".to_string()));
+        }
+        persist::write_atomic(&path, text.as_bytes())
     }
 }
 
@@ -678,33 +716,6 @@ fn extension_for(media_type: &str, source: &Path) -> String {
     }
 }
 
-static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// 原子写入：同目录临时文件 -> fsync -> rename -> fsync 目录。
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
-    let dir = path
-        .parent()
-        .ok_or_else(|| CoreError::io("写入路径缺少父目录"))?;
-    fs::create_dir_all(dir)?;
-    let counter = TMP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = dir.join(format!(
-        ".tmp-{}-{}-{}",
-        std::process::id(),
-        counter,
-        time::now_rfc3339().replace(':', "")
-    ));
-    {
-        let mut file = File::create(&tmp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-    }
-    fs::rename(&tmp, path)?;
-    if let Ok(handle) = File::open(dir) {
-        let _ = handle.sync_all();
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,5 +752,62 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().starts_with(".tmp-"))
             .collect();
         assert!(leftovers.is_empty());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn normal_writes_report_durable_on_linux() {
+        let root = temp_root("durable");
+        let mut store = Store::open(&root).unwrap();
+        let row = store
+            .create_draft(None, "标题", "正文", "2026-11-09", None)
+            .unwrap();
+        assert_eq!(store.last_durability(), &Durability::Durable);
+        let outcome = store.commit(&row.record_id).unwrap();
+        assert_eq!(outcome.durability, Durability::Durable);
+        assert_eq!(outcome.durability.as_str(), "durable");
+        assert_eq!(store.persist().unwrap(), Durability::Durable);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn open_cleans_only_root_temp_files() {
+        let root = temp_root("cleanup");
+        fs::create_dir_all(root.join(MEDIA_DIR)).unwrap();
+        for name in [
+            ".tmp-shiguang-1-2", ".tmp-legacy", ".keep", "tmp-other", "media/.tmp-keep",
+        ] {
+            fs::write(root.join(name), b"synthetic").unwrap();
+        }
+        fs::create_dir(root.join(".tmp-directory")).unwrap();
+        Store::open(&root).unwrap();
+        assert!(!root.join(".tmp-shiguang-1-2").exists());
+        assert!(!root.join(".tmp-legacy").exists());
+        for name in [".keep", "tmp-other", "media/.tmp-keep", ".tmp-directory"] {
+            assert!(root.join(name).exists(), "不得删除 {name}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn serialization_mismatch_keeps_memory_and_disk() {
+        let root = temp_root("serialize");
+        let mut store = Store::open(&root).unwrap();
+        store
+            .create_draft(None, "标题", "正文", "2026-11-09", None)
+            .unwrap();
+        let before = store.state_json().dump();
+        let bytes = fs::read(root.join(STATE_FILE)).unwrap();
+        let error = store
+            .transact(|state| {
+                state.seq = u64::MAX;
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "STATE_SERIALIZE_FAILED");
+        assert_eq!(error.stage, Some("serialize"));
+        assert_eq!(store.state_json().dump(), before);
+        assert_eq!(fs::read(root.join(STATE_FILE)).unwrap(), bytes);
+        fs::remove_dir_all(root).unwrap();
     }
 }

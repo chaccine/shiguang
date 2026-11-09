@@ -25,6 +25,7 @@
   "draftContentHash": "71d15036d9b78aa424d85380ce9b8db7214eeeeb9dea8335c30edb9018fb611d",
   "formalContentHash": "cc6261f59fff69a6e55aac3626aef446801cb70c7d61122ea847c99679ebdd23",
   "formalEventDate": "2026-11-05",
-  "formalEventTime": "19:20"
+  "formalEventTime": "19:20",
+  "durability": "durable"
 }
 

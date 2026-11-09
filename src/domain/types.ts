@@ -34,8 +34,17 @@ export interface FieldIssue {
   message: string;
 }
 
+export type Durability = "durable" | "parentSyncUnsupported" | "uncertain";
+
+export interface CoreErrorPayload {
+  code: string;
+  stage?: string;
+  message: string;
+}
+
 export interface CommitResult {
   recordId: string;
   contentRevision: number;
   committedAt: string;
+  durability: Durability;
 }

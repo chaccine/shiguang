@@ -72,7 +72,7 @@ fn run() -> Result<Json, CoreError> {
                 opts.get("date").unwrap_or(""),
                 opts.get("time"),
             )?;
-            Ok(ok_record(&store, &row))
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
         }
         "draft-save" => {
             let (id, opts) = first_positional(rest)?;
@@ -90,11 +90,14 @@ fn run() -> Result<Json, CoreError> {
             )?;
             if let Some(ms) = opts.get("hold-ms").and_then(|v| v.parse::<u64>().ok()) {
                 // 已落盘后保持进程存活，供验收脚本做 kill -9 演练。
-                println!("{}", ok_record(&store, &row).pretty());
+                println!(
+                    "{}",
+                    ok_record(&row, Some(store.last_durability().as_str())).pretty()
+                );
                 let _ = std::io::stdout().flush();
                 sleep(Duration::from_millis(ms));
             }
-            Ok(ok_record(&store, &row))
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
         }
         "attach" => {
             let (id, opts) = first_positional(rest)?;
@@ -110,6 +113,7 @@ fn run() -> Result<Json, CoreError> {
             Ok(Json::obj(vec![
                 ("ok", Json::Bool(true)),
                 ("photo", photo.to_json()),
+                ("durability", Json::str(store.last_durability().as_str())),
             ]))
         }
         "commit" => {
@@ -120,6 +124,7 @@ fn run() -> Result<Json, CoreError> {
                 ("recordId", Json::str(outcome.record_id)),
                 ("contentRevision", Json::Num(outcome.content_revision as i64)),
                 ("committedAt", Json::str(outcome.committed_at)),
+                ("durability", Json::str(outcome.durability.as_str())),
             ]))
         }
         "list" => {
@@ -137,7 +142,7 @@ fn run() -> Result<Json, CoreError> {
         "get" => {
             let (id, _) = first_positional(rest)?;
             let row = store.row(&id)?.clone();
-            Ok(ok_record(&store, &row))
+            Ok(ok_record(&row, None))
         }
         "dump" => Ok(Json::obj(vec![
             ("ok", Json::Bool(true)),
@@ -234,7 +239,7 @@ fn run() -> Result<Json, CoreError> {
     }
 }
 
-fn ok_record(store: &Store, row: &RecordRow) -> Json {
+fn ok_record(row: &RecordRow, durability: Option<&str>) -> Json {
     let mut entries = vec![
         ("ok", Json::Bool(true)),
         ("record", row.to_json()),
@@ -260,7 +265,9 @@ fn ok_record(store: &Store, row: &RecordRow) -> Json {
             None => Json::Null,
         }));
     }
-    let _ = store;
+    if let Some(durability) = durability {
+        entries.push(("durability", Json::str(durability)));
+    }
     Json::obj(entries)
 }
 

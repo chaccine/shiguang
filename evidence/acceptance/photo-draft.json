@@ -17,6 +17,7 @@
     }
   },
   "draftContentHash": "3eb6bdb99f7581ce1e459ac605736481c5f9b684733400ddf0db3ab6c07aa436",
-  "formalContentHash": null
+  "formalContentHash": null,
+  "durability": "durable"
 }
 
