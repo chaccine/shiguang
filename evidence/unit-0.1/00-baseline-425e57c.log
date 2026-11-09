@@ -1,0 +1,29 @@
+# 00-baseline git=425e57c rustc 1.90.0 (1159e78c4 2025-09-14) at=2026-11-09 13:45:02 CST
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test json::tests::pretty_is_valid ... ok
+test json::tests::round_trip ... ok
+test json::tests::rejects_floats_and_trailing_garbage ... ok
+test preview::tests::crc_known_value ... ok
+test time::tests::date_validation ... ok
+test time::tests::epoch_and_known_dates ... ok
+test time::tests::time_validation ... ok
+test store::tests::draft_round_trip_and_atomic_state ... ok
+test preview::tests::produces_stable_png ... ok
+test sha256::tests::known_vectors ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test ac_u0_03_draft_survives_reopen_with_identical_hash ... ok
+test ac_u0_02_title_only_draft_cannot_be_committed ... ok
+test ac_u0_04_commit_creates_formal_record_and_increments_revision ... ok
+test ac_u0_02b_missing_or_invalid_date_is_rejected ... ok
+test ac_u0_05_formal_list_excludes_drafts ... ok
+test ac_u0_07b_missing_original_blocks_commit ... ok
+test ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view ... ok
+test ac_u0_09_edit_commit_updates_single_entry_with_stable_id ... ok
+test ac_u0_10_future_date_without_time_keeps_null_time ... ok
+test ac_u0_11_manifest_lists_formal_records_and_media_sha ... ok
+test s0_guard_formal_state_never_references_missing_asset ... ok
+test ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically ... ok
+test ac_u0_06_two_photos_independent_captions_and_sha_verifiable ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+exit=0
