@@ -146,11 +146,29 @@ jobs:
           if [ ! -d src-tauri/gen/android ]; then
             npx tauri android init --ci 2>&1 | tee ci-logs/android-init.log
           fi
+          # Gradle wrapper 默认 10s 网络超时，services.gradle.org 在 runner 上偶发读超时：放宽到 120s。
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+          cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties | tee -a ci-logs/android-init.log
+      - name: 缓存 Gradle（wrapper 发行包与依赖）
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: gradle-android-v1-${{ hashFiles('src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
       - name: tauri android build（debug 签名 APK，arm64）
         shell: bash
         run: |
           set -o pipefail
-          npx tauri android build --ci --debug --apk --target aarch64 2>&1 | tee ci-logs/android-build.log
+          # Gradle 发行包/依赖下载偶发超时：最多重试 3 次（已编译的 Rust 部分会复用）。
+          for attempt in 1 2 3; do
+            echo "== android build attempt $attempt ==" | tee -a ci-logs/android-build.log
+            if npx tauri android build --ci --debug --apk --target aarch64 2>&1 | tee -a ci-logs/android-build.log; then
+              ok=1; break
+            fi
+            ok=0; sleep $((attempt * 30))
+          done
+          [ "$ok" = 1 ]
           find src-tauri/gen/android/app/build/outputs -name '*.apk' -exec ls -l {} \; | tee -a ci-logs/android-build.log
       - name: 上传日志与生成的 gen/android 工程
         if: always()
