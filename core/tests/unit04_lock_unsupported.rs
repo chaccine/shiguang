@@ -79,6 +79,8 @@ fn unsupported_write_lock_held_elsewhere_blocks_commit_without_changes() {
     s.commit(&id, 0).unwrap();
 }
 
+// 需要 /proc 判定进程存活：Linux / Android。
+#[cfg(any(target_os = "linux", target_os = "android"))]
 #[test]
 fn unsupported_lock_takes_over_stale_owner_left_by_crashed_process() {
     let t = TempRoot::new("unsupported-stale");
@@ -88,6 +90,21 @@ fn unsupported_lock_takes_over_stale_owner_left_by_crashed_process() {
     fs::write(t.path().join(".write.lock.owner"), "4194304 1 0\n").unwrap();
     let mut s = Store::open_exclusive(t.path()).expect("残留锁应被接管");
     formal(&mut s);
+}
+
+// 没有 /proc（macOS/Windows）时无法确认对方已退出：宁可拒绝，绝不抢锁写入。
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[test]
+fn unsupported_lock_without_proc_never_steals_foreign_owner() {
+    let t = TempRoot::new("unsupported-noproc");
+    unsupported();
+    fs::write(t.path().join(".instance.lock.owner"), "4194304 1 0\n").unwrap();
+    let e = Store::open_exclusive(t.path()).err().expect("must not steal");
+    assert_eq!(e.code, "STORE_LOCKED");
+    assert_eq!(
+        fs::read_to_string(t.path().join(".instance.lock.owner")).unwrap(),
+        "4194304 1 0\n"
+    );
 }
 
 #[test]
