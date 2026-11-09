@@ -10,3 +10,7 @@ name = "shiguang_core"
 path = "src/lib.rs"
 
 [dependencies]
+
+[features]
+# 仅测试使用的故障注入钩子；默认关闭，不改变生产语义，也不是第三方依赖。
+fault-injection = []

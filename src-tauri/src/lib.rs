@@ -2,9 +2,9 @@
 //!
 //! 注意：本目录在 Unit-0 环境因缺少 pkg-config / webkit2gtk 无法构建，状态记 BLOCKED。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use shiguang_core::json::Json;
-use shiguang_core::model::RecordRow;
+use shiguang_core::model::{CoreError, RecordRow};
 use shiguang_core::Store;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -79,11 +79,40 @@ impl Default for AttachPhotoInput {
     }
 }
 
-fn to_value(json: Json) -> Result<serde_json::Value, String> {
-    serde_json::from_str(&json.dump()).map_err(|e| format!("序列化失败：{e}"))
+#[derive(Serialize)]
+pub struct CommandError {
+    code: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stage: Option<&'static str>,
+    message: String,
 }
 
-fn record_value(row: &RecordRow) -> Result<serde_json::Value, String> {
+impl From<CoreError> for CommandError {
+    fn from(error: CoreError) -> Self {
+        Self {
+            code: error.code,
+            stage: error.stage,
+            message: error.message,
+        }
+    }
+}
+
+fn command_error(code: &'static str, error: impl std::fmt::Display) -> CommandError {
+    CoreError::new(code, error.to_string()).into()
+}
+
+fn to_value(json: Json) -> Result<serde_json::Value, CommandError> {
+    serde_json::from_str(&json.dump()).map_err(|e| {
+        CoreError::with_stage(
+            "STATE_SERIALIZE_FAILED",
+            "serialize",
+            format!("序列化失败：{e}"),
+        )
+        .into()
+    })
+}
+
+fn record_value(row: &RecordRow) -> Result<serde_json::Value, CommandError> {
     to_value(row.to_json())
 }
 
@@ -91,8 +120,11 @@ fn record_value(row: &RecordRow) -> Result<serde_json::Value, String> {
 fn create_draft(
     input: CreateDraftInput,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut store = state.store.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, CommandError> {
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
     let row = store
         .create_draft(
             input.base_record_id.as_deref(),
@@ -101,7 +133,7 @@ fn create_draft(
             &input.event_date,
             input.event_time.as_deref(),
         )
-        .map_err(|e| e.message)?;
+        .map_err(CommandError::from)?;
     record_value(&row)
 }
 
@@ -109,8 +141,11 @@ fn create_draft(
 fn save_draft(
     input: SaveDraftInput,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut store = state.store.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, CommandError> {
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
     let time_patch = if input.clear_event_time {
         Some(None)
     } else {
@@ -124,7 +159,7 @@ fn save_draft(
             input.event_date.as_deref(),
             time_patch,
         )
-        .map_err(|e| e.message)?;
+        .map_err(CommandError::from)?;
     record_value(&row)
 }
 
@@ -132,8 +167,11 @@ fn save_draft(
 fn attach_photo(
     input: AttachPhotoInput,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut store = state.store.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, CommandError> {
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
     store
         .attach_photo(
             &input.record_id,
@@ -141,18 +179,24 @@ fn attach_photo(
             &input.caption,
             input.media_type.as_deref(),
         )
-        .map_err(|e| e.message)?;
-    let row = store.row(&input.record_id).map_err(|e| e.message)?;
+        .map_err(CommandError::from)?;
+    let row = store.row(&input.record_id).map_err(CommandError::from)?;
     record_value(row)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 fn commit_record(
     record_id: String,
+    expected_base_revision: u32,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut store = state.store.lock().map_err(|e| e.to_string())?;
-    let outcome = store.commit(&record_id).map_err(|e| e.message)?;
+) -> Result<serde_json::Value, CommandError> {
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let outcome = store
+        .commit(&record_id, expected_base_revision)
+        .map_err(CommandError::from)?;
     to_value(Json::obj(vec![
         ("recordId", Json::str(outcome.record_id)),
         (
@@ -160,17 +204,20 @@ fn commit_record(
             Json::Num(outcome.content_revision as i64),
         ),
         ("committedAt", Json::str(outcome.committed_at)),
+        ("durability", Json::str(outcome.durability.as_str())),
     ]))
 }
 
 #[tauri::command]
-fn list_formal_records(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let store = state.store.lock().map_err(|e| e.to_string())?;
-    let rows: Result<Vec<_>, String> = store
-        .list_formal()
-        .into_iter()
-        .map(record_value)
-        .collect();
+fn list_formal_records(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let rows: Result<Vec<_>, CommandError> =
+        store.list_formal().into_iter().map(record_value).collect();
     Ok(serde_json::Value::Array(rows?))
 }
 
@@ -178,9 +225,12 @@ fn list_formal_records(state: tauri::State<'_, AppState>) -> Result<serde_json::
 fn get_record(
     record_id: String,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let store = state.store.lock().map_err(|e| e.to_string())?;
-    let row = store.row(&record_id).map_err(|e| e.message)?;
+) -> Result<serde_json::Value, CommandError> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let row = store.row(&record_id).map_err(CommandError::from)?;
     record_value(row)
 }
 
@@ -188,12 +238,15 @@ fn get_record(
 fn export_manifest(
     out_path: String,
     state: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    let store = state.store.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, CommandError> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
     let manifest = store
         .manifest_json(&[("tauri".to_string(), tauri::VERSION.to_string())])
-        .map_err(|e| e.message)?;
-    std::fs::write(&out_path, manifest.pretty()).map_err(|e| e.to_string())?;
+        .map_err(CommandError::from)?;
+    std::fs::write(&out_path, manifest.pretty()).map_err(|e| command_error("IO_ERROR", e))?;
     to_value(Json::obj(vec![
         ("out", Json::str(out_path)),
         ("records", Json::Num(store.list_formal().len() as i64)),

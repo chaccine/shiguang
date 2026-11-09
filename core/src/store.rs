@@ -2,13 +2,12 @@
 
 use crate::json::{self, Json};
 use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot};
+use crate::persist::{self, Durability};
 use crate::preview;
 use crate::sha256;
 use crate::time;
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 const STATE_FILE: &str = "state.json";
 const MEDIA_DIR: &str = "media";
@@ -34,8 +33,10 @@ pub struct Store {
     root: PathBuf,
     seed: String,
     state: State,
+    last_durability: Durability,
 }
 
+#[derive(Clone)]
 struct State {
     version: i64,
     seq: u64,
@@ -47,6 +48,7 @@ pub struct CommitOutcome {
     pub record_id: String,
     pub content_revision: u32,
     pub committed_at: String,
+    pub durability: Durability,
 }
 
 impl Store {
@@ -54,6 +56,13 @@ impl Store {
         let root = root.into();
         fs::create_dir_all(root.join(MEDIA_DIR))?;
         fs::create_dir_all(root.join(PREVIEW_DIR))?;
+        if let Ok(entries) = fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().starts_with(".tmp-") {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
         let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
         let state_path = root.join(STATE_FILE);
         let state = if state_path.exists() {
@@ -68,7 +77,14 @@ impl Store {
                 records: Vec::new(),
             }
         };
-        Ok(Store { root, seed, state })
+        Ok(Store {
+            root,
+            seed,
+            state,
+            last_durability: Durability::Uncertain {
+                error: "当前实例尚未写入状态".to_string(),
+            },
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -83,25 +99,44 @@ impl Store {
         self.state.to_json(&self.seed)
     }
 
+    /// 最近一次成功状态写入的耐久性；本实例尚未写入时为 Uncertain。
+    pub fn last_durability(&self) -> &Durability {
+        &self.last_durability
+    }
+
     pub fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
-        self.state
-            .records
-            .iter()
-            .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+        self.state.row(record_id)
     }
 
-    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
-        self.state
-            .records
-            .iter_mut()
-            .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    /// 事务：在候选状态上执行操作，序列化成功后再替换内存状态。
+    /// 任一环节失败，`self.state` 保持不变。
+    fn transact<T>(
+        &mut self,
+        op: impl FnOnce(&mut State) -> Result<T, CoreError>,
+    ) -> Result<(T, Durability), CoreError> {
+        let mut candidate = self.candidate_state()?;
+        let value = op(&mut candidate)?;
+        let durability = self.apply_candidate(candidate)?;
+        Ok((value, durability))
     }
 
-    fn allocate_id(&mut self, prefix: &str) -> String {
-        self.state.seq += 1;
-        format!("{}-{:06}", prefix, self.state.seq)
+    fn candidate_state(&self) -> Result<State, CoreError> {
+        // 写前重载缩小跨进程丢失更新的窗口；单写者文件锁留到 g（后续阶段），
+        // 当前读取、比较、替换之间仍可能发生竞争。
+        match fs::read_to_string(self.root.join(STATE_FILE)) {
+            Ok(text) => State::from_json(&json::parse(&text).map_err(|e| {
+                CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}"))
+            })?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(self.state.clone()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn apply_candidate(&mut self, candidate: State) -> Result<Durability, CoreError> {
+        let durability = self.persist_state(&candidate)?;
+        self.state = candidate;
+        self.last_durability = durability.clone();
+        Ok(durability)
     }
 
     /// 新建草稿；base 指向已有正式记录时，草稿从正式快照派生（正式快照保持不变）。
@@ -115,44 +150,47 @@ impl Store {
     ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
         if let Some(base_id) = base {
-            let row = self.row_mut(base_id)?;
-            let formal = row.formal.clone().ok_or_else(|| {
-                CoreError::new(
-                    "BASE_NOT_FORMAL",
-                    format!("只能基于正式记录创建修改草稿：{base_id}"),
-                )
-            })?;
-            if row.draft.is_none() {
-                row.draft = Some(formal);
-                row.base_revision = row.content_revision;
-            }
-            row.updated_at = now;
-            let out = row.clone();
-            self.persist()?;
-            return Ok(out);
+            return self.transact(|state| {
+                let row = state.row_mut(base_id)?;
+                let formal = row.formal.clone().ok_or_else(|| {
+                    CoreError::new(
+                        "BASE_NOT_FORMAL",
+                        format!("只能基于正式记录创建修改草稿：{base_id}"),
+                    )
+                })?;
+                if row.draft.is_none() {
+                    row.draft = Some(formal);
+                    row.base_revision = row.content_revision;
+                }
+                row.updated_at = now.clone();
+                Ok(row.clone())
+            })
+            .map(|(row, _)| row);
         }
 
-        let record_id = self.allocate_id("rec");
-        let snapshot = Snapshot {
-            title: title.to_string(),
-            body: body.to_string(),
-            event_date: event_date.to_string(),
-            event_time: normalize_time(event_time),
-            photos: Vec::new(),
-        };
-        let row = RecordRow {
-            record_id,
-            content_revision: 0,
-            created_at: now.clone(),
-            updated_at: now.clone(),
-            committed_at: None,
-            base_revision: 0,
-            formal: None,
-            draft: Some(snapshot),
-        };
-        self.state.records.push(row.clone());
-        self.persist()?;
-        Ok(row)
+        self.transact(|state| {
+            let record_id = state.allocate_id("rec");
+            let snapshot = Snapshot {
+                title: title.to_string(),
+                body: body.to_string(),
+                event_date: event_date.to_string(),
+                event_time: normalize_time(event_time),
+                photos: Vec::new(),
+            };
+            let row = RecordRow {
+                record_id,
+                content_revision: 0,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+                committed_at: None,
+                base_revision: 0,
+                formal: None,
+                draft: Some(snapshot),
+            };
+            state.records.push(row.clone());
+            Ok(row)
+        })
+        .map(|(row, _)| row)
     }
 
     /// 保存/更新草稿字段；草稿允许不完整（日期可暂空），但有值时校验格式。
@@ -165,12 +203,35 @@ impl Store {
         event_time: Option<Option<&str>>,
     ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
-        {
-            let row = self.row_mut(record_id)?;
-            if row.draft.is_none() {
-                let formal = row.formal.clone().ok_or_else(|| {
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            // 草稿缺失时先从正式快照派生；此处只读取，暂不物化。
+            let materialized = if row.draft.is_none() {
+                Some(row.formal.clone().ok_or_else(|| {
                     CoreError::new("NO_DRAFT", format!("记录没有草稿可保存：{record_id}"))
-                })?;
+                })?)
+            } else {
+                None
+            };
+            // 先校验日期/时刻，失败时不留下任何修改。
+            if let Some(v) = event_date {
+                if !v.trim().is_empty() && !time::is_valid_date(v) {
+                    return Err(CoreError::new(
+                        "INVALID_EVENT_DATE",
+                        format!("事件日期无效：{v}（需为真实的 YYYY-MM-DD）"),
+                    ));
+                }
+            }
+            if let Some(Some(raw)) = event_time {
+                if !raw.trim().is_empty() && !time::is_valid_time(raw) {
+                    return Err(CoreError::new(
+                        "INVALID_EVENT_TIME",
+                        format!("事件时刻无效：{raw}（需为 HH:MM，可留空）"),
+                    ));
+                }
+            }
+            // 校验通过后再物化草稿并赋值。
+            if let Some(formal) = materialized {
                 row.draft = Some(formal);
                 row.base_revision = row.content_revision;
             }
@@ -182,29 +243,15 @@ impl Store {
                 draft.body = v.to_string();
             }
             if let Some(v) = event_date {
-                if !v.trim().is_empty() && !time::is_valid_date(v) {
-                    return Err(CoreError::new(
-                        "INVALID_EVENT_DATE",
-                        format!("事件日期无效：{v}（需为真实的 YYYY-MM-DD）"),
-                    ));
-                }
                 draft.event_date = v.to_string();
             }
             if let Some(v) = event_time {
-                if let Some(raw) = v {
-                    if !raw.trim().is_empty() && !time::is_valid_time(raw) {
-                        return Err(CoreError::new(
-                            "INVALID_EVENT_TIME",
-                            format!("事件时刻无效：{raw}（需为 HH:MM，可留空）"),
-                        ));
-                    }
-                }
                 draft.event_time = normalize_time(v);
             }
             row.updated_at = now;
-        }
-        self.persist()?;
-        Ok(self.row(record_id)?.clone())
+            Ok(row.clone())
+        })
+        .map(|(row, _)| row)
     }
 
     /// 附加一张合成图：复制原图到 media/，assetId 由内容 SHA 决定，photoUse 独立 caption。
@@ -245,21 +292,22 @@ impl Store {
                 ));
             }
         } else {
-            atomic_write(&dest, &bytes)?;
+            persist::write_atomic(&dest, &bytes)?;
         }
 
-        let photo_use_id = self.allocate_id("pu");
-        let use_ref = PhotoUse {
-            photo_use_id,
-            asset_id,
-            caption: caption.to_string(),
-            sha256: sha,
-            bytes: bytes.len() as u64,
-            media_type,
-        };
-
-        {
-            let row = self.row_mut(record_id)?;
+        self.transact(|state| {
+            // 先在候选状态确认记录存在，成功后才分配 photoUseId，失败不推进 seq。
+            state.row(record_id)?;
+            let photo_use_id = state.allocate_id("pu");
+            let use_ref = PhotoUse {
+                photo_use_id,
+                asset_id,
+                caption: caption.to_string(),
+                sha256: sha,
+                bytes: bytes.len() as u64,
+                media_type,
+            };
+            let row = state.row_mut(record_id)?;
             if row.draft.is_none() {
                 let formal = row.formal.clone().ok_or_else(|| {
                     CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
@@ -273,48 +321,111 @@ impl Store {
                 .photos
                 .push(use_ref.clone());
             row.updated_at = time::now_rfc3339();
-        }
-        self.persist()?;
-        Ok(use_ref)
+            Ok(use_ref)
+        })
+        .map(|(photo, _)| photo)
     }
 
     /// 「存入时光」：校验通过后把草稿快照转为正式，revision 递增，草稿清空。
-    pub fn commit(&mut self, record_id: &str) -> Result<CommitOutcome, CoreError> {
-        let draft = {
-            let row = self.row(record_id)?;
-            row.draft.clone().ok_or_else(|| {
+    /// 调用方预期版本和本地草稿基线均须匹配磁盘正式版本；冲突时保留本地草稿。
+    pub fn commit(
+        &mut self,
+        record_id: &str,
+        expected_base_revision: u32,
+    ) -> Result<CommitOutcome, CoreError> {
+        // 校验先于任何修改：内容合法，且所有原图仍在磁盘上。
+        // 提交调用方的本地草稿及原始基线，不能用磁盘草稿替换它。
+        let local_row = self.state.row(record_id)?;
+        let base_revision = local_row.base_revision;
+        let draft = local_row
+            .draft
+            .clone()
+            .ok_or_else(|| {
                 CoreError::new("NO_DRAFT", format!("没有待提交的草稿：{record_id}"))
-            })?
-        };
+            })?;
         draft.validate_for_commit()?;
         for photo in &draft.photos {
-            if self.find_asset_path(&photo.asset_id).is_none() {
-                return Err(CoreError::new(
+            let asset_path = self.find_asset_path(&photo.asset_id).ok_or_else(|| {
+                CoreError::new(
                     "ASSET_MISSING",
                     format!(
                         "原图缺失，拒绝提交（{} / {}）；不会用缺失的媒体生成正式记录",
                         photo.photo_use_id, photo.asset_id
                     ),
+                )
+            })?;
+            let bytes = fs::read(&asset_path).map_err(|e| {
+                CoreError::new(
+                    "ASSET_READ_FAILED",
+                    format!(
+                        "读取原图失败（{} / {}，{}）：{e}；正式记录未改变，草稿已保留",
+                        photo.photo_use_id,
+                        photo.asset_id,
+                        asset_path.display()
+                    ),
+                )
+            })?;
+            if bytes.len() as u64 != photo.bytes {
+                return Err(CoreError::new(
+                    "ASSET_SIZE_MISMATCH",
+                    format!(
+                        "原图字节数与记录不一致（{} / {}）：记录 {} 字节，实际 {} 字节；正式记录未改变，草稿已保留",
+                        photo.photo_use_id,
+                        photo.asset_id,
+                        photo.bytes,
+                        bytes.len()
+                    ),
+                ));
+            }
+            if sha256::hex_digest(&bytes) != photo.sha256 {
+                return Err(CoreError::new(
+                    "ASSET_HASH_MISMATCH",
+                    format!(
+                        "原图 SHA-256 与记录不一致（{} / {}）；正式记录未改变，草稿已保留",
+                        photo.photo_use_id, photo.asset_id
+                    ),
                 ));
             }
         }
-        let now = time::now_rfc3339();
-        let outcome = {
-            let row = self.row_mut(record_id)?;
-            row.content_revision = row.content_revision.saturating_add(1);
-            row.formal = Some(draft);
-            row.committed_at = Some(now.clone());
-            row.updated_at = now.clone();
-            row.draft = None;
-            row.base_revision = row.content_revision;
-            CommitOutcome {
-                record_id: row.record_id.clone(),
-                content_revision: row.content_revision,
-                committed_at: now,
+        let mut candidate = self.candidate_state()?;
+        let row = candidate.row_mut(record_id)?;
+        if row.content_revision != expected_base_revision || base_revision != row.content_revision {
+            let conflict = CoreError::with_stage(
+                "REVISION_CONFLICT",
+                "commit",
+                format!(
+                    "版本冲突：期望正式版本 {expected_base_revision}，实际正式版本 {}，本地草稿基于版本 {base_revision}；正式版未覆盖，本地草稿已保留",
+                    row.content_revision
+                ),
+            );
+            if row.draft.is_none() {
+                row.draft = Some(draft);
+                // 必须保留旧基线，不能让陈旧草稿被下一次提交自动升级为正式版。
+                row.base_revision = base_revision;
+                self.apply_candidate(candidate)?;
             }
-        };
-        self.persist()?;
-        Ok(outcome)
+            // 磁盘已有（不同）草稿时不写入，也不替换本地内存中的草稿。
+            // 已知限制：第二份草稿只在当前实例内存中；冲突副本存储/UI 留到后续阶段。
+            // updatedAt / committedAt / SHIGUANG_CLOCK 均不参与胜负判断。
+            return Err(conflict);
+        }
+        let now = time::now_rfc3339();
+        row.content_revision = row.content_revision.saturating_add(1);
+        row.formal = Some(draft);
+        row.committed_at = Some(now.clone());
+        row.updated_at = now.clone();
+        row.draft = None;
+        row.base_revision = row.content_revision;
+        let record_id = row.record_id.clone();
+        let content_revision = row.content_revision;
+        let committed_at = now;
+        let durability = self.apply_candidate(candidate)?;
+        Ok(CommitOutcome {
+            record_id,
+            content_revision,
+            committed_at,
+            durability,
+        })
     }
 
     /// 正式列表只包含正式快照；带未提交修改草稿的记录仍显示旧正式内容。
@@ -354,8 +465,12 @@ impl Store {
         let entries = fs::read_dir(dir).ok()?;
         for entry in entries.flatten() {
             let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name == asset_id || name.starts_with(&format!("{asset_id}.")) {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with('.') || !path.is_file() {
+                continue;
+            }
+            // 精确匹配 `{asset_id}.{ext}`：去掉最后一个扩展名后必须恰好等于 assetId。
+            if path.file_stem().and_then(|stem| stem.to_str()) == Some(asset_id) {
                 return Some(path);
             }
         }
@@ -384,14 +499,14 @@ impl Store {
             })?;
             let bytes = fs::read(&asset_path)?;
             let sha = sha256::hex_digest(&bytes);
-            if !photo.sha256.is_empty() && sha != photo.sha256 {
+            if sha != photo.sha256 {
                 return Err(CoreError::new(
                     "ASSET_HASH_MISMATCH",
                     format!("原图 SHA 与记录不一致：{}", photo.asset_id),
                 ));
             }
             let png = preview::preview_bytes(&sha);
-            atomic_write(&preview_path, &png)?;
+            persist::write_atomic(&preview_path, &png)?;
             created.push(photo.asset_id.clone());
         }
         Ok(created)
@@ -531,10 +646,25 @@ impl Store {
         ]))
     }
 
-    pub fn persist(&self) -> Result<(), CoreError> {
+    pub fn persist(&mut self) -> Result<Durability, CoreError> {
+        let durability = self.persist_state(&self.state)?;
+        self.last_durability = durability.clone();
+        Ok(durability)
+    }
+
+    fn persist_state(&self, state: &State) -> Result<Durability, CoreError> {
         let path = self.root.join(STATE_FILE);
-        let text = self.state.to_json(&self.seed).pretty();
-        atomic_write(&path, text.as_bytes())
+        let value = state.to_json(&self.seed);
+        let text = value.pretty();
+        let serialize_error = |message| {
+            CoreError::with_stage("STATE_SERIALIZE_FAILED", "serialize", message)
+        };
+        let parsed = json::parse(&text).map_err(serialize_error)?;
+        let round_trip = State::from_json(&parsed).map_err(|e| serialize_error(e.to_string()))?;
+        if round_trip.to_json(&self.seed).dump() != value.dump() {
+            return Err(serialize_error("状态序列化往返不一致".to_string()));
+        }
+        persist::write_atomic(&path, text.as_bytes())
     }
 }
 
@@ -547,6 +677,25 @@ pub struct AssetInfo {
 }
 
 impl State {
+    fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
+        self.records
+            .iter()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+        self.records
+            .iter_mut()
+            .find(|r| r.record_id == record_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    }
+
+    fn allocate_id(&mut self, prefix: &str) -> String {
+        self.seq += 1;
+        format!("{}-{:06}", prefix, self.seq)
+    }
+
     fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
             ("version", Json::Num(self.version)),
@@ -563,25 +712,52 @@ impl State {
         let version = value
             .get("version")
             .and_then(Json::as_i64)
-            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version"))?;
+            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version 或不是整数"))?;
         if version != STATE_VERSION {
             return Err(CoreError::new(
                 "STATE_VERSION_UNSUPPORTED",
                 format!("不支持的状态版本：{version}"),
             ));
         }
-        let seq = value
-            .get("seq")
-            .and_then(Json::as_i64)
-            .unwrap_or(0)
-            .max(0) as u64;
+        let seq = match value.get("seq").and_then(Json::as_i64) {
+            Some(n) if n >= 0 => n as u64,
+            Some(n) => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    format!("状态文件 seq 必须为非负整数：{n}"),
+                ))
+            }
+            None => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件缺少 seq 或不是整数",
+                ))
+            }
+        };
+        if value.get("seed").and_then(Json::as_str).is_none() {
+            return Err(CoreError::new(
+                "STATE_CORRUPT",
+                "状态文件缺少 seed 或不是字符串",
+            ));
+        }
         let records = match value.get("records") {
             Some(Json::Arr(items)) => items
                 .iter()
                 .map(RecordRow::from_json)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
-            _ => Vec::new(),
+            Some(_) => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件 records 必须是数组",
+                ))
+            }
+            None => {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "状态文件缺少 records",
+                ))
+            }
         };
         Ok(State {
             version,
@@ -648,33 +824,6 @@ fn extension_for(media_type: &str, source: &Path) -> String {
     }
 }
 
-static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// 原子写入：同目录临时文件 -> fsync -> rename -> fsync 目录。
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
-    let dir = path
-        .parent()
-        .ok_or_else(|| CoreError::io("写入路径缺少父目录"))?;
-    fs::create_dir_all(dir)?;
-    let counter = TMP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = dir.join(format!(
-        ".tmp-{}-{}-{}",
-        std::process::id(),
-        counter,
-        time::now_rfc3339().replace(':', "")
-    ));
-    {
-        let mut file = File::create(&tmp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-    }
-    fs::rename(&tmp, path)?;
-    if let Ok(handle) = File::open(dir) {
-        let _ = handle.sync_all();
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -711,5 +860,62 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().starts_with(".tmp-"))
             .collect();
         assert!(leftovers.is_empty());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn normal_writes_report_durable_on_linux() {
+        let root = temp_root("durable");
+        let mut store = Store::open(&root).unwrap();
+        let row = store
+            .create_draft(None, "标题", "正文", "2026-11-09", None)
+            .unwrap();
+        assert_eq!(store.last_durability(), &Durability::Durable);
+        let outcome = store.commit(&row.record_id, 0).unwrap();
+        assert_eq!(outcome.durability, Durability::Durable);
+        assert_eq!(outcome.durability.as_str(), "durable");
+        assert_eq!(store.persist().unwrap(), Durability::Durable);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn open_cleans_only_root_temp_files() {
+        let root = temp_root("cleanup");
+        fs::create_dir_all(root.join(MEDIA_DIR)).unwrap();
+        for name in [
+            ".tmp-shiguang-1-2", ".tmp-legacy", ".keep", "tmp-other", "media/.tmp-keep",
+        ] {
+            fs::write(root.join(name), b"synthetic").unwrap();
+        }
+        fs::create_dir(root.join(".tmp-directory")).unwrap();
+        Store::open(&root).unwrap();
+        assert!(!root.join(".tmp-shiguang-1-2").exists());
+        assert!(!root.join(".tmp-legacy").exists());
+        for name in [".keep", "tmp-other", "media/.tmp-keep", ".tmp-directory"] {
+            assert!(root.join(name).exists(), "不得删除 {name}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn serialization_mismatch_keeps_memory_and_disk() {
+        let root = temp_root("serialize");
+        let mut store = Store::open(&root).unwrap();
+        store
+            .create_draft(None, "标题", "正文", "2026-11-09", None)
+            .unwrap();
+        let before = store.state_json().dump();
+        let bytes = fs::read(root.join(STATE_FILE)).unwrap();
+        let error = store
+            .transact(|state| {
+                state.seq = u64::MAX;
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "STATE_SERIALIZE_FAILED");
+        assert_eq!(error.stage, Some("serialize"));
+        assert_eq!(store.state_json().dump(), before);
+        assert_eq!(fs::read(root.join(STATE_FILE)).unwrap(), bytes);
+        fs::remove_dir_all(root).unwrap();
     }
 }

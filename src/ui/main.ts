@@ -1,4 +1,4 @@
-import { formatEventWhen, formalHeadline } from "../domain/format.ts";
+import { conflictMessage, durabilityLabel, formatEventWhen, formalHeadline } from "../domain/format.ts";
 import { validateForCommit } from "../domain/rules.ts";
 import { formalItems } from "../domain/view.ts";
 import type { RecordRow, Snapshot } from "../domain/types.ts";
@@ -67,8 +67,14 @@ async function refresh(): Promise<void> {
   try {
     render(await api.listFormalRecords());
   } catch (error) {
-    errorBox.textContent = `读取正式列表失败：${String(error)}`;
+    errorBox.textContent = `读取正式列表失败：${errorMessage(error)}`;
   }
+}
+
+function errorMessage(error: unknown): string {
+  return typeof error === "object" && error !== null && "message" in error
+    ? String(error.message)
+    : String(error);
 }
 
 commitButton.addEventListener("click", async () => {
@@ -88,13 +94,15 @@ commitButton.addEventListener("click", async () => {
       eventDate: draft.eventDate,
       eventTime: draft.eventTime,
     });
-    await api.commitRecord(created.recordId);
+    const committed = await api.commitRecord(created.recordId, created.baseRevision);
+    banner.hidden = false;
+    banner.textContent = durabilityLabel(committed.durability);
     titleInput.value = "";
     bodyInput.value = "";
     timeInput.value = "";
     await refresh();
   } catch (error) {
-    errorBox.textContent = `存入失败：${String(error)}`;
+    errorBox.textContent = conflictMessage(error) ?? `存入失败：${errorMessage(error)}`;
   } finally {
     commitButton.disabled = false;
   }

@@ -1,9 +1,9 @@
 # ENV_VERSIONS（Unit-0 / 桌面 Linux box）
 
-- 采集时间（UTC）：2026-11-09T04:43:11Z
+- 采集时间（UTC）：2026-11-09T06:22:47Z
 - OS：Linux 6.12.113+ x86_64
-- rustc：rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)
-- cargo：cargo 1.85.1 (d73d2caf9 2024-12-31)
+- rustc：rustc 1.90.0 (1159e78c4 2025-09-14)
+- cargo：cargo 1.90.0 (840b83a10 2025-07-30)
 - node：v24.22.1
 - npm：11.21.1
 - 验收固定时钟：SHIGUANG_CLOCK=2026-11-09T10:00:00Z
@@ -16,9 +16,9 @@
 ## 工具链原位输出
 
     $ rustc --version
-    rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)
+    rustc 1.90.0 (1159e78c4 2025-09-14)
     $ cargo --version
-    cargo 1.85.1 (d73d2caf9 2024-12-31)
+    cargo 1.90.0 (840b83a10 2025-07-30)
     $ node --version
     v24.22.1
     $ npm --version

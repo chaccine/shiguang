@@ -62,6 +62,7 @@ test("AC-U0-09 提交编辑后单一条目、ID 稳定、revision 递增", () =>
     recordId: "rec-000001",
     contentRevision: 2,
     committedAt: "2026-11-09T11:00:00Z",
+    durability: "durable",
   });
   const items = formalItems([updated]);
   assert.equal(items.length, 1);

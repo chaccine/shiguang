@@ -5,7 +5,7 @@
     "unit": "UNIT0",
     "seed": "20261109",
     "generatedAt": "2026-11-09T10:00:00Z",
-    "rustc": "rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
     "node": "v24.22.1",
     "npm": "11.21.1",
     "tauri": "BLOCKED: 见 evidence/tauri-cargo-check.log"

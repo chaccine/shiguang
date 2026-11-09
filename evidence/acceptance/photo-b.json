@@ -7,6 +7,7 @@
     "sha256": "5a03b2eb4e0e37754bbfef1b834e776ebdae0fc5cb243fae7721e76a85a7f67e",
     "bytes": 27812,
     "mediaType": "image/png"
-  }
+  },
+  "durability": "durable"
 }
 

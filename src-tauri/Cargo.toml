@@ -2,7 +2,7 @@
 name = "shiguang-desktop"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.90"
 description = "拾光 Unit-0 Tauri v2 桌面壳"
 license = "MIT"
 

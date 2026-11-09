@@ -8,6 +8,7 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoreError {
     pub code: &'static str,
+    pub stage: Option<&'static str>,
     pub message: String,
 }
 
@@ -15,6 +16,18 @@ impl CoreError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
+            stage: None,
+            message: message.into(),
+        }
+    }
+    pub fn with_stage(
+        code: &'static str,
+        stage: &'static str,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            stage: Some(stage),
             message: message.into(),
         }
     }
@@ -22,11 +35,15 @@ impl CoreError {
         Self::new("IO_ERROR", message)
     }
     pub fn to_json(&self) -> Json {
-        Json::obj(vec![
+        let mut entries = vec![
             ("ok", Json::Bool(false)),
             ("code", Json::str(self.code)),
             ("message", Json::str(self.message.clone())),
-        ])
+        ];
+        if let Some(stage) = self.stage {
+            entries.push(("stage", Json::str(stage)));
+        }
+        Json::obj(entries)
     }
 }
 
@@ -69,17 +86,21 @@ impl PhotoUse {
     }
 
     pub fn from_json(value: &Json) -> Result<Self, String> {
+        let sha256 = req_str(value, "sha256")?;
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(format!("字段 sha256 必须是 64 位小写十六进制：{sha256}"));
+        }
         Ok(PhotoUse {
             photo_use_id: req_str(value, "photoUseId")?,
             asset_id: req_str(value, "assetId")?,
-            caption: req_str(value, "caption").unwrap_or_default(),
-            sha256: req_str(value, "sha256")?,
-            bytes: value
-                .get("bytes")
-                .and_then(Json::as_i64)
-                .unwrap_or(0)
-                .max(0) as u64,
-            media_type: req_str(value, "mediaType").unwrap_or_else(|_| "application/octet-stream".into()),
+            caption: req_str(value, "caption")?,
+            sha256,
+            bytes: req_u64(value, "bytes")?,
+            media_type: req_str(value, "mediaType")?,
         })
     }
 }
@@ -120,16 +141,14 @@ impl Snapshot {
                 .iter()
                 .map(PhotoUse::from_json)
                 .collect::<Result<Vec<_>, _>>()?,
-            _ => Vec::new(),
+            Some(_) => return Err("字段 photos 必须是数组".to_string()),
+            None => return Err("字段 photos 缺失".to_string()),
         };
         Ok(Snapshot {
-            title: req_str(value, "title").unwrap_or_default(),
-            body: req_str(value, "body").unwrap_or_default(),
-            event_date: req_str(value, "eventDate").unwrap_or_default(),
-            event_time: match value.get("eventTime") {
-                Some(Json::Str(s)) if !s.is_empty() => Some(s.clone()),
-                _ => None,
-            },
+            title: req_str(value, "title")?,
+            body: req_str(value, "body")?,
+            event_date: req_str(value, "eventDate")?,
+            event_time: req_opt_str(value, "eventTime")?.filter(|s| !s.is_empty()),
             photos,
         })
     }
@@ -178,6 +197,37 @@ fn req_str(value: &Json, key: &str) -> Result<String, String> {
         .and_then(Json::as_str)
         .map(|s| s.to_string())
         .ok_or_else(|| format!("字段 {key} 缺失或不是字符串"))
+}
+
+fn req_u32(value: &Json, key: &str) -> Result<u32, String> {
+    let n = value
+        .get(key)
+        .and_then(Json::as_i64)
+        .ok_or_else(|| format!("字段 {key} 缺失或不是整数"))?;
+    if n < 0 {
+        return Err(format!("字段 {key} 不能为负数：{n}"));
+    }
+    u32::try_from(n).map_err(|_| format!("字段 {key} 超出 u32 范围：{n}"))
+}
+
+fn req_u64(value: &Json, key: &str) -> Result<u64, String> {
+    let n = value
+        .get(key)
+        .and_then(Json::as_i64)
+        .ok_or_else(|| format!("字段 {key} 缺失或不是整数"))?;
+    if n < 0 {
+        return Err(format!("字段 {key} 不能为负数：{n}"));
+    }
+    Ok(n as u64)
+}
+
+fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
+    match value.get(key) {
+        None => Err(format!("字段 {key} 缺失")),
+        Some(Json::Null) => Ok(None),
+        Some(Json::Str(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(format!("字段 {key} 必须是字符串或 null")),
+    }
 }
 
 /// 记录的持久化形态：正式快照与草稿分字段保存。
@@ -231,32 +281,27 @@ impl RecordRow {
     }
 
     pub fn from_json(value: &Json) -> Result<Self, String> {
+        let formal = match value.get("formal") {
+            None => return Err("字段 formal 缺失".to_string()),
+            Some(Json::Null) => None,
+            Some(v @ Json::Obj(_)) => Some(Snapshot::from_json(v)?),
+            Some(_) => return Err("字段 formal 必须是对象或 null".to_string()),
+        };
+        let draft = match value.get("draft") {
+            None => return Err("字段 draft 缺失".to_string()),
+            Some(Json::Null) => None,
+            Some(v @ Json::Obj(_)) => Some(Snapshot::from_json(v)?),
+            Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
+        };
         Ok(RecordRow {
             record_id: req_str(value, "recordId")?,
-            content_revision: value
-                .get("contentRevision")
-                .and_then(Json::as_i64)
-                .unwrap_or(0)
-                .max(0) as u32,
-            created_at: req_str(value, "createdAt").unwrap_or_default(),
-            updated_at: req_str(value, "updatedAt").unwrap_or_default(),
-            committed_at: value
-                .get("committedAt")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string()),
-            base_revision: value
-                .get("baseRevision")
-                .and_then(Json::as_i64)
-                .unwrap_or(0)
-                .max(0) as u32,
-            formal: match value.get("formal") {
-                Some(Json::Null) | None => None,
-                Some(v) => Some(Snapshot::from_json(v)?),
-            },
-            draft: match value.get("draft") {
-                Some(Json::Null) | None => None,
-                Some(v) => Some(Snapshot::from_json(v)?),
-            },
+            content_revision: req_u32(value, "contentRevision")?,
+            created_at: req_str(value, "createdAt")?,
+            updated_at: req_str(value, "updatedAt")?,
+            committed_at: req_opt_str(value, "committedAt")?,
+            base_revision: req_u32(value, "baseRevision")?,
+            formal,
+            draft,
         })
     }
 }
