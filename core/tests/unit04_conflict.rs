@@ -69,6 +69,8 @@ fn occupied_disk_draft_preserves_local_copy_durably_without_overwriting_slot() {
         .save_draft(&id, None, Some("合成磁盘草稿"), None, None)
         .unwrap();
     assert_eq!(local.commit(&id, 0).unwrap_err().code, "REVISION_CONFLICT");
+    // commit 冲突本身不写盘（Unit-0.1 断言）；显式保存冲突副本后才持久化。
+    local.save_conflict_copy(&id).unwrap();
     drop(local);
     drop(other);
     let s = Store::open(t.path()).unwrap();

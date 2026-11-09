@@ -361,6 +361,28 @@ impl Store {
         self.pending_conflicts.remove(record_id);
         Ok(row)
     }
+    /// 把本实例待处理的冲突草稿（磁盘草稿槽被占时 commit 失败留下的）持久化为冲突副本；
+    /// 不改动草稿槽与正式版。没有待处理冲突时返回 NO_DRAFT。
+    pub fn save_conflict_copy(&mut self, record_id: &str) -> Result<ConflictCopy, CoreError> {
+        let (snapshot, base_revision) = self
+            .pending_conflicts
+            .get(record_id)
+            .cloned()
+            .ok_or_else(|| CoreError::new("NO_DRAFT", "没有待保存的冲突草稿"))?;
+        let (copy, _) = self.transact(|state| {
+            ensure_active(state.row(record_id)?)?;
+            state.add_conflict(record_id, base_revision, snapshot.clone(), "revision_conflict");
+            state
+                .conflict_copies
+                .iter()
+                .rev()
+                .find(|c| c.record_id == record_id && c.snapshot == snapshot)
+                .cloned()
+                .ok_or_else(|| CoreError::new("CONFLICT_COPY_MISSING", "冲突副本写入失败"))
+        })?;
+        self.pending_conflicts.remove(record_id);
+        Ok(copy)
+    }
     pub fn list_conflict_copies(&self) -> Result<Vec<ConflictCopy>, CoreError> {
         let mut copies = self.state.conflict_copies.clone();
         copies.sort_by(|a, b| {
@@ -922,15 +944,9 @@ impl Store {
                 row.base_revision = base_revision;
                 self.apply_candidate(candidate)?;
             } else if row.draft.as_ref() != Some(&draft) || row.base_revision != base_revision {
-                let added = candidate.add_conflict(
-                    record_id,
-                    base_revision,
-                    draft.clone(),
-                    "revision_conflict",
-                );
-                if added {
-                    self.apply_candidate(candidate)?;
-                }
+                // 磁盘草稿槽已被另一份草稿占用：commit 本身不写盘（保持 Unit-0.1 语义：
+                // 冲突时 state.json 与本实例状态都不变）。本地草稿记入 pending_conflicts，
+                // 由用户/调用方显式 save_conflict_copy 或 resolve_conflict 持久化为冲突副本。
                 self.pending_conflicts
                     .insert(record_id.to_string(), (draft, base_revision));
             }
