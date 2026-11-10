@@ -170,7 +170,8 @@ fn manual_purge_creates_content_free_marker_and_quarantines_original() {
     };
     let mut keys: Vec<_> = fields.iter().map(|(k, _)| k.as_str()).collect();
     keys.sort();
-    assert_eq!(keys, vec!["deletedAt", "lastContentRevision", "recordId"]);
+    // Unit-0.6 起删除标记多一个 createdAt（跨备份防复活的身份匹配用）；仍不含任何正文/标题/说明。
+    assert_eq!(keys, vec!["createdAt", "deletedAt", "lastContentRevision", "recordId"]);
     let disk = String::from_utf8(t.bytes()).unwrap();
     for personal in ["合成标题", "合成正文", "合成隐私说明"] {
         assert!(!disk.contains(personal));
