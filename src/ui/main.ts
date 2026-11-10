@@ -3,6 +3,8 @@ import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
 import type { ErrorDescription } from "../domain/errors.ts";
 import { durabilityLabel, formalHeadline, formatEventWhen } from "../domain/format.ts";
+import { LAST_TAB_KEY, NAV_TABS, initialTab, rememberableTab, tabOf, timelineEmptyKind } from "../domain/navigation.ts";
+import type { MainTab, View } from "../domain/navigation.ts";
 import { calendarGrid, countLabel, daysInMonth, groupByYmd, localToday } from "../domain/timeline.ts";
 import type {
   BackupSummary, CalendarDay, ConflictCopy, FieldIssue, PhotoUse, RecordRow, TagInfo, TimelineFilter, TimelineItem,
@@ -14,8 +16,6 @@ import { PREVIEW_STORAGE_KEY, seedDemo } from "./demo.ts";
 
 import { gateWithRetry } from "../domain/startup.ts";
 const LAST_DRAFT_KEY = "shiguang.lastDraft";
-
-type View = "drafts" | "editor" | "timeline" | "calendar" | "trash" | "data";
 
 function byTestId<T extends HTMLElement>(testId: string): T {
   const node = document.querySelector<T>(`[data-testid="${testId}"]`);
@@ -29,11 +29,26 @@ function byId<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-const draftsTab = byTestId<HTMLButtonElement>("drafts-tab");
-const timelineTab = byTestId<HTMLButtonElement>("timeline-tab");
-const calendarTab = byTestId<HTMLButtonElement>("calendar-tab");
-const trashTab = byTestId<HTMLButtonElement>("trash-tab");
-const dataTab = byTestId<HTMLButtonElement>("data-tab");
+const navTabs = byId<HTMLElement>("nav-tabs");
+const tabButtons = new Map<MainTab, HTMLButtonElement>();
+for (const tab of NAV_TABS) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tab";
+  button.dataset.testid = tab.testId;
+  button.dataset.navTab = tab.id;
+  button.setAttribute("role", "tab");
+  button.setAttribute("aria-selected", "false");
+  const dot = document.createElement("span");
+  dot.className = "tab-dot";
+  const label = document.createElement("span");
+  label.className = "tab-label";
+  label.textContent = tab.label;
+  button.append(dot, label);
+  button.addEventListener("click", () => { void activateMainTab(tab.id); });
+  navTabs.append(button);
+  tabButtons.set(tab.id, button);
+}
 const viewData = byId<HTMLElement>("view-data");
 const exportBackupButton = byTestId<HTMLButtonElement>("export-backup");
 const exportResult = byTestId<HTMLDivElement>("export-result");
@@ -70,6 +85,7 @@ const viewDrafts = byId<HTMLElement>("view-drafts");
 const viewEditor = byId<HTMLElement>("view-editor");
 const viewTimeline = byId<HTMLElement>("view-timeline");
 const viewCalendar = byId<HTMLElement>("view-calendar");
+const viewCollect = byId<HTMLElement>("view-collect");
 const viewTrash = byId<HTMLElement>("view-trash");
 const draftList = byId<HTMLDivElement>("draft-list");
 const timelineList = byId<HTMLDivElement>("timeline-list");
@@ -79,10 +95,6 @@ const emptyTrashButton = byTestId<HTMLButtonElement>("empty-trash-button");
 const conflictActions = byId<HTMLElement>("conflict-actions");
 const keepMineButton = byTestId<HTMLButtonElement>("keep-mine");
 const keepFormalButton = byTestId<HTMLButtonElement>("keep-formal");
-const appShell = byId<HTMLElement>("app-shell");
-const storeBlocked = byTestId<HTMLElement>("store-blocked");
-const storeBlockedTitle = byId<HTMLElement>("store-blocked-title");
-const storeBlockedDetail = byId<HTMLParagraphElement>("store-blocked-detail");
 const confirmDialog = byTestId<HTMLDialogElement>("confirm-dialog");
 const confirmTitle = byId<HTMLElement>("confirm-title");
 const confirmMessage = byId<HTMLParagraphElement>("confirm-message");
@@ -105,6 +117,8 @@ const calTitle = byId<HTMLHeadingElement>("cal-title");
 const calMonthInput = byTestId<HTMLInputElement>("cal-month-input");
 const calToday = byTestId<HTMLButtonElement>("cal-today");
 const calGrid = byId<HTMLDivElement>("cal-grid");
+const calEmpty = byId<HTMLParagraphElement>("cal-empty");
+const calEmptyWrite = byTestId<HTMLButtonElement>("cal-empty-write");
 const dayPanelTitle = byId<HTMLHeadingElement>("day-panel").querySelector("h2") as HTMLHeadingElement;
 const dayPanelDate = byId<HTMLParagraphElement>("day-panel-date");
 const dayPanelList = byId<HTMLDivElement>("day-panel-list");
@@ -125,6 +139,15 @@ const tagPickerList = byId<HTMLDivElement>("tag-picker-list");
 const tagPickerCancel = byTestId<HTMLButtonElement>("tag-picker-cancel");
 const tagPickerSave = byTestId<HTMLButtonElement>("tag-picker-save");
 
+// ---- Unit-0.8 主导航 / 继续写提示 / 收藏与标签 ----
+const resumeDraftBar = byTestId<HTMLDivElement>("resume-draft");
+const resumeDraftButton = byTestId<HTMLButtonElement>("resume-draft-button");
+const collectFavorites = byTestId<HTMLDivElement>("collect-favorites");
+const collectTags = byTestId<HTMLDivElement>("collect-tags");
+const collectManageTags = byTestId<HTMLButtonElement>("collect-manage-tags");
+const openTrashButton = byTestId<HTMLButtonElement>("open-trash");
+const backToSettingsButton = byTestId<HTMLButtonElement>("back-to-settings");
+
 const params = new URLSearchParams(window.location.search);
 const invoke = tauriInvokeFromWindow();
 const demo = invoke === null && params.get("demo") === "1";
@@ -139,7 +162,7 @@ const memory = invoke === null
   : null;
 const api: ShiguangApi = memory ?? createTauriApi(invoke!);
 
-let currentView: View = "drafts";
+let currentView: View = "timeline";
 let photoKey: string | null = null;
 
 function createSession(): DraftSession<number> {
@@ -201,19 +224,19 @@ function setView(view: View): void {
   viewEditor.hidden = view !== "editor";
   viewTimeline.hidden = view !== "timeline";
   viewCalendar.hidden = view !== "calendar";
+  viewCollect.hidden = view !== "collect";
   viewTrash.hidden = view !== "trash";
-  viewData.hidden = view !== "data";
-  dataTab.classList.toggle("is-active", view === "data");
-  dataTab.setAttribute("aria-selected", String(view === "data"));
-  const draftsActive = view === "drafts" || view === "editor";
-  draftsTab.classList.toggle("is-active", draftsActive);
-  timelineTab.classList.toggle("is-active", view === "timeline");
-  calendarTab.classList.toggle("is-active", view === "calendar");
-  trashTab.classList.toggle("is-active", view === "trash");
-  draftsTab.setAttribute("aria-selected", String(draftsActive));
-  timelineTab.setAttribute("aria-selected", String(view === "timeline"));
-  calendarTab.setAttribute("aria-selected", String(view === "calendar"));
-  trashTab.setAttribute("aria-selected", String(view === "trash"));
+  viewData.hidden = view !== "settings";
+  const active = tabOf(view);
+  for (const [id, button] of tabButtons) {
+    const on = id === active;
+    button.classList.toggle("is-active", on);
+    button.setAttribute("aria-selected", String(on));
+  }
+  const remembered = rememberableTab(view);
+  if (remembered !== null) window.localStorage.setItem(LAST_TAB_KEY, remembered);
+  // 数据打不开时，每个页签都显示同一条错误提示，但导航始终可用。
+  if (blockedDescription !== null) showErrorDescription(blockedDescription);
 }
 
 function showPreviewNotice(): void {
@@ -256,6 +279,57 @@ function showError(error: unknown): void {
   showErrorDescription(describeError(error));
 }
 
+interface EmptyCardOptions {
+  title: string;
+  message: string;
+  actionLabel?: string;
+  actionTestId?: string;
+  onAction?: () => void;
+  testId?: string;
+}
+
+/** 空态卡片：一句说明 + 一个合适的下一步按钮，别让页面成为死路。 */
+function emptyCard(options: EmptyCardOptions): HTMLDivElement {
+  const card = document.createElement("div");
+  card.className = "empty-card";
+  if (options.testId !== undefined) card.dataset.testid = options.testId;
+  const title = document.createElement("h2");
+  title.textContent = options.title;
+  const message = document.createElement("p");
+  message.textContent = options.message;
+  card.append(title, message);
+  const action = options.onAction;
+  if (options.actionLabel !== undefined && action !== undefined) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button";
+    if (options.actionTestId !== undefined) button.dataset.testid = options.actionTestId;
+    button.textContent = options.actionLabel;
+    button.addEventListener("click", action);
+    card.append(button);
+  }
+  return card;
+}
+
+function blockedCard(): HTMLDivElement {
+  return emptyCard({
+    title: blockedTitle.length > 0 ? blockedTitle : "数据暂时无法打开",
+    message: blockedDescription?.detail ?? "稍后可以再试一次。",
+    testId: "blocked-state",
+  });
+}
+
+/** 启动门禁失败时，把同一个错误提示放进每个列表，页签切换不会卡在“正在加载”。 */
+function renderBlockedState(): void {
+  for (const node of [timelineList, draftList, trashList, dayPanelList, onThisDayList, collectFavorites, collectTags]) {
+    node.replaceChildren(blockedCard());
+  }
+  timelineSummary.textContent = "";
+  calGrid.replaceChildren();
+  calEmpty.hidden = true;
+  resumeDraftBar.hidden = true;
+}
+
 let confirmSettler: ((value: boolean) => void) | null = null;
 
 function finishConfirm(value: boolean): void {
@@ -289,15 +363,21 @@ confirmDialog.addEventListener("close", () => {
   settle?.(false);
 });
 
-/** 启动失败时只展示中文提示，不加载任何列表，也不提供写操作。 */
+/**
+ * 数据打不开时：保留全部导航，页签仍可切换；每个页签显示同一条错误提示，不做任何写操作。
+ * 不再整屏遮挡，避免用户被困在错误页里看不到入口。
+ */
+let blockedDescription: ErrorDescription | null = null;
+let blockedTitle = "";
+
 function showStoreBlocked(code: string, error: unknown): void {
   const description = describeError(error);
-  storeBlockedTitle.textContent = code === "STORE_LOCKED"
+  blockedDescription = description;
+  blockedTitle = code === "STORE_LOCKED"
     ? "拾光已在别处打开"
     : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : code === "STORE_STARTING" ? "拾光还在打开数据" : "数据暂时无法打开";
-  storeBlockedDetail.textContent = description.detail;
-  appShell.hidden = true;
-  storeBlocked.hidden = false;
+  showErrorDescription({ ...description, title: blockedTitle });
+  showAppNotice(`${blockedTitle}：${description.detail} 页签仍可切换，但暂时不能读取或写入数据。`, "warn");
 }
 
 async function gateStore(): Promise<boolean> {
@@ -305,6 +385,13 @@ async function gateStore(): Promise<boolean> {
   const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
   if (outcome.ok) return true;
   showStoreBlocked(outcome.code, outcome.error);
+  return false;
+}
+
+/** 数据打不开时不允许进入写流程；提示已有的错误，不做无用的写入尝试。 */
+function ensureWritable(): boolean {
+  if (blockedDescription === null) return true;
+  showErrorDescription(blockedDescription);
   return false;
 }
 
@@ -495,6 +582,7 @@ async function flushBeforeLeave(): Promise<boolean> {
 
 async function openDraft(row: RecordRow): Promise<void> {
   if (!(await flushBeforeLeave())) return;
+  if (!ensureWritable()) return;
   try {
     openInEditor(row);
     clearAppNotice();
@@ -507,6 +595,7 @@ async function openDraft(row: RecordRow): Promise<void> {
 
 async function startNewDraft(): Promise<void> {
   if (!(await flushBeforeLeave())) return;
+  if (!ensureWritable()) return;
   try {
     openInEditor(null);
     window.localStorage.removeItem(LAST_DRAFT_KEY);
@@ -521,6 +610,7 @@ async function startNewDraft(): Promise<void> {
 
 async function openModification(recordId: string): Promise<void> {
   if (!(await flushBeforeLeave())) return;
+  if (!ensureWritable()) return;
   try {
     const created = await api.createDraft({ baseRecordId: recordId });
     openInEditor(created.row);
@@ -533,6 +623,10 @@ async function openModification(recordId: string): Promise<void> {
 }
 
 async function refreshDrafts(): Promise<void> {
+  if (blockedDescription !== null) {
+    draftList.replaceChildren(blockedCard());
+    return;
+  }
   try {
     const [rows, copies] = await Promise.all([api.listDrafts(), api.listConflictCopies()]);
     const sorted = rows
@@ -649,10 +743,14 @@ async function restoreCopy(copy: ConflictCopy): Promise<void> {
 function renderDrafts(rows: readonly RecordRow[], copies: readonly ConflictCopy[]): void {
   const nodes: HTMLElement[] = [];
   if (rows.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-state";
-    empty.textContent = "还没有草稿，点上面的「新建草稿」写第一篇吧。";
-    nodes.push(empty);
+    nodes.push(emptyCard({
+      title: "还没有草稿",
+      message: "没写完的小事可以先放在这里，之后再慢慢补。",
+      actionLabel: "写一篇",
+      actionTestId: "empty-new-draft",
+      onAction: () => { void startNewDraft(); },
+      testId: "drafts-empty",
+    }));
   } else {
     nodes.push(...rows.map(draftCard));
   }
@@ -665,6 +763,7 @@ const TIMELINE_PAGE_SIZE = 50;
 let timelineItems: TimelineItem[] = [];
 let timelineCursor: string | null = null;
 let timelineTotal = 0;
+let timelineFormalCount = 0;
 let timelineLoading = false;
 let timelineLoaded = false;
 let timelineGeneration = 0;
@@ -773,6 +872,11 @@ async function refreshMonthOptions(generation: number): Promise<void> {
 }
 
 async function reloadTimeline(): Promise<void> {
+  if (blockedDescription !== null) {
+    timelineList.replaceChildren(blockedCard());
+    timelineSummary.textContent = "";
+    return;
+  }
   const generation = ++timelineGeneration;
   timelineItems = [];
   timelineCursor = null;
@@ -789,6 +893,11 @@ async function reloadTimeline(): Promise<void> {
     timelineItems = page.items;
     timelineCursor = page.nextCursor;
     timelineTotal = page.total;
+    // 空态需要区分“一条都没有”和“筛选后为空”，所以有筛选时再取一次全量条数。
+    timelineFormalCount = hasTimelineFilter()
+      ? (await api.timelinePage({ order: timelineOrder }, null, 1)).total
+      : page.total;
+    if (generation !== timelineGeneration) return;
     timelineLoaded = true;
     renderTimelineLoaded();
     await refreshMonthOptions(generation);
@@ -815,30 +924,41 @@ async function loadMoreTimeline(): Promise<void> {
   }
 }
 
+function clearTimelineFilters(): void {
+  timelineTo = null;
+  favoriteFilter.checked = false;
+  selectedTagIds.clear();
+  void reloadTimeline();
+}
+
 function renderTimelineLoaded(): void {
   timelineSummary.textContent = `已显示 ${timelineItems.length} / 共 ${timelineTotal} 条`;
   timelineSentinel.hidden = timelineCursor === null;
   if (timelineItems.length === 0) {
-    if (!hasTimelineFilter()) {
-      timelineList.replaceChildren(timelineEmpty("还没有时光，去记录第一段吧"));
+    const kind = timelineEmptyKind(timelineTotal, timelineFormalCount);
+    if (kind === "no-entries") {
+      timelineList.replaceChildren(emptyCard({
+        title: "这里还没有时光",
+        message: "写下第一段小事，它会按日子排进时光轴。",
+        actionLabel: "写下第一段时光",
+        actionTestId: "write-first",
+        onAction: () => { void startNewDraft(); },
+        testId: "timeline-empty",
+      }));
       return;
     }
-    const holder = document.createElement("div");
-    holder.className = "empty-state";
-    holder.append(document.createTextNode(timelineTo !== null ? "这一段时间尚无记录" : "没有找到相符的时光"));
-    const clear = document.createElement("button");
-    clear.type = "button";
-    clear.className = "button ghost";
-    clear.dataset.testid = "clear-filters";
-    clear.textContent = "清除筛选";
-    clear.addEventListener("click", () => {
-      timelineTo = null;
-      favoriteFilter.checked = false;
-      selectedTagIds.clear();
-      void reloadTimeline();
-    });
-    holder.append(document.createElement("br"), clear);
-    timelineList.replaceChildren(holder);
+    if (kind === "filtered-empty") {
+      timelineList.replaceChildren(emptyCard({
+        title: "没有符合筛选的时光",
+        message: "换个标签，或者回到全部时光看看。",
+        actionLabel: "清除筛选",
+        actionTestId: "clear-filters",
+        onAction: clearTimelineFilters,
+        testId: "timeline-empty",
+      }));
+      return;
+    }
+    timelineList.replaceChildren();
     return;
   }
   const nodes: HTMLElement[] = [];
@@ -932,6 +1052,7 @@ function paintFavorite(button: HTMLButtonElement, item: TimelineItem): void {
 }
 
 async function toggleFavorite(item: TimelineItem, button: HTMLButtonElement): Promise<void> {
+  if (!ensureWritable()) return;
   clearErrorBox();
   button.disabled = true;
   try {
@@ -1110,6 +1231,10 @@ async function showCalendar(): Promise<void> {
 }
 
 async function refreshCalendar(): Promise<void> {
+  if (blockedDescription !== null) {
+    renderBlockedState();
+    return;
+  }
   const generation = ++calendarGeneration;
   try {
     const days = await api.calendarMonth(calYear, calMonth);
@@ -1176,6 +1301,7 @@ function renderCalendar(): void {
     return button;
   });
   calGrid.replaceChildren(...cells);
+  calEmpty.hidden = calDays.size > 0;
 }
 
 async function selectCalendarDate(date: string): Promise<void> {
@@ -1259,6 +1385,7 @@ async function refreshOnThisDay(): Promise<void> {
 
 async function startNewDraftAt(date: string): Promise<void> {
   if (!(await flushBeforeLeave())) return;
+  if (!ensureWritable()) return;
   try {
     openInEditor(null);
     session.edit({ eventDate: date });
@@ -1461,9 +1588,11 @@ async function deleteTagFlow(tag: TagInfo): Promise<void> {
 async function afterTagMetaChange(): Promise<void> {
   await reloadTimeline();
   if (currentView === "calendar") await refreshCalendar();
+  if (currentView === "collect") await refreshCollect();
 }
 
 async function openTagManager(): Promise<void> {
+  if (!ensureWritable()) return;
   clearErrorBox();
   setDialogStatus(tagDialogStatus, "", "calm");
   tagNewInput.value = "";
@@ -1579,6 +1708,10 @@ async function savePickerTags(): Promise<void> {
 }
 
 async function refreshTrash(): Promise<void> {
+  if (blockedDescription !== null) {
+    trashList.replaceChildren(blockedCard());
+    return;
+  }
   try {
     renderTrash(await api.listTrash());
   } catch (error) {
@@ -1713,6 +1846,97 @@ async function showTrash(): Promise<void> {
   await refreshTrash();
 }
 
+// ---- Unit-0.8 标签·收藏 ----
+let collectGeneration = 0;
+
+function renderCollectFavorites(items: readonly TimelineItem[]): void {
+  if (items.length === 0) {
+    collectFavorites.replaceChildren(emptyCard({
+      title: "还没有珍藏的时光",
+      message: "在时光轴点一下星星，就能把那段时光收进这里。",
+      actionLabel: "去时光轴看看",
+      actionTestId: "collect-empty-favorites",
+      onAction: () => { void showTimeline(); },
+      testId: "collect-favorites-empty",
+    }));
+    return;
+  }
+  collectFavorites.replaceChildren(...items.map((item) => timelineCard(item, true)));
+}
+
+function filterTimelineByTag(tagId: string): void {
+  selectedTagIds.clear();
+  selectedTagIds.add(tagId);
+  favoriteFilter.checked = false;
+  timelineTo = null;
+  void showTimeline();
+}
+
+function renderCollectTagList(tags: readonly TagInfo[]): void {
+  if (tags.length === 0) {
+    collectTags.replaceChildren(emptyCard({
+      title: "还没有标签",
+      message: "在时光轴给记录加上标签，这里就会按标签归好。",
+      actionLabel: "去时光轴给记录加标签",
+      actionTestId: "collect-empty-tags",
+      onAction: () => { void showTimeline(); },
+      testId: "collect-tags-empty",
+    }));
+    return;
+  }
+  collectTags.replaceChildren(...tags.map((tag) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "collect-tag";
+    button.dataset.testid = "collect-tag-item";
+    button.dataset.tagId = tag.tagId;
+    const name = document.createElement("span");
+    name.textContent = tag.name;
+    const count = document.createElement("span");
+    count.className = "collect-tag-count";
+    count.textContent = `${tag.activeCount} 条`;
+    button.append(name, count);
+    button.addEventListener("click", () => { filterTimelineByTag(tag.tagId); });
+    return button;
+  }));
+}
+
+async function refreshCollect(): Promise<void> {
+  if (blockedDescription !== null) {
+    renderBlockedState();
+    return;
+  }
+  const generation = ++collectGeneration;
+  try {
+    const tags = await api.listTags();
+    if (generation !== collectGeneration) return;
+    timelineTags = tags;
+    renderCollectTagList(tags);
+    const page = await api.timelinePage({ favoriteOnly: true }, null, TIMELINE_PAGE_SIZE);
+    if (generation !== collectGeneration) return;
+    renderCollectFavorites(page.items);
+  } catch (error) {
+    if (generation === collectGeneration) showError(error);
+  }
+}
+
+async function showCollect(): Promise<void> {
+  if (!(await flushBeforeLeave())) return;
+  setView("collect");
+  await refreshCollect();
+}
+
+/** 一级页签入口：所有路径都先 flush 当前草稿，再切换视图。 */
+function activateMainTab(tab: MainTab): void {
+  switch (tab) {
+    case "timeline": void showTimeline(); break;
+    case "calendar": void showCalendar(); break;
+    case "drafts": void showDrafts(); break;
+    case "collect": void showCollect(); break;
+    case "settings": void showData(); break;
+  }
+}
+
 // ---- Unit-0.5 数据与备份 ----
 let pickedToken: string | null = null;
 
@@ -1748,10 +1972,11 @@ function formatBytes(bytes: number): string {
 
 async function showData(): Promise<void> {
   if (!(await flushBeforeLeave())) return;
-  setView("data");
+  setView("settings");
 }
 
 async function exportBackupNow(): Promise<void> {
+  if (!ensureWritable()) return;
   clearErrorBox();
   let password: string | undefined;
   if (encryptToggle.checked) {
@@ -1801,6 +2026,7 @@ async function clearPicked(): Promise<void> {
 }
 
 async function pickBackupNow(): Promise<void> {
+  if (!ensureWritable()) return;
   clearErrorBox();
   await clearPicked();
   pickBackupButton.disabled = true;
@@ -1854,6 +2080,7 @@ async function unlockBackupNow(): Promise<void> {
 }
 
 async function mergeBackupNow(): Promise<void> {
+  if (!ensureWritable()) return;
   const token = pickedToken;
   if (token === null) return;
   clearErrorBox();
@@ -1892,6 +2119,7 @@ async function mergeBackupNow(): Promise<void> {
 }
 
 async function restoreBackupNow(): Promise<void> {
+  if (!ensureWritable()) return;
   const token = pickedToken;
   if (token === null) return;
   const confirmed = await askConfirm(
@@ -1926,6 +2154,7 @@ async function restoreBackupNow(): Promise<void> {
 }
 
 async function commitCurrent(): Promise<void> {
+  if (!ensureWritable()) return;
   if (currentView !== "editor") return;
   clearErrorBox();
   commitButton.disabled = true;
@@ -1933,6 +2162,8 @@ async function commitCurrent(): Promise<void> {
   try {
     const result = await session.commit();
     window.localStorage.removeItem(LAST_DRAFT_KEY);
+    unfinishedDraft = null;
+    refreshResumeNotice();
     showAppNotice(durabilityLabel(result.durability), result.durability === "uncertain" ? "warn" : "ok");
     await showTimeline();
   } catch (error) {
@@ -2004,33 +2235,44 @@ async function attachSelectedPhotos(): Promise<void> {
   }
 }
 
-async function restoreLastDraft(): Promise<void> {
+let unfinishedDraft: RecordRow | null = null;
+
+function refreshResumeNotice(): void {
+  resumeDraftBar.hidden = unfinishedDraft === null || blockedDescription !== null;
+}
+
+/** 找到没写完的草稿只在时光轴顶部温和提示，不强制跳走。 */
+async function prepareUnfinishedDraft(): Promise<void> {
   try {
     const preferred = window.localStorage.getItem(LAST_DRAFT_KEY) ?? undefined;
-    const row = await recoverLastDraft(api, preferred);
-    if (row === null) {
-      setView("drafts");
-      return;
-    }
-    openInEditor(row);
-    setView("editor");
-    showAppNotice("已为你恢复上次没写完的草稿", "calm");
+    unfinishedDraft = await recoverLastDraft(api, preferred);
   } catch (error) {
     showError(error);
-    setView("drafts");
+  }
+  refreshResumeNotice();
+}
+
+async function resumeUnfinishedDraft(): Promise<void> {
+  const row = unfinishedDraft;
+  if (row === null) return;
+  try {
+    const fresh = await api.getRecord(row.recordId);
+    await openDraft(fresh);
+  } catch (error) {
+    showError(error);
   }
 }
 
-draftsTab.addEventListener("click", () => { void showDrafts(); });
-timelineTab.addEventListener("click", () => { void showTimeline(); });
-calendarTab.addEventListener("click", () => { void showCalendar(); });
+resumeDraftButton.addEventListener("click", () => { void resumeUnfinishedDraft(); });
 newDraftButton.addEventListener("click", () => { void startNewDraft(); });
 backButton.addEventListener("click", () => { void showDrafts(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
 
-trashTab.addEventListener("click", () => { void showTrash(); });
-dataTab.addEventListener("click", () => { void showData(); });
+openTrashButton.addEventListener("click", () => { void showTrash(); });
+backToSettingsButton.addEventListener("click", () => { void showData(); });
+collectManageTags.addEventListener("click", () => { void openTagManager(); });
+calEmptyWrite.addEventListener("click", () => { void startNewDraftAt(localToday()); });
 exportBackupButton.addEventListener("click", () => { void exportBackupNow(); });
 pickBackupButton.addEventListener("click", () => { void pickBackupNow(); });
 restoreBackupButton.addEventListener("click", () => { void restoreBackupNow(); });
@@ -2175,24 +2417,25 @@ async function boot(): Promise<void> {
       if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
       if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
     }
+    // 启动默认落在时光轴（显式 ?view= 或上次页签优先），不再自动跳进草稿编辑器。
+    const start = initialTab({
+      param: params.get("view"),
+      lastTab: window.localStorage.getItem(LAST_TAB_KEY),
+    });
     // 启动先确认数据目录可用（第二个实例 STORE_LOCKED / 数据版本过新 SCHEMA_TOO_NEW），不可用时不做任何写操作。
-    if (!(await gateStore())) return;
+    if (!(await gateStore())) {
+      // 数据打不开也不能没有入口：导航照常，每个页签显示同一条错误提示。
+      setView(start);
+      renderBlockedState();
+      return;
+    }
     await reportMedia();
     await refreshDrafts();
     await reloadTimeline();
-    if (params.get("view") === "data") {
-      setView("data");
-      return;
-    }
-    if (params.get("view") === "calendar") {
-      await showCalendar();
-      return;
-    }
-    if (demo) {
-      setView("drafts");
-      return;
-    }
-    await restoreLastDraft();
+    await prepareUnfinishedDraft();
+    setView(start);
+    if (start === "calendar") await refreshCalendar();
+    if (start === "collect") await refreshCollect();
   } finally {
     // 视觉证据脚本等待这个标记，确保演示数据和初始视图都已就绪。
     document.body.dataset.appReady = "1";
@@ -2201,5 +2444,5 @@ async function boot(): Promise<void> {
 
 void boot().catch((error: unknown) => {
   showError(error);
-  setView("drafts");
+  setView("timeline");
 });
