@@ -13,7 +13,8 @@
     "preview": "npm run build && node scripts/preview-server.mjs",
     "screenshots": "npm run build && node scripts/screenshots.mjs",
     "tauri": "tauri",
-    "screenshots:mobile": "npm run build && node scripts/screenshots-mobile.mjs"
+    "screenshots:mobile": "npm run build && node scripts/screenshots-mobile.mjs",
+    "screenshots:u04": "npm run build && node scripts/screenshots-u04.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

@@ -4,13 +4,16 @@
 
 use serde::{Deserialize, Serialize};
 use shiguang_core::json::Json;
-use shiguang_core::model::{CoreError, RecordRow};
+use shiguang_core::model::{
+    ConflictChoice, ConflictCopy, CoreError, MediaReport, PhotoStatus, PurgeOutcome, RecordRow,
+};
 use shiguang_core::Store;
 use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppState {
-    store: Mutex<Store>,
+    store: Mutex<Result<Store, CoreError>>,
+    media_report: Result<MediaReport, CoreError>,
 }
 
 #[derive(Deserialize)]
@@ -134,15 +137,252 @@ fn save_value(row: Option<&RecordRow>, store: &Store) -> Result<serde_json::Valu
     ]))
 }
 
+fn quarantined_value(items: &[shiguang_core::QuarantinedMedia]) -> serde_json::Value {
+    serde_json::Value::Array(
+        items
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "assetId": item.asset_id,
+                    "file": item.file,
+                    "movedTo": item.moved_to,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn purge_value(outcome: &PurgeOutcome, store: &Store) -> serde_json::Value {
+    serde_json::json!({
+        "deletionMarkers": outcome.deletion_markers.iter().map(|marker| serde_json::json!({
+            "recordId": marker.record_id,
+            "deletedAt": marker.deleted_at,
+            "lastContentRevision": marker.last_content_revision,
+        })).collect::<Vec<_>>(),
+        "quarantined": quarantined_value(&outcome.quarantined),
+        "durability": store.last_durability().as_str(),
+    })
+}
+
+fn conflict_value(copy: &ConflictCopy) -> Result<serde_json::Value, CommandError> {
+    Ok(serde_json::json!({
+        "conflictId": copy.conflict_id,
+        "recordId": copy.record_id,
+        "baseRevision": copy.base_revision,
+        "snapshot": to_value(copy.snapshot.to_json())?,
+        "createdAt": copy.created_at,
+        "reason": copy.reason,
+    }))
+}
+
+fn report_value(report: &MediaReport) -> serde_json::Value {
+    let issues = |items: &[shiguang_core::MediaIssue]| {
+        items
+            .iter()
+            .map(|issue| {
+                serde_json::json!({
+                    "recordId": issue.record_id,
+                    "photoUseId": issue.photo_use_id,
+                    "assetId": issue.asset_id,
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    serde_json::json!({
+        "quarantined": quarantined_value(&report.quarantined),
+        "missing": issues(&report.missing),
+        "corrupt": issues(&report.corrupt),
+        "checkedAt": report.checked_at,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn store_status(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, CommandError> {
+    let slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    match slot.as_ref() {
+        Ok(_) => Ok(serde_json::json!({ "ok": true })),
+        Err(error) => to_value(error.to_json()),
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn media_report(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, CommandError> {
+    let slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+    let report = state
+        .media_report
+        .as_ref()
+        .map_err(|e| CommandError::from(e.clone()))?;
+    Ok(report_value(report))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn photo_status(
+    asset_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<&'static str, CommandError> {
+    let slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+    Ok(
+        match store.photo_status(&asset_id).map_err(CommandError::from)? {
+            PhotoStatus::Available => "available",
+            PhotoStatus::Missing => "missing",
+            PhotoStatus::Corrupt => "corrupt",
+        },
+    )
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn trash_record(
+    record_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store.trash_record(&record_id).map_err(CommandError::from)?;
+    save_value(Some(&row), store)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn restore_record(
+    record_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store
+        .restore_record(&record_id)
+        .map_err(CommandError::from)?;
+    save_value(Some(&row), store)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn purge_record(
+    record_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let outcome = store.purge_record(&record_id).map_err(CommandError::from)?;
+    Ok(purge_value(&outcome, store))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn empty_trash(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let outcome = store.empty_trash().map_err(CommandError::from)?;
+    Ok(purge_value(&outcome, store))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn list_trash(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, CommandError> {
+    let slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+    let rows: Result<Vec<_>, _> = store
+        .list_trash()
+        .map_err(CommandError::from)?
+        .into_iter()
+        .map(record_value)
+        .collect();
+    Ok(serde_json::Value::Array(rows?))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn resolve_conflict(
+    record_id: String,
+    choice: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let choice = match choice.as_str() {
+        "keepMine" => ConflictChoice::KeepMine,
+        "keepFormal" => ConflictChoice::KeepFormal,
+        _ => {
+            return Err(command_error(
+                "INVALID_CONFLICT_CHOICE",
+                "请选择以我的草稿为准或保留当前正式版",
+            ))
+        }
+    };
+    let row = store
+        .resolve_conflict(&record_id, choice)
+        .map_err(CommandError::from)?;
+    save_value(Some(&row), store)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn list_conflict_copies(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+    let copies: Result<Vec<_>, _> = store
+        .list_conflict_copies()
+        .map_err(CommandError::from)?
+        .iter()
+        .map(conflict_value)
+        .collect();
+    Ok(serde_json::Value::Array(copies?))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn restore_conflict_copy(
+    conflict_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state
+        .store
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store
+        .restore_conflict_copy(&conflict_id)
+        .map_err(CommandError::from)?;
+    save_value(Some(&row), store)
+}
+
 #[tauri::command(rename_all = "camelCase")]
 fn create_draft(
     input: CreateDraftInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let row = store
         .create_draft(
             input.base_record_id.as_deref(),
@@ -152,7 +392,7 @@ fn create_draft(
             input.event_time.as_deref(),
         )
         .map_err(CommandError::from)?;
-    save_value(Some(&row), &store)
+    save_value(Some(&row), store)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -160,10 +400,11 @@ fn save_draft(
     input: SaveDraftInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let time_patch = if input.clear_event_time {
         Some(None)
     } else {
@@ -178,7 +419,7 @@ fn save_draft(
             time_patch,
         )
         .map_err(CommandError::from)?;
-    save_value(Some(&row), &store)
+    save_value(Some(&row), store)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -186,10 +427,11 @@ fn attach_photo(
     input: AttachPhotoInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     store
         .attach_photo(
             &input.record_id,
@@ -207,10 +449,11 @@ fn attach_photo_bytes(
     input: AttachPhotoBytesInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     store
         .attach_photo_bytes(
             &input.record_id,
@@ -222,7 +465,7 @@ fn attach_photo_bytes(
         .map_err(CommandError::from)?;
     save_value(
         Some(store.row(&input.record_id).map_err(CommandError::from)?),
-        &store,
+        store,
     )
 }
 
@@ -232,14 +475,15 @@ fn remove_draft_photo(
     photo_use_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let row = store
         .remove_draft_photo(&record_id, &photo_use_id)
         .map_err(CommandError::from)?;
-    save_value(Some(&row), &store)
+    save_value(Some(&row), store)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -247,22 +491,24 @@ fn discard_draft(
     record_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let row = store
         .discard_draft(&record_id)
         .map_err(CommandError::from)?;
-    save_value(row.as_ref(), &store)
+    save_value(row.as_ref(), store)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn list_drafts(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, CommandError> {
-    let store = state
+    let slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     let rows: Result<Vec<_>, _> = store.list_drafts().into_iter().map(record_value).collect();
     Ok(serde_json::Value::Array(rows?))
 }
@@ -273,10 +519,16 @@ fn photo_data_url(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, CommandError> {
     use std::io::Read;
-    let store = state
+    let slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+    match store.photo_status(&asset_id).map_err(CommandError::from)? {
+        PhotoStatus::Available => {}
+        PhotoStatus::Missing => return Err(command_error("ASSET_MISSING", "原图缺失")),
+        PhotoStatus::Corrupt => return Err(command_error("ASSET_HASH_MISMATCH", "原图校验失败")),
+    }
     let path = store
         .asset_path(&asset_id)
         .ok_or_else(|| command_error("ASSET_MISSING", "原图不存在"))?;
@@ -304,7 +556,11 @@ fn photo_data_url(
         ));
     }
     // 优先使用持久化的 mediaType；孤立原图只能按受控扩展名回退。
-    let rows = store.list_drafts().into_iter().chain(store.list_formal());
+    let rows = store
+        .list_drafts()
+        .into_iter()
+        .chain(store.list_formal())
+        .chain(store.list_trash().map_err(CommandError::from)?);
     let photo = rows
         .flat_map(|row| row.draft.iter().chain(row.formal.iter()))
         .flat_map(|snapshot| snapshot.photos.iter())
@@ -329,10 +585,11 @@ fn commit_record(
     expected_base_revision: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let mut store = state
+    let mut slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let outcome = store
         .commit(&record_id, expected_base_revision)
         .map_err(CommandError::from)?;
@@ -351,10 +608,11 @@ fn commit_record(
 fn list_formal_records(
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let store = state
+    let slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     let rows: Result<Vec<_>, CommandError> =
         store.list_formal().into_iter().map(record_value).collect();
     Ok(serde_json::Value::Array(rows?))
@@ -365,10 +623,11 @@ fn get_record(
     record_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let store = state
+    let slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     let row = store.row(&record_id).map_err(CommandError::from)?;
     record_value(row)
 }
@@ -378,10 +637,11 @@ fn export_manifest(
     out_path: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
-    let store = state
+    let slot = state
         .store
         .lock()
         .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     let manifest = store
         .manifest_json(&[("tauri".to_string(), tauri::VERSION.to_string())])
         .map_err(CommandError::from)?;
@@ -396,13 +656,22 @@ fn export_manifest(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let dir = app
+            // 数据目录/锁/迁移错误由命令返回，仍然启动窗口以显示中文提示。
+            let opened = app
                 .path()
                 .app_data_dir()
-                .map_err(|e| format!("无法解析应用数据目录：{e}"))?;
-            let store = Store::open(dir).map_err(|e| e.message)?;
+                .map_err(|e| CoreError::io(format!("无法解析应用数据目录：{e}")))
+                .and_then(Store::open_exclusive);
+            let (store, media_report) = match opened {
+                Ok(mut store) => {
+                    let report = store.reconcile_media();
+                    (Ok(store), report)
+                }
+                Err(error) => (Err(error.clone()), Err(error)),
+            };
             app.manage(AppState {
                 store: Mutex::new(store),
+                media_report,
             });
             Ok(())
         })
@@ -418,7 +687,18 @@ pub fn run() {
             commit_record,
             list_formal_records,
             get_record,
-            export_manifest
+            export_manifest,
+            trash_record,
+            restore_record,
+            purge_record,
+            empty_trash,
+            list_trash,
+            resolve_conflict,
+            list_conflict_copies,
+            restore_conflict_copy,
+            media_report,
+            photo_status,
+            store_status
         ])
         .run(tauri::generate_context!())
         .expect("启动拾光桌面壳失败");

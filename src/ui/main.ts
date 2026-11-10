@@ -3,7 +3,7 @@ import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
 import type { ErrorDescription } from "../domain/errors.ts";
 import { durabilityLabel, formalHeadline, formatEventWhen } from "../domain/format.ts";
-import type { FieldIssue, PhotoUse, RecordRow } from "../domain/types.ts";
+import type { ConflictCopy, FieldIssue, PhotoUse, RecordRow } from "../domain/types.ts";
 import { formalItems } from "../domain/view.ts";
 import type { FormalListItem } from "../domain/view.ts";
 import type { ShiguangApi } from "../platform/api.ts";
@@ -13,7 +13,7 @@ import { PREVIEW_STORAGE_KEY, seedDemo } from "./demo.ts";
 
 const LAST_DRAFT_KEY = "shiguang.lastDraft";
 
-type View = "drafts" | "editor" | "timeline";
+type View = "drafts" | "editor" | "timeline" | "trash";
 
 function byTestId<T extends HTMLElement>(testId: string): T {
   const node = document.querySelector<T>(`[data-testid="${testId}"]`);
@@ -29,6 +29,7 @@ function byId<T extends HTMLElement>(id: string): T {
 
 const draftsTab = byTestId<HTMLButtonElement>("drafts-tab");
 const timelineTab = byTestId<HTMLButtonElement>("timeline-tab");
+const trashTab = byTestId<HTMLButtonElement>("trash-tab");
 const newDraftButton = byTestId<HTMLButtonElement>("new-draft");
 const commitButton = byTestId<HTMLButtonElement>("commit-button");
 const backButton = byTestId<HTMLButtonElement>("back-to-drafts");
@@ -46,9 +47,24 @@ const appNotice = byId<HTMLParagraphElement>("app-notice");
 const viewDrafts = byId<HTMLElement>("view-drafts");
 const viewEditor = byId<HTMLElement>("view-editor");
 const viewTimeline = byId<HTMLElement>("view-timeline");
+const viewTrash = byId<HTMLElement>("view-trash");
 const draftList = byId<HTMLDivElement>("draft-list");
 const timelineList = byId<HTMLDivElement>("timeline-list");
+const trashList = byId<HTMLDivElement>("trash-list");
 const photoGrid = byId<HTMLDivElement>("photo-grid");
+const emptyTrashButton = byTestId<HTMLButtonElement>("empty-trash-button");
+const conflictActions = byId<HTMLElement>("conflict-actions");
+const keepMineButton = byTestId<HTMLButtonElement>("keep-mine");
+const keepFormalButton = byTestId<HTMLButtonElement>("keep-formal");
+const appShell = byId<HTMLElement>("app-shell");
+const storeBlocked = byTestId<HTMLElement>("store-blocked");
+const storeBlockedTitle = byId<HTMLElement>("store-blocked-title");
+const storeBlockedDetail = byId<HTMLParagraphElement>("store-blocked-detail");
+const confirmDialog = byTestId<HTMLDialogElement>("confirm-dialog");
+const confirmTitle = byId<HTMLElement>("confirm-title");
+const confirmMessage = byId<HTMLParagraphElement>("confirm-message");
+const confirmOk = byTestId<HTMLButtonElement>("confirm-ok");
+const confirmCancel = byTestId<HTMLButtonElement>("confirm-cancel");
 
 const params = new URLSearchParams(window.location.search);
 const invoke = tauriInvokeFromWindow();
@@ -64,25 +80,29 @@ const memory = invoke === null
   : null;
 const api: ShiguangApi = memory ?? createTauriApi(invoke!);
 
-const session = new DraftSession<number>({
-  api,
-  schedule: (fn, ms) => window.setTimeout(fn, ms),
-  cancel: (handle) => window.clearTimeout(handle),
-  debounceMs: 800,
-});
-
 let currentView: View = "drafts";
 let photoKey: string | null = null;
 
-session.onChange((state) => {
-  renderStatus(state);
-  renderPhotos(state.snapshot.photos);
-  const recordId = state.recordId;
-  if (recordId !== null && currentView === "editor"
-    && (state.status === "saved" || state.status === "savedUncertain")) {
-    window.localStorage.setItem(LAST_DRAFT_KEY, recordId);
-  }
-});
+function createSession(): DraftSession<number> {
+  const created = new DraftSession<number>({
+    api,
+    schedule: (fn, ms) => window.setTimeout(fn, ms),
+    cancel: (handle) => window.clearTimeout(handle),
+    debounceMs: 800,
+  });
+  created.onChange((state) => {
+    renderStatus(state);
+    renderPhotos(state.snapshot.photos);
+    const recordId = state.recordId;
+    if (recordId !== null && currentView === "editor"
+      && (state.status === "saved" || state.status === "savedUncertain")) {
+      window.localStorage.setItem(LAST_DRAFT_KEY, recordId);
+    }
+  });
+  return created;
+}
+
+let session: DraftSession<number> = createSession();
 
 function two(value: number): string {
   return String(value).padStart(2, "0");
@@ -118,11 +138,14 @@ function setView(view: View): void {
   viewDrafts.hidden = view !== "drafts";
   viewEditor.hidden = view !== "editor";
   viewTimeline.hidden = view !== "timeline";
+  viewTrash.hidden = view !== "trash";
   const draftsActive = view === "drafts" || view === "editor";
   draftsTab.classList.toggle("is-active", draftsActive);
   timelineTab.classList.toggle("is-active", view === "timeline");
+  trashTab.classList.toggle("is-active", view === "trash");
   draftsTab.setAttribute("aria-selected", String(draftsActive));
   timelineTab.setAttribute("aria-selected", String(view === "timeline"));
+  trashTab.setAttribute("aria-selected", String(view === "trash"));
 }
 
 function showPreviewNotice(): void {
@@ -165,6 +188,77 @@ function showError(error: unknown): void {
   showErrorDescription(describeError(error));
 }
 
+let confirmSettler: ((value: boolean) => void) | null = null;
+
+function finishConfirm(value: boolean): void {
+  const settle = confirmSettler;
+  confirmSettler = null;
+  confirmDialog.close();
+  settle?.(value);
+}
+
+/** 应用内二次确认；不使用 window.confirm，取消/关闭一律按“不执行”处理。 */
+function askConfirm(title: string, message: string, okLabel = "确定"): Promise<boolean> {
+  if (confirmSettler !== null) finishConfirm(false);
+  confirmTitle.textContent = title;
+  confirmMessage.textContent = message;
+  confirmOk.textContent = okLabel;
+  return new Promise<boolean>((resolve) => {
+    confirmSettler = resolve;
+    confirmDialog.showModal();
+  });
+}
+
+confirmOk.addEventListener("click", () => { finishConfirm(true); });
+confirmCancel.addEventListener("click", () => { finishConfirm(false); });
+confirmDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  finishConfirm(false);
+});
+confirmDialog.addEventListener("close", () => {
+  const settle = confirmSettler;
+  confirmSettler = null;
+  settle?.(false);
+});
+
+/** 启动失败时只展示中文提示，不加载任何列表，也不提供写操作。 */
+function showStoreBlocked(code: string, error: unknown): void {
+  const description = describeError(error);
+  storeBlockedTitle.textContent = code === "STORE_LOCKED"
+    ? "拾光已在别处打开"
+    : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : "数据暂时无法打开";
+  storeBlockedDetail.textContent = description.detail;
+  appShell.hidden = true;
+  storeBlocked.hidden = false;
+}
+
+async function gateStore(): Promise<boolean> {
+  try {
+    const status = await api.storeStatus();
+    if (status.ok) return true;
+    showStoreBlocked(status.code, { code: status.code, message: status.message });
+  } catch (error) {
+    showStoreBlocked("", error);
+  }
+  return false;
+}
+
+async function reportMedia(): Promise<void> {
+  try {
+    const report = await api.mediaReport();
+    const messages: string[] = [];
+    if (report.quarantined.length > 0) {
+      messages.push(`发现 ${report.quarantined.length} 个未被记录使用的照片文件，已移到隔离文件夹（没有删除）`);
+    }
+    if (report.missing.length > 0) {
+      messages.push(`有 ${report.missing.length} 张照片原图缺失`);
+    }
+    if (messages.length > 0) showAppNotice(messages.join("；"), "warn");
+  } catch (error) {
+    showError(error);
+  }
+}
+
 function isFieldIssue(error: unknown): error is FieldIssue {
   if (typeof error !== "object" || error === null) return false;
   const value = error as { code?: unknown; message?: unknown };
@@ -184,6 +278,7 @@ function showFieldIssue(issue: FieldIssue): void {
 function renderStatus(state: DraftSessionSnapshot): void {
   saveStatus.replaceChildren();
   saveStatus.className = "save-status";
+  conflictActions.hidden = state.status !== "conflict" || state.recordId === null;
   if (state.status === "idle") return;
 
   const text = document.createElement("span");
@@ -245,8 +340,22 @@ function createPhotoThumb(assetId: string, caption: string): HTMLImageElement {
   return img;
 }
 
+function photoPlaceholder(holder: HTMLElement, status: "missing" | "corrupt"): void {
+  const fallback = document.createElement("span");
+  fallback.className = "photo-fallback";
+  fallback.setAttribute("data-testid", status === "missing" ? "photo-missing" : "photo-corrupt");
+  fallback.textContent = status === "missing" ? "原图缺失" : "原图校验失败";
+  holder.append(fallback);
+}
+
 async function loadPhoto(img: HTMLImageElement, assetId: string, holder: HTMLElement): Promise<void> {
   try {
+    const status = await api.photoStatus(assetId);
+    if (status !== "available") {
+      img.remove();
+      photoPlaceholder(holder, status);
+      return;
+    }
     img.src = await api.photoDataUrl(assetId);
   } catch (error) {
     const description = describeError(error);
@@ -360,10 +469,11 @@ async function openModification(recordId: string): Promise<void> {
 
 async function refreshDrafts(): Promise<void> {
   try {
-    const rows = (await api.listDrafts())
+    const [rows, copies] = await Promise.all([api.listDrafts(), api.listConflictCopies()]);
+    const sorted = rows
       .filter((row) => row.draft !== null)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.recordId.localeCompare(a.recordId));
-    renderDrafts(rows);
+    renderDrafts(sorted, copies);
   } catch (error) {
     showError(error);
   }
@@ -406,15 +516,83 @@ function draftCard(row: RecordRow): HTMLElement {
   return card;
 }
 
-function renderDrafts(rows: readonly RecordRow[]): void {
+function conflictCopyCard(copy: ConflictCopy): HTMLElement {
+  const article = document.createElement("article");
+  article.className = "timeline-card";
+  article.setAttribute("data-testid", "conflict-copy-item");
+
+  const head = document.createElement("div");
+  head.className = "card-head";
+  const title = document.createElement("h3");
+  title.className = "timeline-title";
+  title.textContent = formalHeadline(copy.snapshot);
+  const badge = document.createElement("span");
+  badge.className = "pill is-pending";
+  badge.textContent = "冲突副本";
+  head.append(title, badge);
+  article.append(head);
+
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+  meta.textContent = `${formatEventWhen(copy.snapshot)} · 另存于 ${formatUpdated(copy.createdAt)}`;
+  article.append(meta);
+
+  const body = previewText(copy.snapshot.body, 120);
+  if (body.length > 0) {
+    const paragraph = document.createElement("p");
+    paragraph.className = "timeline-body";
+    paragraph.textContent = body;
+    article.append(paragraph);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  const restore = document.createElement("button");
+  restore.type = "button";
+  restore.className = "button ghost";
+  restore.setAttribute("data-testid", "restore-copy-button");
+  restore.textContent = "恢复为草稿";
+  restore.addEventListener("click", () => { void restoreCopy(copy); });
+  actions.append(restore);
+  article.append(actions);
+  return article;
+}
+
+function conflictCopySection(copies: readonly ConflictCopy[]): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "conflict-copies";
+  const heading = document.createElement("h2");
+  heading.textContent = "冲突副本";
+  const hint = document.createElement("p");
+  hint.className = "conflict-hint";
+  hint.textContent = "发生冲突时保留的草稿，恢复后会回到草稿列表。";
+  section.append(heading, hint, ...copies.map(conflictCopyCard));
+  return section;
+}
+
+async function restoreCopy(copy: ConflictCopy): Promise<void> {
+  clearErrorBox();
+  try {
+    await api.restoreConflictCopy(copy.conflictId);
+    showAppNotice("冲突副本已恢复为草稿", "ok");
+    await refreshDrafts();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function renderDrafts(rows: readonly RecordRow[], copies: readonly ConflictCopy[]): void {
+  const nodes: HTMLElement[] = [];
   if (rows.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
     empty.textContent = "还没有草稿，点上面的「新建草稿」写第一篇吧。";
-    draftList.replaceChildren(empty);
-    return;
+    nodes.push(empty);
+  } else {
+    nodes.push(...rows.map(draftCard));
   }
-  draftList.replaceChildren(...rows.map(draftCard));
+  if (copies.length > 0) nodes.push(conflictCopySection(copies));
+  draftList.replaceChildren(...nodes);
 }
 
 async function refreshTimeline(): Promise<void> {
@@ -476,6 +654,15 @@ function timelineCard(item: FormalListItem): HTMLElement {
   edit.textContent = "修改";
   edit.addEventListener("click", () => { void openModification(item.recordId); });
   actions.append(edit);
+
+  const trash = document.createElement("button");
+  trash.type = "button";
+  trash.className = "button ghost danger";
+  trash.setAttribute("data-testid", "trash-button");
+  trash.textContent = "移到回收站";
+  trash.addEventListener("click", () => { void trashTimelineItem(item.recordId, formalHeadline(item)); });
+  actions.append(trash);
+
   article.append(actions);
   return article;
 }
@@ -491,6 +678,140 @@ function renderTimeline(items: readonly FormalListItem[]): void {
   timelineList.replaceChildren(...items.map(timelineCard));
 }
 
+async function trashTimelineItem(recordId: string, headline: string): Promise<void> {
+  const confirmed = await askConfirm(
+    "移到回收站？",
+    `「${headline}」移到回收站后可以随时恢复。`,
+    "移到回收站",
+  );
+  if (!confirmed) return;
+  clearErrorBox();
+  try {
+    await api.trashRecord(recordId);
+    showAppNotice("已移到回收站，可以随时恢复", "calm");
+    await refreshTimeline();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function refreshTrash(): Promise<void> {
+  try {
+    renderTrash(await api.listTrash());
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function trashCard(row: RecordRow): HTMLElement {
+  const article = document.createElement("article");
+  article.className = "timeline-card";
+  article.setAttribute("data-testid", "trash-item");
+
+  const snapshot = row.formal ?? row.draft;
+  const head = document.createElement("div");
+  head.className = "card-head";
+  const title = document.createElement("h3");
+  title.className = "timeline-title";
+  title.textContent = snapshot ? formalHeadline(snapshot) : "（无题）";
+  head.append(title);
+  article.append(head);
+
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+  const when = snapshot ? formatEventWhen(snapshot) : "日期未填写";
+  const movedAt = row.trashedAt ? formatUpdated(row.trashedAt) : "时间未知";
+  meta.textContent = `${when} · 移入回收站 ${movedAt}`;
+  article.append(meta);
+
+  const body = snapshot ? previewText(snapshot.body, 120) : "";
+  if (body.length > 0) {
+    const paragraph = document.createElement("p");
+    paragraph.className = "timeline-body";
+    paragraph.textContent = body;
+    article.append(paragraph);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+
+  const restore = document.createElement("button");
+  restore.type = "button";
+  restore.className = "button ghost";
+  restore.setAttribute("data-testid", "restore-button");
+  restore.textContent = "恢复";
+  restore.addEventListener("click", () => { void restoreTrashItem(row.recordId); });
+  actions.append(restore);
+
+  const purge = document.createElement("button");
+  purge.type = "button";
+  purge.className = "button ghost danger";
+  purge.setAttribute("data-testid", "purge-button");
+  purge.textContent = "永久删除";
+  purge.addEventListener("click", () => { void purgeTrashItem(row.recordId); });
+  actions.append(purge);
+
+  article.append(actions);
+  return article;
+}
+
+function renderTrash(rows: readonly RecordRow[]): void {
+  emptyTrashButton.disabled = rows.length === 0;
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "回收站是空的";
+    trashList.replaceChildren(empty);
+    return;
+  }
+  trashList.replaceChildren(...rows.map(trashCard));
+}
+
+async function restoreTrashItem(recordId: string): Promise<void> {
+  clearErrorBox();
+  try {
+    await api.restoreRecord(recordId);
+    showAppNotice("已恢复这条时光", "ok");
+    await refreshTrash();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function purgeTrashItem(recordId: string): Promise<void> {
+  const confirmed = await askConfirm(
+    "永久删除这条记录？",
+    "永久删除后不可撤销。照片原件不会直接删除，会移到本机隔离文件夹。",
+    "永久删除",
+  );
+  if (!confirmed) return;
+  clearErrorBox();
+  try {
+    await api.purgeRecord(recordId);
+    showAppNotice("已永久删除这条记录", "calm");
+    await refreshTrash();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function emptyTrash(): Promise<void> {
+  const confirmed = await askConfirm(
+    "清空回收站？",
+    "清空后，回收站里的所有记录将被永久删除，不可撤销。照片原件不会直接删除，会移到本机隔离文件夹。",
+    "全部永久删除",
+  );
+  if (!confirmed) return;
+  clearErrorBox();
+  try {
+    await api.emptyTrash();
+    showAppNotice("回收站已清空", "calm");
+    await refreshTrash();
+  } catch (error) {
+    showError(error);
+  }
+}
+
 async function showDrafts(): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   setView("drafts");
@@ -501,6 +822,12 @@ async function showTimeline(): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   setView("timeline");
   await refreshTimeline();
+}
+
+async function showTrash(): Promise<void> {
+  if (!(await flushBeforeLeave())) return;
+  setView("trash");
+  await refreshTrash();
 }
 
 async function commitCurrent(): Promise<void> {
@@ -520,6 +847,46 @@ async function commitCurrent(): Promise<void> {
   } finally {
     commitButton.disabled = false;
     commitButton.textContent = "存入时光";
+  }
+}
+
+async function resolveKeepMine(): Promise<void> {
+  const recordId = session.state.recordId;
+  if (recordId === null) return;
+  clearErrorBox();
+  keepMineButton.disabled = true;
+  keepFormalButton.disabled = true;
+  try {
+    const result = await api.resolveConflict(recordId, "keepMine");
+    session = createSession();
+    openInEditor(result.row);
+    showAppNotice("已以你的草稿为准，确认无误后再点“存入时光”", "ok");
+    setView("editor");
+  } catch (error) {
+    showError(error);
+  } finally {
+    keepMineButton.disabled = false;
+    keepFormalButton.disabled = false;
+  }
+}
+
+async function resolveKeepFormal(): Promise<void> {
+  const recordId = session.state.recordId;
+  if (recordId === null) return;
+  clearErrorBox();
+  keepMineButton.disabled = true;
+  keepFormalButton.disabled = true;
+  try {
+    await api.resolveConflict(recordId, "keepFormal");
+    session = createSession();
+    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    showAppNotice("你的草稿已另存为冲突副本，不会丢失", "ok");
+    await showDrafts();
+  } catch (error) {
+    showError(error);
+  } finally {
+    keepMineButton.disabled = false;
+    keepFormalButton.disabled = false;
   }
 }
 
@@ -566,6 +933,11 @@ backButton.addEventListener("click", () => { void showDrafts(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
 
+trashTab.addEventListener("click", () => { void showTrash(); });
+emptyTrashButton.addEventListener("click", () => { void emptyTrash(); });
+keepMineButton.addEventListener("click", () => { void resolveKeepMine(); });
+keepFormalButton.addEventListener("click", () => { void resolveKeepFormal(); });
+
 editorTitle.addEventListener("input", () => {
   clearAppNotice();
   session.edit({ title: editorTitle.value });
@@ -603,6 +975,9 @@ async function boot(): Promise<void> {
     if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
     if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
   }
+  // 启动先确认数据目录可用（第二个实例 STORE_LOCKED / 数据版本过新 SCHEMA_TOO_NEW），不可用时不做任何写操作。
+  if (!(await gateStore())) return;
+  await reportMedia();
   await refreshDrafts();
   await refreshTimeline();
   if (demo) {

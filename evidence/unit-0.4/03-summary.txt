@@ -1,0 +1,32 @@
+第 2 阶段：TS + Tauri 贯通层
+
+完成内容
+- Tauri setup 使用 Store::open_exclusive；成功打开后仅 reconcile_media 一次，AppState 保存报告或核查错误。
+- 数据目录解析、独占锁、schema、损坏状态、迁移等打开错误保存进 AppState；setup 正常返回，普通命令拒绝原错误（保留 code/stage/message），store_status 返回 ok:false。
+- 注册要求的 10 个命令及 TS API 已有的 photo_status；写操作返回 row/durability，永久删除返回 deletionMarkers/quarantined/durability。
+- MemoryAdapter 实现回收站、显式永久删除、无个人内容的删除标记、原图隔离、冲突副本恢复与基线选择。冲突副本保留原图引用；删除标记阻止恢复副本时复活已删除记录。
+- 磁盘草稿槽被占用时，将尚未被当前正式版/草稿保留的本地内容持久化为冲突副本；重复冲突不重复生成同一副本。已有测试“占用时存储字节不变”的本地内容已存在于正式版，因此不额外写入重复副本。
+- 新增中文错误文案；正式列表投影过滤回收站。
+
+浏览器预览入口（由 MemoryAdapter 自动读取 window.location.search）
+- ?fail=locked：storeStatus() 返回 STORE_LOCKED；其他 API 均拒绝该错误，存储不读写。
+- ?fail=schema：同上，错误为 SCHEMA_TOO_NEW。
+- ?media=missing 或 ?missing=1：模拟被引用原图缺失；?media=corrupt 模拟校验失败。
+- 可用 setPhotoStatus(assetId, "missing" | "corrupt" | "available") 单独模拟；也可通过构造参数 missingAssets/corruptAssets 注入。
+- mediaReport() 返回 missing/corrupt；photoStatus() 返回对应状态；photoDataUrl() 拒绝 ASSET_MISSING / ASSET_HASH_MISMATCH。模拟不改写记录或原图。
+- 构造参数 search 可在 Node 中注入相同 URL 参数。此任务未修改 src/ui/，具体提示界面由 UI 阶段接入。
+
+验证
+- PASS npm test 2>&1 | tee evidence/unit-0.4/03-npm-test.log
+- PASS node --test --test-isolation=none tests/*.test.ts：79/79（既有 59 + Unit-0.4 新增 20），详见 03-npm-test-details.log。默认 npm test 输出按 8 个文件汇总。
+- PASS npm run typecheck，详见 03-typecheck.log。
+- PASS npm run build，详见 03-build.log。
+- PASS node evidence/unit-0.4/03-adapter-smoke.mjs：URL 启动失败的全部方法、共享原图隔离、冲突副本引用、删除防复活、媒体状态模拟、TS 新命令参数映射，详见 03-adapter-smoke.log。
+- PASS rustfmt --edition 2021 --check src-tauri/src/lib.rs；已逐个对照 core 公开方法和本地缓存的 Tauri v2 State / Manager / setup API。
+- NOT_RUN Tauri 编译：环境缺少 webkit2gtk；按任务要求不尝试构建或安装依赖。Rust 静态检查不等于实际编译通过。
+- NOT_RUN G03 旧备份合并防复活：本单元只提供删除标记基础，后续导入单元验证。
+
+范围
+- 自行修改仅位于 src-tauri/src/、src/platform/、src/domain/、evidence/unit-0.4/。
+- 未修改任何测试断言；未修改 core/、cli/、src/ui/、tests/、.github/；未联网、未安装依赖、未执行 git commit。
+- npm run build 生成忽略的 dist/ 产物，没有编辑其源码。

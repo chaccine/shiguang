@@ -2,6 +2,9 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FaultPoint {
+    MigrationBackup,
+    MigrationWrite,
+    AfterMediaWrite,
     TempCreate,
     TempWrite,
     TempSync,

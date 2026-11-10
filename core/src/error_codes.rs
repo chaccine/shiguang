@@ -1,0 +1,12 @@
+//! Stable Unit-0.4 error codes.
+pub const NOT_IMPLEMENTED: &str = "NOT_IMPLEMENTED";
+pub const STORE_LOCKED: &str = "STORE_LOCKED";
+pub const STORE_BUSY: &str = "STORE_BUSY";
+pub const STORE_NOT_EXCLUSIVE: &str = "STORE_NOT_EXCLUSIVE";
+pub const RECORD_TRASHED: &str = "RECORD_TRASHED";
+pub const RECORD_DELETED: &str = "RECORD_DELETED";
+pub const SCHEMA_TOO_NEW: &str = "SCHEMA_TOO_NEW";
+pub const MIGRATION_BACKUP_FAILED: &str = "MIGRATION_BACKUP_FAILED";
+pub const MIGRATION_FAILED: &str = "MIGRATION_FAILED";
+pub const SCHEMA_CHANGED_ON_DISK: &str = "SCHEMA_CHANGED_ON_DISK";
+pub const REVISION_CONFLICT: &str = "REVISION_CONFLICT";

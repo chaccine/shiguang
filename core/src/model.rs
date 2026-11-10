@@ -20,11 +20,7 @@ impl CoreError {
             message: message.into(),
         }
     }
-    pub fn with_stage(
-        code: &'static str,
-        stage: &'static str,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn with_stage(code: &'static str, stage: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             stage: Some(stage),
@@ -233,6 +229,8 @@ fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
 /// 记录的持久化形态：正式快照与草稿分字段保存。
 #[derive(Clone, Debug, Default)]
 pub struct RecordRow {
+    pub status: RecordStatus,
+    pub trashed_at: Option<String>,
     pub record_id: String,
     pub content_revision: u32,
     pub created_at: String,
@@ -251,6 +249,14 @@ impl RecordRow {
 
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("status", Json::str(self.status.as_str())),
+            (
+                "trashedAt",
+                self.trashed_at
+                    .as_ref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
             ("recordId", Json::str(self.record_id.clone())),
             ("contentRevision", Json::Num(self.content_revision as i64)),
             ("createdAt", Json::str(self.created_at.clone())),
@@ -294,6 +300,12 @@ impl RecordRow {
             Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
         };
         Ok(RecordRow {
+            status: match value.get("status").and_then(Json::as_str) {
+                Some("active") => RecordStatus::Active,
+                Some("trashed") => RecordStatus::Trashed,
+                _ => return Err("字段 status 必须是 active 或 trashed".to_string()),
+            },
+            trashed_at: req_opt_str(value, "trashedAt")?,
             record_id: req_str(value, "recordId")?,
             content_revision: req_u32(value, "contentRevision")?,
             created_at: req_str(value, "createdAt")?,
@@ -303,5 +315,183 @@ impl RecordRow {
             formal,
             draft,
         })
+    }
+}
+
+/// 回收站、删除标记、冲突副本及媒体核对结果。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RecordStatus {
+    #[default]
+    Active,
+    Trashed,
+}
+impl RecordStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Trashed => "trashed",
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeletionMarker {
+    pub record_id: String,
+    pub deleted_at: String,
+    pub last_content_revision: u32,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictCopy {
+    pub conflict_id: String,
+    pub record_id: String,
+    pub base_revision: u32,
+    pub snapshot: Snapshot,
+    pub created_at: String,
+    pub reason: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictChoice {
+    KeepMine,
+    KeepFormal,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QuarantinedMedia {
+    pub asset_id: Option<String>,
+    pub file: String,
+    pub moved_to: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaIssue {
+    pub record_id: String,
+    pub photo_use_id: String,
+    pub asset_id: String,
+}
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MediaReport {
+    pub quarantined: Vec<QuarantinedMedia>,
+    pub missing: Vec<MediaIssue>,
+    pub corrupt: Vec<MediaIssue>,
+    pub checked_at: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PhotoStatus {
+    Available,
+    Missing,
+    Corrupt,
+}
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PurgeOutcome {
+    pub deletion_markers: Vec<DeletionMarker>,
+    pub quarantined: Vec<QuarantinedMedia>,
+}
+
+impl DeletionMarker {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            ("recordId", Json::str(&self.record_id)),
+            ("deletedAt", Json::str(&self.deleted_at)),
+            (
+                "lastContentRevision",
+                Json::Num(self.last_content_revision as i64),
+            ),
+        ])
+    }
+    pub fn from_json(value: &Json) -> Result<Self, String> {
+        Ok(Self {
+            record_id: req_str(value, "recordId")?,
+            deleted_at: req_str(value, "deletedAt")?,
+            last_content_revision: req_u32(value, "lastContentRevision")?,
+        })
+    }
+}
+impl ConflictCopy {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            ("conflictId", Json::str(&self.conflict_id)),
+            ("recordId", Json::str(&self.record_id)),
+            ("baseRevision", Json::Num(self.base_revision as i64)),
+            ("snapshot", self.snapshot.to_json()),
+            ("createdAt", Json::str(&self.created_at)),
+            ("reason", Json::str(&self.reason)),
+        ])
+    }
+    pub fn from_json(value: &Json) -> Result<Self, String> {
+        Ok(Self {
+            conflict_id: req_str(value, "conflictId")?,
+            record_id: req_str(value, "recordId")?,
+            base_revision: req_u32(value, "baseRevision")?,
+            snapshot: Snapshot::from_json(value.get("snapshot").ok_or("字段 snapshot 缺失")?)?,
+            created_at: req_str(value, "createdAt")?,
+            reason: req_str(value, "reason")?,
+        })
+    }
+}
+
+impl QuarantinedMedia {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            (
+                "assetId",
+                self.asset_id.as_ref().map(Json::str).unwrap_or(Json::Null),
+            ),
+            ("file", Json::str(&self.file)),
+            ("movedTo", Json::str(&self.moved_to)),
+        ])
+    }
+}
+impl MediaIssue {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            ("recordId", Json::str(&self.record_id)),
+            ("photoUseId", Json::str(&self.photo_use_id)),
+            ("assetId", Json::str(&self.asset_id)),
+        ])
+    }
+}
+impl MediaReport {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            (
+                "quarantined",
+                Json::Arr(
+                    self.quarantined
+                        .iter()
+                        .map(QuarantinedMedia::to_json)
+                        .collect(),
+                ),
+            ),
+            (
+                "missing",
+                Json::Arr(self.missing.iter().map(MediaIssue::to_json).collect()),
+            ),
+            (
+                "corrupt",
+                Json::Arr(self.corrupt.iter().map(MediaIssue::to_json).collect()),
+            ),
+            ("checkedAt", Json::str(&self.checked_at)),
+        ])
+    }
+}
+impl PurgeOutcome {
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            (
+                "deletionMarkers",
+                Json::Arr(
+                    self.deletion_markers
+                        .iter()
+                        .map(DeletionMarker::to_json)
+                        .collect(),
+                ),
+            ),
+            (
+                "quarantined",
+                Json::Arr(
+                    self.quarantined
+                        .iter()
+                        .map(QuarantinedMedia::to_json)
+                        .collect(),
+                ),
+            ),
+        ])
     }
 }

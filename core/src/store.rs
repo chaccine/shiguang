@@ -1,13 +1,21 @@
 //! 本地持久化：状态文件原子写入 + media 原图目录 + 派生预览缓存。
 
 use crate::json::{self, Json};
-use crate::model::{CoreError, PhotoUse, RecordRow, Snapshot};
+use crate::model::{
+    ConflictChoice, ConflictCopy, CoreError, DeletionMarker, MediaIssue, MediaReport, PhotoStatus,
+    PhotoUse, PurgeOutcome, QuarantinedMedia, RecordRow, RecordStatus, Snapshot,
+};
 use crate::persist::{self, Durability};
 use crate::preview;
 use crate::sha256;
 use crate::time;
+use crate::{
+    fault::{self, FaultPoint},
+    schema,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 const STATE_FILE: &str = "state.json";
 const MEDIA_DIR: &str = "media";
@@ -34,6 +42,8 @@ pub struct Store {
     seed: String,
     state: State,
     last_durability: Durability,
+    instance_lock: Option<crate::lock::LockGuard>,
+    pending_conflicts: std::collections::BTreeMap<String, (Snapshot, u32)>,
 }
 
 #[derive(Clone)]
@@ -41,6 +51,8 @@ struct State {
     version: i64,
     seq: u64,
     records: Vec<RecordRow>,
+    deletion_markers: Vec<DeletionMarker>,
+    conflict_copies: Vec<ConflictCopy>,
 }
 
 #[derive(Clone, Debug)]
@@ -52,35 +64,444 @@ pub struct CommitOutcome {
 }
 
 impl Store {
-    pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
+    pub fn open_exclusive(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
         let root = root.into();
-        fs::create_dir_all(root.join(MEDIA_DIR))?;
-        fs::create_dir_all(root.join(PREVIEW_DIR))?;
-        if let Ok(entries) = fs::read_dir(&root) {
-            for entry in entries.flatten() {
-                if entry.file_name().to_string_lossy().starts_with(".tmp-") {
-                    let _ = fs::remove_file(entry.path());
-                }
+        preflight(&root)?;
+        fs::create_dir_all(&root)?;
+        let lock = match crate::lock::try_acquire(&root, ".instance.lock")? {
+            crate::lock::Acquire::Held(guard) => guard,
+            crate::lock::Acquire::Busy => return Err(CoreError::new("STORE_LOCKED", "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。")),
+        };
+        let mut store = Self::open(root)?;
+        store.instance_lock = Some(lock);
+        Ok(store)
+    }
+    pub fn trash_record(&mut self, record_id: &str) -> Result<RecordRow, CoreError> {
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            if row.formal.is_none() {
+                return Err(CoreError::new(
+                    "RECORD_NOT_FORMAL",
+                    "仅正式记录可以移到回收站",
+                ));
+            }
+            row.status = RecordStatus::Trashed;
+            row.trashed_at = Some(time::now_rfc3339());
+            Ok(row.clone())
+        })
+        .map(|(row, _)| row)
+    }
+    pub fn restore_record(&mut self, record_id: &str) -> Result<RecordRow, CoreError> {
+        self.transact(|state| {
+            let row = state.any_row_mut(record_id)?;
+            if row.status != RecordStatus::Trashed {
+                return Err(CoreError::new("RECORD_NOT_TRASHED", "记录不在回收站"));
+            }
+            row.status = RecordStatus::Active;
+            row.trashed_at = None;
+            Ok(row.clone())
+        })
+        .map(|(row, _)| row)
+    }
+    pub fn list_trash(&self) -> Result<Vec<&RecordRow>, CoreError> {
+        let mut rows: Vec<_> = self
+            .state
+            .records
+            .iter()
+            .filter(|r| r.status == RecordStatus::Trashed)
+            .collect();
+        rows.sort_by(|a, b| {
+            b.trashed_at
+                .cmp(&a.trashed_at)
+                .then_with(|| b.record_id.cmp(&a.record_id))
+        });
+        Ok(rows)
+    }
+    pub fn purge_record(&mut self, record_id: &str) -> Result<PurgeOutcome, CoreError> {
+        self.purge(Some(record_id))
+    }
+    pub fn empty_trash(&mut self) -> Result<PurgeOutcome, CoreError> {
+        self.purge(None)
+    }
+    fn purge(&mut self, record_id: Option<&str>) -> Result<PurgeOutcome, CoreError> {
+        let _write_lock = write_lock(&self.root)?;
+        let mut candidate = self.candidate_state()?;
+        if let Some(id) = record_id {
+            if candidate.row(id)?.status != RecordStatus::Trashed {
+                return Err(CoreError::new(
+                    "RECORD_NOT_TRASHED",
+                    "永久删除只允许用于回收站记录",
+                ));
             }
         }
+        let selected: Vec<_> = candidate
+            .records
+            .iter()
+            .filter(|r| {
+                r.status == RecordStatus::Trashed && record_id.is_none_or(|id| id == r.record_id)
+            })
+            .cloned()
+            .collect();
+        let assets: std::collections::BTreeSet<_> = selected
+            .iter()
+            .flat_map(|r| [r.formal.as_ref(), r.draft.as_ref()].into_iter().flatten())
+            .flat_map(|s| s.photos.iter().map(|p| p.asset_id.clone()))
+            .collect();
+        let deleted_at = time::now_rfc3339();
+        let markers: Vec<_> = selected
+            .iter()
+            .map(|r| DeletionMarker {
+                record_id: r.record_id.clone(),
+                deleted_at: deleted_at.clone(),
+                last_content_revision: r.content_revision,
+            })
+            .collect();
+        candidate
+            .records
+            .retain(|r| !markers.iter().any(|m| m.record_id == r.record_id));
+        candidate.deletion_markers.extend(markers.clone());
+        // 先持久化删除标记：若随后移动失败或崩溃，原图仍在原位，可再次核对隔离。
+        if !markers.is_empty() {
+            self.apply_candidate(candidate)?;
+        }
+        let referenced = self.state.referenced_assets();
+        let mut quarantined = Vec::new();
+        for path in media_files(&self.root)? {
+            let asset = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            if assets.contains(asset) && !referenced.contains(asset) {
+                quarantined.push(self.quarantine(&path)?);
+            }
+        }
+        Ok(PurgeOutcome {
+            deletion_markers: markers,
+            quarantined,
+        })
+    }
+    fn quarantine(&self, path: &Path) -> Result<QuarantinedMedia, CoreError> {
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| CoreError::io("原图文件名无效"))?;
+        let parent = self.root.join("media-quarantine");
+        let dir = parent.join(timestamp());
+        fs::create_dir_all(&dir)?;
+        let dest = unique_path(&dir, name, "");
+        // 同一数据根目录内 rename：不复制后删除，不覆盖已有隔离文件。
+        fs::rename(path, &dest)?;
+        for directory in [&dir, &parent, &self.root.join(MEDIA_DIR), &self.root] {
+            if let Durability::Uncertain { error } = persist::parent_sync(directory) {
+                return Err(CoreError::io(format!(
+                    "原图已移入隔离区，但目录同步失败：{error}"
+                )));
+            }
+        }
+        Ok(QuarantinedMedia {
+            asset_id: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|s| s.starts_with("ast-"))
+                .map(str::to_string),
+            file: format!("media/{name}"),
+            moved_to: dest
+                .strip_prefix(&self.root)
+                .map_err(|e| CoreError::io(e.to_string()))?
+                .to_string_lossy()
+                .into_owned(),
+        })
+    }
+    pub fn reconcile_media(&mut self) -> Result<MediaReport, CoreError> {
+        if self.instance_lock.is_none() {
+            return Err(CoreError::new(
+                "STORE_NOT_EXCLUSIVE",
+                "原图核对需要独占打开数据目录",
+            ));
+        }
+        let _write_lock = write_lock(&self.root)?;
+        let state = self.candidate_state()?;
+        let referenced = state.referenced_assets();
+        let mut report = MediaReport {
+            checked_at: time::now_rfc3339(),
+            ..MediaReport::default()
+        };
+        for path in media_files(&self.root)? {
+            let asset = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            if !referenced.contains(asset)
+                || path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with(".tmp-"))
+            {
+                report.quarantined.push(self.quarantine(&path)?);
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for (record_id, photo) in state.photo_refs() {
+            if !seen.insert((record_id, &photo.photo_use_id, &photo.asset_id)) {
+                continue;
+            }
+            let status = self.check_photo(photo)?;
+            let issue = MediaIssue {
+                record_id: record_id.to_string(),
+                photo_use_id: photo.photo_use_id.clone(),
+                asset_id: photo.asset_id.clone(),
+            };
+            match status {
+                PhotoStatus::Missing => report.missing.push(issue),
+                PhotoStatus::Corrupt => report.corrupt.push(issue),
+                PhotoStatus::Available => {}
+            }
+        }
+        self.state = state;
+        Ok(report)
+    }
+    fn check_photo(&self, photo: &PhotoUse) -> Result<PhotoStatus, CoreError> {
+        let Some(path) = self.find_asset_path(&photo.asset_id) else {
+            return Ok(PhotoStatus::Missing);
+        };
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(PhotoStatus::Missing),
+            Err(e) => return Err(e.into()),
+        };
+        Ok(
+            if bytes.len() as u64 != photo.bytes || sha256::hex_digest(&bytes) != photo.sha256 {
+                PhotoStatus::Corrupt
+            } else {
+                PhotoStatus::Available
+            },
+        )
+    }
+    pub fn photo_status(&self, asset_id: &str) -> Result<PhotoStatus, CoreError> {
+        let photos: Vec<_> = self
+            .state
+            .photo_refs()
+            .into_iter()
+            .filter(|(_, p)| p.asset_id == asset_id)
+            .map(|(_, p)| p)
+            .collect();
+        if photos.is_empty() {
+            return Ok(if self.find_asset_path(asset_id).is_some() {
+                PhotoStatus::Available
+            } else {
+                PhotoStatus::Missing
+            });
+        }
+        for photo in photos {
+            let status = self.check_photo(photo)?;
+            if status != PhotoStatus::Available {
+                return Ok(status);
+            }
+        }
+        Ok(PhotoStatus::Available)
+    }
+    pub fn resolve_conflict(
+        &mut self,
+        record_id: &str,
+        choice: ConflictChoice,
+    ) -> Result<RecordRow, CoreError> {
+        let local = self.state.row(record_id)?;
+        ensure_active(local)?;
+        if local.formal.is_none() {
+            return Err(CoreError::new(
+                "RECORD_NOT_FORMAL",
+                "这条记录还没有正式版，不存在需要选择的冲突",
+            ));
+        }
+        let (snapshot, base_revision) = self
+            .pending_conflicts
+            .get(record_id)
+            .cloned()
+            .or_else(|| local.draft.clone().map(|s| (s, local.base_revision)))
+            .ok_or_else(|| CoreError::new("NO_DRAFT", "没有待处理的草稿"))?;
+        let row = self
+            .transact(|state| {
+                let row = state.row_mut(record_id)?;
+                let occupied = row.draft.clone().filter(|draft| draft != &snapshot);
+                let occupied_base = row.base_revision;
+                match choice {
+                    ConflictChoice::KeepMine => {
+                        // 用户选择替换草稿槽时，另一份草稿也保留为可恢复副本。
+                        if let Some(draft) = occupied {
+                            state.add_conflict(
+                                record_id,
+                                occupied_base,
+                                draft,
+                                "resolve_keep_mine",
+                            );
+                        }
+                        let row = state.row_mut(record_id)?;
+                        row.draft = Some(snapshot);
+                        row.base_revision = row.content_revision;
+                    }
+                    ConflictChoice::KeepFormal => {
+                        state.add_conflict(
+                            record_id,
+                            base_revision,
+                            snapshot,
+                            "resolve_keep_formal",
+                        );
+                        // 明确清空草稿槽之前也保存不同的磁盘草稿。
+                        if let Some(draft) = occupied {
+                            state.add_conflict(
+                                record_id,
+                                occupied_base,
+                                draft,
+                                "resolve_keep_formal_occupied",
+                            );
+                        }
+                        let row = state.row_mut(record_id)?;
+                        row.draft = None;
+                        row.base_revision = row.content_revision;
+                    }
+                }
+                Ok(state.row(record_id)?.clone())
+            })
+            .map(|(row, _)| row)?;
+        self.pending_conflicts.remove(record_id);
+        Ok(row)
+    }
+    /// 把本实例待处理的冲突草稿（磁盘草稿槽被占时 commit 失败留下的）持久化为冲突副本；
+    /// 不改动草稿槽与正式版。没有待处理冲突时返回 NO_DRAFT。
+    pub fn save_conflict_copy(&mut self, record_id: &str) -> Result<ConflictCopy, CoreError> {
+        let (snapshot, base_revision) = self
+            .pending_conflicts
+            .get(record_id)
+            .cloned()
+            .ok_or_else(|| CoreError::new("NO_DRAFT", "没有待保存的冲突草稿"))?;
+        let (copy, _) = self.transact(|state| {
+            ensure_active(state.row(record_id)?)?;
+            state.add_conflict(record_id, base_revision, snapshot.clone(), "revision_conflict");
+            state
+                .conflict_copies
+                .iter()
+                .rev()
+                .find(|c| c.record_id == record_id && c.snapshot == snapshot)
+                .cloned()
+                .ok_or_else(|| CoreError::new("CONFLICT_COPY_MISSING", "冲突副本写入失败"))
+        })?;
+        self.pending_conflicts.remove(record_id);
+        Ok(copy)
+    }
+    pub fn list_conflict_copies(&self) -> Result<Vec<ConflictCopy>, CoreError> {
+        let mut copies = self.state.conflict_copies.clone();
+        copies.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.conflict_id.cmp(&a.conflict_id))
+        });
+        Ok(copies)
+    }
+    pub fn restore_conflict_copy(&mut self, conflict_id: &str) -> Result<RecordRow, CoreError> {
+        self.transact(|state| {
+            let index = state
+                .conflict_copies
+                .iter()
+                .position(|c| c.conflict_id == conflict_id)
+                .ok_or_else(|| CoreError::new("CONFLICT_NOT_FOUND", "冲突副本不存在"))?;
+            let copy = state.conflict_copies[index].clone();
+            let row = state.row_mut(&copy.record_id)?;
+            if row.draft.is_some() {
+                return Err(CoreError::new(
+                    "DRAFT_OCCUPIED",
+                    "已有草稿，请先处理后再恢复副本",
+                ));
+            }
+            row.draft = Some(copy.snapshot);
+            row.base_revision = row.content_revision;
+            let row = row.clone();
+            state.conflict_copies.remove(index);
+            Ok(row)
+        })
+        .map(|(row, _)| row)
+    }
+
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
+        let root = root.into();
+        preflight(&root)?;
+        fs::create_dir_all(&root)?;
+        let _write_lock = write_lock(&root)?;
         let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
         let state_path = root.join(STATE_FILE);
         let state = if state_path.exists() {
             let text = fs::read_to_string(&state_path)?;
-            State::from_json(&json::parse(&text).map_err(|e| {
-                CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}"))
-            })?)?
+            let value = parse_state(&text)?;
+            let from = schema::version(&value)?;
+            if from < schema::CURRENT_SCHEMA_VERSION {
+                let backup_error = |e| {
+                    CoreError::with_stage(
+                        "MIGRATION_BACKUP_FAILED",
+                        "migration_backup",
+                        format!("迁移备份失败：{e}"),
+                    )
+                };
+                fault::hit(FaultPoint::MigrationBackup).map_err(|e| backup_error(e.to_string()))?;
+                let backup_dir = root.join("backups");
+                fs::create_dir_all(&backup_dir).map_err(|e| backup_error(e.to_string()))?;
+                let backup = unique_path(
+                    &backup_dir,
+                    &format!("state.schema-v{from}.{}", timestamp()),
+                    ".json",
+                );
+                let durability = persist::write_atomic(&backup, text.as_bytes())
+                    .map_err(|e| backup_error(e.to_string()))?;
+                if let Durability::Uncertain { error } = durability {
+                    return Err(backup_error(error));
+                }
+                // backups/ 可能刚创建；同步根目录后才允许替换原状态。
+                if let Durability::Uncertain { error } = persist::parent_sync(&root) {
+                    return Err(backup_error(error));
+                }
+                let migration_error = |e| {
+                    CoreError::with_stage(
+                        "MIGRATION_FAILED",
+                        "migration_write",
+                        format!("迁移失败：{e}"),
+                    )
+                };
+                let value = schema::migrate(value).map_err(|e| migration_error(e.to_string()))?;
+                let state = State::from_json(&value).map_err(|e| migration_error(e.to_string()))?;
+                // 使用迁移后的原 JSON 保留 seed 及所有旧字段，严格校验后替换。
+                let encoded = value.pretty();
+                State::from_json(&parse_state(&encoded)?)
+                    .map_err(|e| migration_error(e.to_string()))?;
+                fault::hit(FaultPoint::MigrationWrite)
+                    .map_err(|e| migration_error(e.to_string()))?;
+                persist::write_atomic(&state_path, encoded.as_bytes())
+                    .map_err(|e| migration_error(e.to_string()))?;
+                state
+            } else {
+                State::from_json(&value)?
+            }
         } else {
             State {
                 version: STATE_VERSION,
                 seq: 0,
                 records: Vec::new(),
+                deletion_markers: Vec::new(),
+                conflict_copies: Vec::new(),
             }
         };
+        fs::create_dir_all(root.join(MEDIA_DIR))?;
+        fs::create_dir_all(root.join(PREVIEW_DIR))?;
+        for entry in fs::read_dir(&root)? {
+            let entry = entry?;
+            if entry.file_name().to_string_lossy().starts_with(".tmp-")
+                && entry.file_type()?.is_file()
+            {
+                fs::remove_file(entry.path())?;
+            }
+        }
         Ok(Store {
             root,
             seed,
             state,
+            instance_lock: None,
+            pending_conflicts: std::collections::BTreeMap::new(),
             last_durability: Durability::Uncertain {
                 error: "当前实例尚未写入状态".to_string(),
             },
@@ -114,6 +535,7 @@ impl Store {
         &mut self,
         op: impl FnOnce(&mut State) -> Result<T, CoreError>,
     ) -> Result<(T, Durability), CoreError> {
+        let _write_lock = write_lock(&self.root)?;
         let mut candidate = self.candidate_state()?;
         let value = op(&mut candidate)?;
         let durability = self.apply_candidate(candidate)?;
@@ -121,12 +543,21 @@ impl Store {
     }
 
     fn candidate_state(&self) -> Result<State, CoreError> {
-        // 写前重载缩小跨进程丢失更新的窗口；单写者文件锁留到 g（后续阶段），
-        // 当前读取、比较、替换之间仍可能发生竞争。
+        // 调用方在整个重载、比较及原子替换期间持有写锁。
         match fs::read_to_string(self.root.join(STATE_FILE)) {
-            Ok(text) => State::from_json(&json::parse(&text).map_err(|e| {
-                CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}"))
-            })?),
+            Ok(text) => {
+                let value = parse_state(&text)?;
+                let version = schema::version(&value)?;
+                // 即使 schema 已变化，损坏文件也必须首先被严格拒绝。
+                let decoded = State::from_json(&schema::migrate(value)?)?;
+                if version != schema::CURRENT_SCHEMA_VERSION {
+                    return Err(CoreError::new(
+                        "SCHEMA_CHANGED_ON_DISK",
+                        "磁盘数据结构版本已改变，请重新打开拾光；你的输入未丢失",
+                    ));
+                }
+                Ok(decoded)
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(self.state.clone()),
             Err(error) => Err(error.into()),
         }
@@ -150,22 +581,23 @@ impl Store {
     ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
         if let Some(base_id) = base {
-            return self.transact(|state| {
-                let row = state.row_mut(base_id)?;
-                let formal = row.formal.clone().ok_or_else(|| {
-                    CoreError::new(
-                        "BASE_NOT_FORMAL",
-                        format!("只能基于正式记录创建修改草稿：{base_id}"),
-                    )
-                })?;
-                if row.draft.is_none() {
-                    row.draft = Some(formal);
-                    row.base_revision = row.content_revision;
-                }
-                row.updated_at = now.clone();
-                Ok(row.clone())
-            })
-            .map(|(row, _)| row);
+            return self
+                .transact(|state| {
+                    let row = state.row_mut(base_id)?;
+                    let formal = row.formal.clone().ok_or_else(|| {
+                        CoreError::new(
+                            "BASE_NOT_FORMAL",
+                            format!("只能基于正式记录创建修改草稿：{base_id}"),
+                        )
+                    })?;
+                    if row.draft.is_none() {
+                        row.draft = Some(formal);
+                        row.base_revision = row.content_revision;
+                    }
+                    row.updated_at = now.clone();
+                    Ok(row.clone())
+                })
+                .map(|(row, _)| row);
         }
 
         self.transact(|state| {
@@ -178,6 +610,8 @@ impl Store {
                 photos: Vec::new(),
             };
             let row = RecordRow {
+                status: RecordStatus::Active,
+                trashed_at: None,
                 record_id,
                 content_revision: 0,
                 created_at: now.clone(),
@@ -323,6 +757,7 @@ impl Store {
         let dest = self.root.join(MEDIA_DIR).join(format!("{asset_id}.{ext}"));
 
         // 所有领域校验先在候选状态完成，非法请求不产生原图或推进序号。
+        let _write_lock = write_lock(&self.root)?;
         let mut candidate = self.candidate_state()?;
         let row = candidate.row_mut(record_id)?;
         if row.draft.is_none() {
@@ -356,6 +791,13 @@ impl Store {
         } else {
             Some(persist::write_atomic(&dest, bytes)?)
         };
+        fault::hit(FaultPoint::AfterMediaWrite).map_err(|e| {
+            CoreError::with_stage(
+                "MEDIA_STATE_WRITE_FAILED",
+                "after_media_write",
+                format!("原图已保存，照片引用尚未写入：{e}"),
+            )
+        })?;
         self.apply_candidate(candidate)?;
         // 原图写入也需要目录同步；不能用状态文件的确认掩盖原图的不确定性。
         if let Some(d @ Durability::Uncertain { .. }) = asset_durability {
@@ -411,7 +853,7 @@ impl Store {
             .state
             .records
             .iter()
-            .filter(|r| r.draft.is_some())
+            .filter(|r| r.status == RecordStatus::Active && r.draft.is_some())
             .collect();
         rows.sort_by(|a, b| {
             b.updated_at
@@ -428,16 +870,24 @@ impl Store {
         record_id: &str,
         expected_base_revision: u32,
     ) -> Result<CommitOutcome, CoreError> {
+        let _write_lock = write_lock(&self.root)?;
+        let mut candidate = self.candidate_state()?;
+        candidate.row_mut(record_id)?;
         // 校验先于任何修改：内容合法，且所有原图仍在磁盘上。
         // 提交调用方的本地草稿及原始基线，不能用磁盘草稿替换它。
         let local_row = self.state.row(record_id)?;
-        let base_revision = local_row.base_revision;
-        let draft = local_row
-            .draft
-            .clone()
-            .ok_or_else(|| {
-                CoreError::new("NO_DRAFT", format!("没有待提交的草稿：{record_id}"))
-            })?;
+        ensure_active(local_row)?;
+        let (draft, base_revision) = self
+            .pending_conflicts
+            .get(record_id)
+            .cloned()
+            .or_else(|| {
+                local_row
+                    .draft
+                    .clone()
+                    .map(|draft| (draft, local_row.base_revision))
+            })
+            .ok_or_else(|| CoreError::new("NO_DRAFT", format!("没有待提交的草稿：{record_id}")))?;
         draft.validate_for_commit()?;
         for photo in &draft.photos {
             let asset_path = self.find_asset_path(&photo.asset_id).ok_or_else(|| {
@@ -482,7 +932,6 @@ impl Store {
                 ));
             }
         }
-        let mut candidate = self.candidate_state()?;
         let row = candidate.row_mut(record_id)?;
         if row.content_revision != expected_base_revision || base_revision != row.content_revision {
             let conflict = CoreError::with_stage(
@@ -495,12 +944,16 @@ impl Store {
             );
             if row.draft.is_none() {
                 row.draft = Some(draft);
-                // 必须保留旧基线，不能让陈旧草稿被下一次提交自动升级为正式版。
+                // 保留原基线，之后必须由用户明确选择重定基线。
                 row.base_revision = base_revision;
                 self.apply_candidate(candidate)?;
+            } else if row.draft.as_ref() != Some(&draft) || row.base_revision != base_revision {
+                // 磁盘草稿槽已被另一份草稿占用：commit 本身不写盘（保持 Unit-0.1 语义：
+                // 冲突时 state.json 与本实例状态都不变）。本地草稿记入 pending_conflicts，
+                // 由用户/调用方显式 save_conflict_copy 或 resolve_conflict 持久化为冲突副本。
+                self.pending_conflicts
+                    .insert(record_id.to_string(), (draft, base_revision));
             }
-            // 磁盘已有（不同）草稿时不写入，也不替换本地内存中的草稿。
-            // 已知限制：第二份草稿只在当前实例内存中；冲突副本存储/UI 留到后续阶段。
             // updatedAt / committedAt / SHIGUANG_CLOCK 均不参与胜负判断。
             return Err(conflict);
         }
@@ -515,6 +968,7 @@ impl Store {
         let content_revision = row.content_revision;
         let committed_at = now;
         let durability = self.apply_candidate(candidate)?;
+        self.pending_conflicts.remove(&record_id);
         Ok(CommitOutcome {
             record_id,
             content_revision,
@@ -529,7 +983,7 @@ impl Store {
             .state
             .records
             .iter()
-            .filter(|r| r.formal.is_some())
+            .filter(|r| r.status == RecordStatus::Active && r.formal.is_some())
             .collect();
         rows.sort_by(|a, b| {
             let left = a.formal.as_ref().expect("filtered formal");
@@ -626,17 +1080,12 @@ impl Store {
 
     pub fn all_photos(&self) -> Vec<PhotoUse> {
         let mut seen = std::collections::BTreeSet::new();
-        let mut photos = Vec::new();
-        for row in &self.state.records {
-            for snapshot in [row.formal.as_ref(), row.draft.as_ref()].into_iter().flatten() {
-                for photo in &snapshot.photos {
-                    if seen.insert(photo.photo_use_id.clone()) {
-                        photos.push(photo.clone());
-                    }
-                }
-            }
-        }
-        photos
+        self.state
+            .photo_refs()
+            .into_iter()
+            .filter(|(_, photo)| seen.insert(photo.photo_use_id.clone()))
+            .map(|(_, photo)| photo.clone())
+            .collect()
     }
 
     /// 磁盘上的原图清单（用于 AC-U0-07 前后对比，不依赖任何记录引用）。
@@ -651,11 +1100,7 @@ impl Store {
             }
             let bytes = fs::read(&path)?;
             assets.push(AssetInfo {
-                file: format!(
-                    "{}/{}",
-                    MEDIA_DIR,
-                    entry.file_name().to_string_lossy()
-                ),
+                file: format!("{}/{}", MEDIA_DIR, entry.file_name().to_string_lossy()),
                 asset_id: entry
                     .file_name()
                     .to_string_lossy()
@@ -687,7 +1132,10 @@ impl Store {
                         "bodySha256",
                         Json::str(sha256::hex_digest(formal.body.as_bytes())),
                     ),
-                    ("titleSha256", Json::str(sha256::hex_digest(formal.title.as_bytes()))),
+                    (
+                        "titleSha256",
+                        Json::str(sha256::hex_digest(formal.title.as_bytes())),
+                    ),
                     (
                         "photos",
                         Json::Arr(
@@ -742,18 +1190,15 @@ impl Store {
     }
 
     pub fn persist(&mut self) -> Result<Durability, CoreError> {
-        let durability = self.persist_state(&self.state)?;
-        self.last_durability = durability.clone();
-        Ok(durability)
+        self.transact(|_| Ok(())).map(|(_, durability)| durability)
     }
 
     fn persist_state(&self, state: &State) -> Result<Durability, CoreError> {
         let path = self.root.join(STATE_FILE);
         let value = state.to_json(&self.seed);
         let text = value.pretty();
-        let serialize_error = |message| {
-            CoreError::with_stage("STATE_SERIALIZE_FAILED", "serialize", message)
-        };
+        let serialize_error =
+            |message| CoreError::with_stage("STATE_SERIALIZE_FAILED", "serialize", message);
         let parsed = json::parse(&text).map_err(serialize_error)?;
         let round_trip = State::from_json(&parsed).map_err(|e| serialize_error(e.to_string()))?;
         if round_trip.to_json(&self.seed).dump() != value.dump() {
@@ -772,18 +1217,82 @@ pub struct AssetInfo {
 }
 
 impl State {
+    fn missing_row(&self, record_id: &str) -> CoreError {
+        if self
+            .deletion_markers
+            .iter()
+            .any(|m| m.record_id == record_id)
+        {
+            CoreError::new("RECORD_DELETED", "这条记录已永久删除")
+        } else {
+            CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}"))
+        }
+    }
     fn row(&self, record_id: &str) -> Result<&RecordRow, CoreError> {
         self.records
             .iter()
             .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+            .ok_or_else(|| self.missing_row(record_id))
+    }
+    fn any_row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+        let index = self
+            .records
+            .iter()
+            .position(|r| r.record_id == record_id)
+            .ok_or_else(|| self.missing_row(record_id))?;
+        Ok(&mut self.records[index])
+    }
+    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+        let row = self.any_row_mut(record_id)?;
+        ensure_active(row)?;
+        Ok(row)
+    }
+    fn photo_refs(&self) -> Vec<(&str, &PhotoUse)> {
+        self.records
+            .iter()
+            .flat_map(|r| {
+                [r.formal.as_ref(), r.draft.as_ref()]
+                    .into_iter()
+                    .flatten()
+                    .flat_map(move |s| s.photos.iter().map(move |p| (r.record_id.as_str(), p)))
+            })
+            .chain(self.conflict_copies.iter().flat_map(|c| {
+                c.snapshot
+                    .photos
+                    .iter()
+                    .map(move |p| (c.record_id.as_str(), p))
+            }))
+            .collect()
+    }
+    fn referenced_assets(&self) -> std::collections::BTreeSet<String> {
+        self.photo_refs()
+            .iter()
+            .map(|(_, p)| p.asset_id.clone())
+            .collect()
     }
 
-    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
-        self.records
-            .iter_mut()
-            .find(|r| r.record_id == record_id)
-            .ok_or_else(|| CoreError::new("NOT_FOUND", format!("记录不存在：{record_id}")))
+    fn add_conflict(
+        &mut self,
+        record_id: &str,
+        base_revision: u32,
+        snapshot: Snapshot,
+        reason: &str,
+    ) -> bool {
+        if self.conflict_copies.iter().any(|c| {
+            c.record_id == record_id && c.base_revision == base_revision && c.snapshot == snapshot
+        }) {
+            return false;
+        }
+        let conflict_id = self.allocate_id("conflict");
+        self.conflict_copies.push(ConflictCopy {
+            conflict_id,
+            record_id: record_id.to_string(),
+            base_revision,
+            snapshot,
+            created_at: time::now_rfc3339(),
+            reason: reason.to_string(),
+        });
+        true
     }
 
     fn allocate_id(&mut self, prefix: &str) -> String {
@@ -794,6 +1303,25 @@ impl State {
     fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
             ("version", Json::Num(self.version)),
+            ("schemaVersion", Json::Num(schema::CURRENT_SCHEMA_VERSION)),
+            (
+                "deletionMarkers",
+                Json::Arr(
+                    self.deletion_markers
+                        .iter()
+                        .map(DeletionMarker::to_json)
+                        .collect(),
+                ),
+            ),
+            (
+                "conflictCopies",
+                Json::Arr(
+                    self.conflict_copies
+                        .iter()
+                        .map(ConflictCopy::to_json)
+                        .collect(),
+                ),
+            ),
             ("seed", Json::str(seed)),
             ("seq", Json::Num(self.seq as i64)),
             (
@@ -847,18 +1375,119 @@ impl State {
                     "状态文件 records 必须是数组",
                 ))
             }
-            None => {
+            None => return Err(CoreError::new("STATE_CORRUPT", "状态文件缺少 records")),
+        };
+        schema::version(value)?;
+        let array = |key| {
+            value.get(key).and_then(Json::as_arr).ok_or_else(|| {
+                CoreError::new("STATE_CORRUPT", format!("字段 {key} 缺失或不是数组"))
+            })
+        };
+        let deletion_markers = array("deletionMarkers")?
+            .iter()
+            .map(DeletionMarker::from_json)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| CoreError::new("STATE_CORRUPT", e))?;
+        let conflict_copies = array("conflictCopies")?
+            .iter()
+            .map(ConflictCopy::from_json)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| CoreError::new("STATE_CORRUPT", e))?;
+        for row in &records {
+            if (row.status == RecordStatus::Trashed) != row.trashed_at.is_some()
+                || (row.status == RecordStatus::Trashed && row.formal.is_none())
+            {
                 return Err(CoreError::new(
                     "STATE_CORRUPT",
-                    "状态文件缺少 records",
-                ))
+                    "回收站状态与 trashedAt / formal 不一致",
+                ));
             }
-        };
+        }
         Ok(State {
             version,
             seq,
             records,
+            deletion_markers,
+            conflict_copies,
         })
+    }
+}
+
+fn ensure_active(row: &RecordRow) -> Result<(), CoreError> {
+    if row.status == RecordStatus::Trashed {
+        return Err(CoreError::new(
+            "RECORD_TRASHED",
+            "记录已在回收站，请先恢复后再修改",
+        ));
+    }
+    Ok(())
+}
+
+fn media_files(root: &Path) -> Result<Vec<PathBuf>, CoreError> {
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(root.join(MEDIA_DIR))? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            paths.push(entry.path());
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn parse_state(text: &str) -> Result<Json, CoreError> {
+    json::parse(text).map_err(|e| CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}")))
+}
+
+fn preflight(root: &Path) -> Result<(), CoreError> {
+    match fs::read_to_string(root.join(STATE_FILE)) {
+        Ok(text) => {
+            schema::version(&parse_state(&text)?)?;
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn timestamp() -> String {
+    time::now_rfc3339()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn unique_path(dir: &Path, stem: &str, suffix: &str) -> PathBuf {
+    let mut counter = 0u64;
+    loop {
+        let name = if counter == 0 {
+            format!("{stem}{suffix}")
+        } else {
+            format!("{stem}.{counter}{suffix}")
+        };
+        let path = dir.join(name);
+        if !path.exists() {
+            return path;
+        }
+        counter += 1;
+    }
+}
+
+fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
+    let start = Instant::now();
+    loop {
+        match crate::lock::try_acquire(root, ".write.lock")? {
+            crate::lock::Acquire::Held(guard) => return Ok(guard),
+            crate::lock::Acquire::Busy => {
+                if start.elapsed() >= Duration::from_secs(3) {
+                    return Err(CoreError::new(
+                        "STORE_BUSY",
+                        "另一个拾光窗口正在写入，请稍后重试；你的输入未丢失",
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
 }
 
@@ -978,7 +1607,11 @@ mod tests {
         let root = temp_root("cleanup");
         fs::create_dir_all(root.join(MEDIA_DIR)).unwrap();
         for name in [
-            ".tmp-shiguang-1-2", ".tmp-legacy", ".keep", "tmp-other", "media/.tmp-keep",
+            ".tmp-shiguang-1-2",
+            ".tmp-legacy",
+            ".keep",
+            "tmp-other",
+            "media/.tmp-keep",
         ] {
             fs::write(root.join(name), b"synthetic").unwrap();
         }

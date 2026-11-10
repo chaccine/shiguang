@@ -87,7 +87,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> 
     Ok(parent_sync(dir))
 }
 
-fn parent_sync(dir: &Path) -> Durability {
+pub(crate) fn parent_sync(dir: &Path) -> Durability {
     if let Err(error) = fault::hit(FaultPoint::ParentSync) {
         return Durability::Uncertain {
             error: error.to_string(),
