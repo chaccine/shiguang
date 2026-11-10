@@ -10,6 +10,10 @@ name = "shiguang_core"
 path = "src/lib.rs"
 
 [dependencies]
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "zeroize"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+getrandom = "0.2"
+zeroize = "1"
 
 [features]
 # 仅测试使用的故障注入钩子；默认关闭，不改变生产语义，也不是第三方依赖。
