@@ -476,7 +476,7 @@ export class MemoryAdapter implements ShiguangApi {
     if (Number(m.schemaVersion) > 2) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
     const summary: BackupSummary = {
       formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
-      exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: "none", counts: m.counts,
+      exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: pkg.lock ? "argon2id-xchacha20poly1305" : "none", counts: m.counts,
     };
     return { summary, state: parsed.state };
   }
@@ -583,7 +583,7 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   next.deletedCreatedAt ??= {};
   next.mergeOrigins ??= {};
   const counts: MergeCounts = { added: 0, updated: 0, unchanged: 0, conflicts: 0, keptTrashed: 0, keptActive: 0, skippedDeleted: 0,
-    deletedInBackup: 0, markersAdded: 0, conflictCopiesAdded: 0, mediaAdded: 0, mediaMissing: 0, mediaConflicts: 0 };
+    deletedInBackup: 0, markersAdded: 0, conflictCopiesAdded: 0, conflictCopiesDropped: 0, mediaAdded: 0, mediaMissing: 0, mediaConflicts: 0 };
   const skippedDeleted: string[] = [], deletedInBackup: string[] = [];
   const usedIds = new Set<string>([...next.records.map((r) => r.recordId), ...next.deletionMarkers.map((m) => m.recordId)]);
   const usedConflict = new Set(next.conflictCopies.map((c) => c.conflictId));

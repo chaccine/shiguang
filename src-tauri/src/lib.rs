@@ -710,7 +710,10 @@ pub fn run() {
             backup_cmd::export_backup,
             backup_cmd::pick_backup,
             backup_cmd::restore_backup,
-            backup_cmd::discard_picked_backup
+            backup_cmd::discard_picked_backup,
+            backup_cmd::unlock_backup,
+            backup_cmd::plan_merge,
+            backup_cmd::merge_backup
         ])
         .run(tauri::generate_context!())
         .expect("启动拾光桌面壳失败");

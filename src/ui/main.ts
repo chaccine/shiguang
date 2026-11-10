@@ -868,6 +868,7 @@ function summaryList(summary: BackupSummary, extra: Array<[string, string]> = []
     ["照片原件", `${c.mediaFiles} 张${c.missingMedia > 0 ? `（另有 ${c.missingMedia} 张原图缺失，未包含）` : ""}`],
     ["文件大小", formatBytes(summary.bytes)],
     ["拾光版本", summary.appVersion],
+    ["加密", summary.encryption === "none" ? "未加密（明文）" : "口令加密"],
     ...extra,
   ];
   for (const [k, v] of rows) {
