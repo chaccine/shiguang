@@ -101,3 +101,31 @@ PR run [42826986278](https://github.com/chaccine/shiguang/actions/runs/428269862
 | `拾光_0.1.7_arm64-debug.apk`（22,954,549 B） | `cc296a6eab71fea8bda66da2326223aceaaba903b10e7f57af9cd124fd192300` | CI universal debug APK → strip（`--strip-debug`，大小不变）→ 去旧签名 → `zipalign -p 4` → box `~/.android/debug.keystore` 重签；`apksigner verify` v2+v3 通过；证书 SHA-256 `59dbe106e00efc187b10faf0c2839fd575de09a42f7a964dc94c00e309af766f`（与旧版相同，可覆盖安装）；versionCode 1007 / versionName 0.1.7；无 INTERNET 权限。Drive：https://drive.google.com/file/d/1KxWn5ousNpXfUhrrwLyHAccAL6tZaTUX/view |
 | `拾光_0.1.7_aarch64.dmg` | `a1a8deb9a5c10ca23840612859691a318a03bc4d7d8c7a0183aae8011d3c6dcc` | 未签名 |
 | `拾光_0.1.7_x64_zh-CN.msi` | `622562b1e05337beb223159a79ea4a1448a27f45bf818614c6d6939658894b64` | 未签名 |
+
+## 0.1.8（versionCode 1008）：真机反馈修复——默认打开时光轴 + 永远可见的主导航
+
+**Cine 真机反馈（REDMI，0.1.7）**：热修复后能打开了，但“打开后只有草稿页面，只有存入草稿后才能看到时光轴”。
+
+**原因**：
+1. 启动默认视图是草稿；若有未写完的草稿还会直接跳进编辑器（“已保存”卡片）。
+2. 手机布局把导航塞进顶栏、横向滚动，只露出当前页签（“● 草稿”胶囊），其他页签被挤出屏幕，看起来没有入口。
+3. 数据打不开时会用整屏覆盖层盖住整个应用（含导航）。
+
+**修复**：
+- 新的纯函数模块 `src/domain/navigation.ts`：五个一级页签 **时光轴 / 日历 / 草稿 / 标签·收藏 / 设置**；`initialTab` = URL 参数 > 上次页签（localStorage `shiguang.lastTab`，只记一级页签）> **时光轴**；`visibleTabs` 在任何视图、任何数据状态都返回全部五个；`timelineEmptyKind` 区分“一条没有”和“筛选为空”。
+- 手机（≤760px）：底部固定 tab bar，5 个等宽按钮、触控高度 ≥48px，尊重 `safe-area-inset-bottom/left/right`，内容底部留白不被遮挡；顶部只留品牌栏。桌面：左侧竖排 5 个页签。编辑器里 tab bar 也在（离开前沿用自动保存 flush）。
+- 时光轴空态：“这里还没有时光 / 写下第一段小事，它会按日子排进时光轴。/ 写下第一段时光”；筛选为空 → “清除筛选”。草稿、日历、标签·收藏空态都有说明和按钮。
+- 未写完的草稿：不再强制进编辑器，时光轴顶部提示“有一篇没写完的草稿 · 继续写”。
+- 新页“标签·收藏”：收藏的记录 + 标签列表（点标签 → 时光轴按该标签筛选）+ 管理标签。
+- 回收站改为从“设置”进入（有“返回设置”），功能不变。
+- 数据打不开（STORE_LOCKED / SCHEMA_TOO_NEW 等）时不再盖住导航：页签可切换，各页显示同一张错误卡片；所有写入口（新建、提交、收藏、标签、导出/选择/合并/恢复备份）都先 `ensureWritable()`，后端本身也会拒绝。
+
+**测试**：`tests/navigation.test.ts` 6 条（默认时光轴、参数/上次页签优先级与非法值回落、五个页签、零记录零草稿时每个视图都有 5 个页签、二级视图高亮与不记忆、空态区分）；`npm test` **126 通过**；typecheck 通过。Rust 代码未改动（只改版本号）。
+
+**截图**（`evidence/unit-0.8/`，浏览器预览 + MemoryAdapter，合成数据；脚本对每张手机图断言底部 tab bar 贴底、可见、5 个按钮、≥48px，page errors 0）：01-mobile-empty-timeline（**最能说明问题**：空数据 → 时光轴空态 + 底部 5 个页签）、02~05 空数据下的草稿/日历/标签·收藏/设置、06-mobile-demo-timeline、07-mobile-editor-with-tabbar、08-desktop-empty-timeline、09-desktop-demo-collect、10-mobile-unfinished-draft-notice。
+
+**未做 / 注意**：旧单元的截图脚本 `screenshots-u04/u05/u06.mjs` 依赖已移除的回收站页签和“启动即草稿列表”，没有改（不在 CI 里，只是历史证据脚本）；`screenshots-u07.mjs` 已最小适配并可运行。真机（REDMI 上默认页、底部 tab bar 与系统手势条/安全区）**NOT_RUN**。
+
+**0.1.8 CI**：PR run [42838504899](https://github.com/chaccine/shiguang/actions/runs/42838504899)，head `1ad4db5`，**7/7 success**（一次通过）。
+
+**0.1.8 APK**：`/workspace/u08dl/拾光_0.1.8_arm64-debug.apk`（22,958,645 B），sha256 `74b292d1db7bcdf46ed50ebf9a6802783ae3a84241a9bb4d98ce4d8248c8e14f`。处理流程同 0.1.7（strip → 去旧签名 → zipalign -p 4 → box debug.keystore 重签）；`apksigner verify` v2+v3 通过；证书 SHA-256 `59dbe106e00efc187b10faf0c2839fd575de09a42f7a964dc94c00e309af766f`（可覆盖安装 0.1.7，数据保留）；versionCode 1008 / versionName 0.1.8；无 INTERNET 权限。Drive：https://drive.google.com/file/d/1YUQmydWVdd8UuaDMBx7gym0T4sUTY5K9/view
