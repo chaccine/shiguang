@@ -17,6 +17,7 @@ pub mod lock;
 pub mod model;
 pub mod persist;
 pub mod preview;
+pub mod session;
 pub mod sha256;
 pub mod store;
 pub mod time;

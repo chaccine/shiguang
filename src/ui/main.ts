@@ -11,6 +11,7 @@ import { MemoryAdapter } from "../platform/memory-adapter.ts";
 import { createTauriApi, tauriInvokeFromWindow } from "../platform/tauri-adapter.ts";
 import { PREVIEW_STORAGE_KEY, seedDemo } from "./demo.ts";
 
+import { gateWithRetry } from "../domain/startup.ts";
 const LAST_DRAFT_KEY = "shiguang.lastDraft";
 
 type View = "drafts" | "editor" | "timeline" | "trash" | "data";
@@ -248,20 +249,17 @@ function showStoreBlocked(code: string, error: unknown): void {
   const description = describeError(error);
   storeBlockedTitle.textContent = code === "STORE_LOCKED"
     ? "拾光已在别处打开"
-    : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : "数据暂时无法打开";
+    : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : code === "STORE_STARTING" ? "拾光还在打开数据" : "数据暂时无法打开";
   storeBlockedDetail.textContent = description.detail;
   appShell.hidden = true;
   storeBlocked.hidden = false;
 }
 
 async function gateStore(): Promise<boolean> {
-  try {
-    const status = await api.storeStatus();
-    if (status.ok) return true;
-    showStoreBlocked(status.code, { code: status.code, message: status.message });
-  } catch (error) {
-    showStoreBlocked("", error);
-  }
+  // 数据仍在打开（STORE_STARTING）或宿主刚重建时短暂重试，不把等待误报为“无法打开”。
+  const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
+  if (outcome.ok) return true;
+  showStoreBlocked(outcome.code, outcome.error);
   return false;
 }
 

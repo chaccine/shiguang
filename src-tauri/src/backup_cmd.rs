@@ -168,10 +168,7 @@ fn with_store<T>(
     f: impl FnOnce(&mut shiguang_core::Store) -> Result<T, CoreError>,
 ) -> Result<T, CommandError> {
     let state = app.state::<AppState>();
-    let mut slot = state
-        .store
-        .lock()
-        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let mut slot = state.store.wait_lock()?;
     let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     f(store).map_err(CommandError::from)
 }
@@ -199,13 +196,16 @@ pub async fn export_backup(
 ) -> Result<serde_json::Value, CommandError> {
     let password = password.map(zeroize::Zeroizing::new);
     if matches!(&password, Some(p) if p.is_empty()) {
-        return Err(command_error("BACKUP_PASSWORD_EMPTY", "请设置口令，或不勾选加密"));
+        return Err(command_error(
+            "BACKUP_PASSWORD_EMPTY",
+            "请设置口令，或不勾选加密",
+        ));
     }
     tauri::async_runtime::spawn_blocking(move || {
         export_backup_blocking(&app, password.as_ref().map(|p| p.as_str()))
     })
-        .await
-        .map_err(join_err)?
+    .await
+    .map_err(join_err)?
 }
 
 fn export_backup_blocking(
@@ -292,7 +292,10 @@ fn deliver(
                 out.sync_all().map_err(write_err)?;
                 drop(out);
                 if sha != expected {
-                    return Err(command_error("BACKUP_WRITE_FAILED", "写出的备份与校验和不一致"));
+                    return Err(command_error(
+                        "BACKUP_WRITE_FAILED",
+                        "写出的备份与校验和不一致",
+                    ));
                 }
                 fs::rename(&partial, dest).map_err(write_err)?;
                 Ok(())
@@ -306,7 +309,10 @@ fn deliver(
                 let mut back = fs::File::open(dest).map_err(write_err)?;
                 let (_, sha) = hash_stream(&mut back).map_err(write_err)?;
                 if sha != expected {
-                    return Err(command_error("BACKUP_WRITE_FAILED", "读回的备份与校验和不一致"));
+                    return Err(command_error(
+                        "BACKUP_WRITE_FAILED",
+                        "读回的备份与校验和不一致",
+                    ));
                 }
             } else {
                 verify_backup(dest).map_err(CommandError::from)?;
@@ -395,7 +401,10 @@ pub async fn restore_backup(
         .map_err(join_err)?
 }
 
-fn restore_backup_blocking(app: &AppHandle, token: &str) -> Result<serde_json::Value, CommandError> {
+fn restore_backup_blocking(
+    app: &AppHandle,
+    token: &str,
+) -> Result<serde_json::Value, CommandError> {
     if !is_valid_token(token) {
         return Err(command_error("BACKUP_TOKEN_INVALID", "请重新选择备份文件"));
     }
@@ -434,7 +443,10 @@ fn picked_paths(app: &AppHandle, token: &str) -> Result<(PathBuf, PathBuf), Comm
         return Err(command_error("BACKUP_TOKEN_INVALID", "请重新选择备份文件"));
     }
     let dir = cache_dir(app, "backup-imports")?;
-    Ok((dir.join(format!("{token}.sgbak")), dir.join(format!("{token}.plain.sgbak"))))
+    Ok((
+        dir.join(format!("{token}.sgbak")),
+        dir.join(format!("{token}.plain.sgbak")),
+    ))
 }
 
 /// 返回可直接交给 core 的明文包路径：未加密包就是导入副本；加密包必须先解锁。
@@ -447,7 +459,10 @@ fn usable_copy(app: &AppHandle, token: &str) -> Result<PathBuf, CommandError> {
         return Err(command_error("BACKUP_TOKEN_INVALID", "请重新选择备份文件"));
     }
     if is_encrypted(&copy) {
-        return Err(command_error("BACKUP_PASSWORD_REQUIRED", "这是加密备份，请先输入口令"));
+        return Err(command_error(
+            "BACKUP_PASSWORD_REQUIRED",
+            "这是加密备份，请先输入口令",
+        ));
     }
     Ok(copy)
 }
@@ -539,7 +554,10 @@ pub async fn plan_merge(app: AppHandle, token: String) -> Result<serde_json::Val
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn merge_backup(app: AppHandle, token: String) -> Result<serde_json::Value, CommandError> {
+pub async fn merge_backup(
+    app: AppHandle,
+    token: String,
+) -> Result<serde_json::Value, CommandError> {
     tauri::async_runtime::spawn_blocking(move || {
         let path = usable_copy(&app, &token)?;
         let (report, durability) = with_store(&app, |store| {
