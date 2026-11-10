@@ -54,10 +54,6 @@
 
 **修改了 4 条既有断言**（`core/tests/unit04_schema.rs` 2 条、`unit04_faults.rs` 共享的 1 处断言影响 2 条）：原来写死“迁移后 schemaVersion == 2”，现在 v1 → v2 → v3 链式迁移到最新版本，改为期望 `CURRENT_SCHEMA_VERSION`（3）。v1 原文件逐字节备份、失败不改原文件、无残留临时文件等断言**都没改**；`migrate_v1_to_v2` 单步函数的测试也没改。改前的失败输出保存在 01-core.log。
 
-## CI
-
-见文末「CI 与安装包」。
-
 ## 截图（浏览器预览 + MemoryAdapter，合成数据；不是真机）
 
 `evidence/unit-0.7/`：01-timeline-desktop、02-timeline-mobile、03-calendar-month、04-day-detail、05-on-this-day、06-favourites-filter、07-tag-manage、08-tag-rename-conflict、09-tag-merged、10-tag-filter、11-calendar-mobile；page errors 0。最能说明问题的两张：**04-day-detail**（日历圆点/条数 + 当天时光 + 那年今日）和 **01-timeline-desktop**（分组时光轴 + 收藏 + 标签筛选）。
@@ -89,3 +85,19 @@
 | 热修复真机（REDMI 导出 → 重开） | **NOT_RUN** |
 | Tauri 新命令真机 / 桌面实际运行 | NOT_RUN（只在 box 上编译 Android 目标通过；box 无 webkit2gtk） |
 | macOS / Windows 安装包实际安装 | NOT_RUN（CI 构建通过，未签名） |
+
+## CI 与安装包
+
+PR run [42826986278](https://github.com/chaccine/shiguang/actions/runs/42826986278)，head `304a4b8`，**7/7 success**：core+cli+ts ×3（ubuntu/macos/windows）、tauri bundle ×3、tauri android apk。
+
+中间失败与处理：
+1. run 42825664998（head `122d6f7`）：macOS / Windows 上 `hotfix07_reopen::process_killed_during_export_then_reopen` 失败（STORE_LOCKED）。原因：判断 `.owner` 是否陈旧要读 `/proc`，只有 Linux/Android 有；没有 `/proc` 时按 Unit-0.4 的设计**从不抢占**未知 owner（`lock.rs` 已有测试 `without_proc_an_unknown_owner_is_never_stolen`）。这条测试模拟的是 Android 场景，改为仅在 Linux/Android 上编译（`304a4b8`），没有改锁的行为。
+2. run 42826986278 第一次：Windows 上既有的 `unit04_multiprocess::four_processes_create_twenty_drafts_each_without_lost_updates` 有一个进程返回 STORE_BUSY（4 进程 × 20 次写，写锁等待 3 s）。同一提交上的上一次运行这条测试是通过的，按偶发处理，只重跑失败的 job，重跑通过。**风险**：Windows 运行器很慢时这条 3 s 等待可能再次偶发失败，没有改它。
+
+安装包（`/workspace/u07dl/`，取自上面的 CI run）：
+
+| 文件 | sha256 | 说明 |
+|---|---|---|
+| `拾光_0.1.7_arm64-debug.apk`（22,954,549 B） | `cc296a6eab71fea8bda66da2326223aceaaba903b10e7f57af9cd124fd192300` | CI universal debug APK → strip（`--strip-debug`，大小不变）→ 去旧签名 → `zipalign -p 4` → box `~/.android/debug.keystore` 重签；`apksigner verify` v2+v3 通过；证书 SHA-256 `59dbe106e00efc187b10faf0c2839fd575de09a42f7a964dc94c00e309af766f`（与旧版相同，可覆盖安装）；versionCode 1007 / versionName 0.1.7；无 INTERNET 权限。Drive：https://drive.google.com/file/d/1KxWn5ousNpXfUhrrwLyHAccAL6tZaTUX/view |
+| `拾光_0.1.7_aarch64.dmg` | `a1a8deb9a5c10ca23840612859691a318a03bc4d7d8c7a0183aae8011d3c6dcc` | 未签名 |
+| `拾光_0.1.7_x64_zh-CN.msi` | `622562b1e05337beb223159a79ea4a1448a27f45bf818614c6d6939658894b64` | 未签名 |
