@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "recordId": "rec-000001",
+      "eventDate": "2025-11-10",
+      "eventTime": "18:20",
+      "title": "合成：那年今日",
+      "excerpt": "虚构的旧记录",
+      "cover": null,
+      "photoCount": 0,
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [
+        "tag-000004",
+        "tag-000005"
+      ],
+      "tagRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "isFuture": false
+    }
+  ],
+  "nextCursor": null,
+  "total": 1
+}
+

@@ -1,6 +1,10 @@
 {
   "ok": true,
   "record": {
+    "favorite": false,
+    "favoriteRevision": 0,
+    "tagIds": [],
+    "tagRevision": 0,
     "status": "active",
     "trashedAt": null,
     "recordId": "rec-000008",

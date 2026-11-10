@@ -3,7 +3,7 @@ mod unit04_support;
 use shiguang_core::{
     fault::{self, FaultPoint},
     json::Json,
-    Store,
+    Store, CURRENT_SCHEMA_VERSION,
 };
 use std::fs;
 use unit04_support::*;
@@ -31,7 +31,10 @@ fn migration_failure(name: &str, point: FaultPoint, code: &str, stage: &str, bac
             .starts_with(".tmp-"));
     }
     let s = Store::open(t.path()).unwrap();
-    assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(2)));
+    assert_eq!(
+        s.state_json().get("schemaVersion"),
+        Some(&Json::Num(CURRENT_SCHEMA_VERSION))
+    );
     for copy in copies {
         assert_eq!(fs::read(copy).unwrap(), before);
     }

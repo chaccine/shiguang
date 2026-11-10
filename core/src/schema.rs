@@ -1,8 +1,8 @@
 //! 有序迁移链；容器 version 与数据结构 schemaVersion 分开演进。
 use crate::{json::Json, CoreError};
-pub const CURRENT_SCHEMA_VERSION: i64 = 2;
+pub const CURRENT_SCHEMA_VERSION: i64 = 3;
 pub type Migration = fn(Json) -> Result<Json, CoreError>;
-pub const MIGRATIONS: &[(i64, Migration)] = &[(1, migrate_v1_to_v2)];
+pub const MIGRATIONS: &[(i64, Migration)] = &[(1, migrate_v1_to_v2), (2, migrate_v2_to_v3)];
 
 pub(crate) fn set(value: &mut Json, key: &str, item: Json) -> Result<(), CoreError> {
     let Json::Obj(fields) = value else {
@@ -78,5 +78,27 @@ pub(crate) fn migrate(mut value: Json) -> Result<Json, CoreError> {
         value = migration(value)?;
         current += 1;
     }
+    Ok(value)
+}
+
+/// Add independent metadata without touching content snapshots.
+pub fn migrate_v2_to_v3(mut value: Json) -> Result<Json, CoreError> {
+    let rows = value
+        .get("records")
+        .and_then(Json::as_arr)
+        .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件 records 必须是数组"))?;
+    let mut rows = rows.to_vec();
+    for row in &mut rows {
+        set(row, "favorite", Json::Bool(false))?;
+        set(row, "favoriteRevision", Json::Num(0))?;
+        set(row, "tagIds", Json::Arr(vec![]))?;
+        set(row, "tagRevision", Json::Num(0))?;
+    }
+    set(&mut value, "records", Json::Arr(rows))?;
+    for key in ["tags", "tagAliases", "tagTombstones"] {
+        set(&mut value, key, Json::Arr(vec![]))?;
+    }
+    set(&mut value, "tagDictRevision", Json::Num(0))?;
+    set(&mut value, "schemaVersion", Json::Num(3))?;
     Ok(value)
 }

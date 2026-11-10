@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "USAGE",
+  "message": "标签删除需要 --yes 确认"
+}
+

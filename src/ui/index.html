@@ -451,7 +451,7 @@
         border: 1px solid rgba(138, 90, 56, 0.12);
         border-radius: 12px;
       }
-      .card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+      .card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
       .button.danger { background: var(--danger); box-shadow: 0 5px 14px rgba(165, 67, 46, 0.18); }
       .button.danger:hover { background: #8c3827; }
@@ -499,42 +499,85 @@
       }
       .conflict-copies .timeline-card + .timeline-card { margin-top: 12px; }
 
-      .store-blocked {
-        position: fixed;
-        inset: 0;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: calc(24px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
-        background: radial-gradient(circle at 20% 0%, #fbf6ef 0%, var(--paper) 55%, #f1e6d9 100%);
+      /* ---- Unit-0.8 空态 / 继续写提示 / 收藏与标签 ---- */
+      .empty-card {
+        margin: 22px 0;
+        padding: 34px 22px;
+        border: 1px dashed #d9c7b2;
+        border-radius: 18px;
+        background: rgba(255, 250, 244, 0.62);
+        text-align: center;
       }
-      .store-blocked-card {
-        width: min(100%, 430px);
-        padding: 30px 26px;
-        border: 1px solid rgba(138, 90, 56, 0.14);
-        border-radius: 20px;
-        background: var(--card);
-        box-shadow: var(--shadow);
-      }
-      .store-blocked-card h1 {
-        margin: 0 0 12px;
-        font-size: 20px;
+      .empty-card h2 {
+        margin: 0;
+        font-size: 18px;
         font-weight: 650;
         letter-spacing: 0.06em;
-        color: var(--wood-dark);
+        color: #574433;
       }
-      .store-blocked-card p {
-        margin: 0;
-        font-size: 14px;
+      .empty-card p {
+        margin: 8px 0 0;
+        font-size: 13px;
         line-height: 1.8;
-        color: #6e5d4f;
+        color: #8f7d6d;
       }
-      .store-blocked-card .store-blocked-hint {
-        margin-top: 14px;
+      .empty-card .button { margin-top: 16px; }
+
+      .resume-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 0 0 14px;
+        padding: 12px 14px;
+        border: 1px solid #e3cfb7;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #fff8ec 0%, #fbf0df 100%);
+        box-shadow: 0 4px 16px rgba(140, 96, 42, 0.06);
+      }
+      .resume-text { font-size: 13px; line-height: 1.6; color: #7a5a2e; }
+      .resume-card .button { padding: 7px 15px; }
+
+      .calendar-empty {
+        margin: 12px 0 0;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(138, 90, 56, 0.2);
         font-size: 12px;
+        line-height: 1.8;
         color: var(--muted);
       }
+      .calendar-empty .button { margin-left: 8px; padding: 4px 11px; font-size: 12px; }
+
+      .view-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .entry-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+      .entry-card .data-desc { margin-bottom: 0; }
+
+      .collect-block { margin: 0 0 22px; }
+      .collect-title {
+        margin: 0 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(138, 90, 56, 0.16);
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: 0.08em;
+        color: #574433;
+      }
+      .collect-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
+      .collect-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fffdf9;
+        color: #5c4b3d;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .collect-tag:hover { background: #f7eee4; border-color: rgba(138, 90, 56, 0.3); }
+      .collect-tag-count { font-size: 11px; color: var(--muted); }
 
       .data-card {
         background: var(--card, #fffaf3); border: 1px solid rgba(120, 90, 60, 0.14); border-radius: 16px;
@@ -585,8 +628,285 @@
         margin-top: 18px;
       }
 
+      /* ---- Unit-0.7 时光轴工具条 / 年月日分组 / 卡片 ---- */
+      .timeline-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 250, 244, 0.66);
+      }
+      .tool-field {
+        display: grid;
+        gap: 4px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .tool-field select {
+        max-width: 230px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fffdf9;
+        outline: none;
+      }
+      .tool-field select:focus,
+      .calendar-tools input:focus {
+        border-color: var(--wood-soft);
+        box-shadow: 0 0 0 3px rgba(201, 155, 114, 0.18);
+      }
+      .check-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding-bottom: 10px;
+        font-size: 13px;
+        color: #6e5d4f;
+      }
+      .check-inline input { width: 16px; height: 16px; accent-color: var(--wood); }
+      .tag-filter-bar {
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border: 1px dashed #d9c7b2;
+        border-radius: 12px;
+        background: rgba(255, 250, 244, 0.5);
+      }
+      .tag-filter-hint { margin: 0 0 8px; font-size: 11px; color: var(--muted); }
+      .tag-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .tag-chip {
+        padding: 4px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fffdf9;
+        color: #6e5d4f;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .tag-chip:hover { background: #f7eee4; }
+      .tag-chip.is-active { background: var(--wood); border-color: var(--wood); color: #fffaf4; }
+      .timeline-summary { margin: 0 0 10px; font-size: 12px; color: var(--muted); letter-spacing: 0.03em; }
+      .timeline-sentinel { height: 1px; }
+      .timeline-year {
+        margin: 26px 0 4px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(138, 90, 56, 0.16);
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--wood-dark);
+      }
+      .timeline-year:first-child { margin-top: 0; }
+      .timeline-month {
+        margin: 18px 0 6px;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: 0.1em;
+        color: #7a5638;
+      }
+      .timeline-day-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 12px 0 8px;
+      }
+      .timeline-day-date { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #8a725c; }
+      .timeline-card--record { position: relative; padding-right: 54px; }
+      .favorite-toggle {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: #fffdf9;
+        color: #b3a291;
+        font-size: 19px;
+        line-height: 1;
+        transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+      }
+      .favorite-toggle:hover { background: #fbf1e2; color: #a56a1f; }
+      .favorite-toggle.is-on { color: #b9822e; border-color: #e3c48e; background: #fff6e2; }
+      .favorite-toggle:disabled { opacity: 0.6; cursor: wait; }
+      .favorite-static { position: absolute; top: 14px; right: 16px; color: #b9822e; font-size: 17px; }
+      .timeline-time { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+      .timeline-cover {
+        max-height: 240px;
+        margin-top: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(138, 90, 56, 0.12);
+        border-radius: 12px;
+        background: #efe4d6;
+      }
+      .timeline-cover img { display: block; width: 100%; max-height: 240px; object-fit: cover; }
+      .cover-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 12px;
+        color: #8a7665;
+        font-size: 12px;
+        text-align: center;
+      }
+      .timeline-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+      .tag-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 9px;
+        border-radius: 999px;
+        background: #f3e7d8;
+        color: #7a5638;
+        font-size: 11px;
+        line-height: 1.6;
+      }
+      .timeline-photo-count { font-size: 12px; color: var(--muted); }
+      .timeline-meta-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+      .timeline-meta-line .timeline-tags { margin-top: 0; }
+
+      /* ---- Unit-0.7 日历 ---- */
+      .calendar-layout { display: grid; gap: 16px; }
+      .calendar-card, .day-panel, .on-this-day {
+        padding: 16px 18px;
+        border: 1px solid rgba(138, 90, 56, 0.12);
+        border-radius: 18px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+      }
+      .calendar-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .calendar-title { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: 0.08em; color: #4b3b2f; }
+      .cal-nav { padding: 5px 11px; font-size: 19px; line-height: 1.1; }
+      .calendar-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+      .calendar-tools input {
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fffdf9;
+        outline: none;
+        font-size: 13px;
+      }
+      .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+      .calendar-weekdays span { padding: 4px 0; font-size: 11px; color: var(--muted); text-align: center; }
+      .cal-day {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-height: 50px;
+        padding: 4px 2px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #5c4b3d;
+      }
+      .cal-day:hover { background: #f7eee4; }
+      .cal-day.is-empty { pointer-events: none; }
+      .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--wood-soft); }
+      .cal-day.has-record { background: #fff6ea; }
+      .cal-day.is-selected { background: #f3e7d8; border-color: #e0c8ae; }
+      .cal-num { font-size: 13px; line-height: 1.2; }
+      .cal-mark { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 14px; font-size: 10px; color: #96613a; }
+      .cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--wood); }
+      .cal-star { font-size: 10px; color: #b9822e; }
+      .day-panel-title, .on-this-day-title { margin: 0; font-size: 16px; font-weight: 650; color: #4b3b2f; letter-spacing: 0.06em; }
+      .day-panel-date, .on-this-day-sub { min-height: 18px; margin: 4px 0 12px; font-size: 12px; color: var(--muted); }
+      .day-panel .empty-state, .on-this-day .empty-state { margin: 8px 0; padding: 24px 16px; font-size: 13px; }
+      .on-this-day-group + .on-this-day-group { margin-top: 16px; }
+      .on-this-day-group .timeline-card + .timeline-card { margin-top: 10px; }
+      .on-this-day-year { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: #7a5638; letter-spacing: 0.05em; }
+      .on-this-day .timeline-card { padding: 14px 52px 14px 16px; }
+      .on-this-day .timeline-title { font-size: 15px; }
+
+      /* ---- Unit-0.7 标签管理 / 标签选择 ---- */
+      .tag-dialog { width: min(100% - 32px, 560px); max-height: min(86vh, 760px); overflow: auto; }
+      .dialog-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.7; color: var(--muted); }
+      .dialog-status {
+        margin: 0 0 12px;
+        padding: 8px 11px;
+        border-radius: 10px;
+        background: #f7eee4;
+        color: #6e5d4f;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .dialog-status.is-ok { background: #eef5ea; color: #4f7149; }
+      .dialog-status.is-warn { background: #fff6e6; color: #8a5a1e; }
+      .dialog-status.is-error { background: #fff1ed; color: #8c3827; }
+      .tag-new-row { display: flex; gap: 8px; margin-bottom: 10px; }
+      .tag-new-row input {
+        flex: 1;
+        min-width: 0;
+        padding: 9px 11px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fffdf9;
+        outline: none;
+      }
+      .tag-manage-list { display: grid; gap: 8px; }
+      .tag-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fffdf9;
+      }
+      .tag-row-name { font-size: 14px; font-weight: 600; color: #4b3b2f; }
+      .tag-row-count { margin-right: auto; font-size: 11px; color: var(--muted); }
+      .tag-row .button { padding: 5px 10px; font-size: 12px; }
+      .tag-row input, .tag-row select {
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fffdf9;
+        font-size: 12px;
+      }
+      .tag-picker-list { display: grid; gap: 3px; max-height: 42vh; overflow: auto; margin-bottom: 12px; }
+      .tag-option-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        color: #5a4a3d;
+        font-size: 14px;
+      }
+      .tag-option-row:hover { background: #f7eee4; }
+      .tag-option-row input { width: 16px; height: 16px; accent-color: var(--wood); }
+      .tag-option-count { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+      @media (min-width: 900px) {
+        .calendar-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 288px); align-items: start; }
+        .calendar-card { grid-column: 1; }
+        .on-this-day { grid-column: 1; }
+        .day-panel {
+          grid-column: 2;
+          grid-row: 1 / span 2;
+          position: sticky;
+          top: 0;
+          max-height: calc(100vh - 52px);
+          overflow: auto;
+        }
+      }
+
       @media (max-width: 760px) {
-        .tab { white-space: nowrap; }
         .app-shell {
           display: flex;
           flex-direction: column;
@@ -594,32 +914,83 @@
           min-height: 100vh;
           overflow: visible;
         }
+        /* 顶部只留品牌小标题栏，尊重刘海安全区。 */
         .sidebar {
+          position: sticky;
+          top: 0;
+          z-index: 40;
           flex-direction: row;
           align-items: center;
           gap: 16px;
-          /* 安全区：支持 env() 的 WebView/浏览器生效；Android 由原生 padding 处理（此时 env 为 0），桌面为 0 不变。 */
-          padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 14px calc(16px + env(safe-area-inset-left, 0px));
+          padding: calc(12px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 12px calc(16px + env(safe-area-inset-left, 0px));
           border-right: none;
           border-bottom: 1px solid rgba(138, 90, 56, 0.12);
+          background: linear-gradient(180deg, #f3e7d7 0%, #efe0cf 100%);
         }
-        .brand { padding: 0; }
-        .brand-title { font-size: 19px; }
+        .brand { padding: 0; flex-shrink: 0; }
+        .brand-title { font-size: 19px; white-space: nowrap; }
         .brand-sub { display: none; }
-        .brand { flex-shrink: 0; }
-        .brand-title { white-space: nowrap; }
-        .tabs { flex-direction: row; margin-left: auto; gap: 2px; min-width: 0; }
-        .tab { padding: 8px 9px; }
         .sidebar-foot { display: none; }
-        .sidebar { gap: 10px; }
+
+        /* 主导航：底部固定、5 个等宽页签，永远可见。 */
+        .tabs {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 60;
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 2px;
+          margin: 0;
+          padding: 6px calc(4px + env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) calc(4px + env(safe-area-inset-left, 0px));
+          background: rgba(251, 245, 237, 0.97);
+          border-top: 1px solid rgba(138, 90, 56, 0.16);
+          box-shadow: 0 -8px 24px rgba(96, 66, 42, 0.08);
+          backdrop-filter: blur(8px);
+        }
+        .tab {
+          flex-direction: column;
+          justify-content: center;
+          gap: 3px;
+          min-height: 48px;
+          padding: 4px 2px;
+          border-radius: 10px;
+          font-size: 11px;
+          letter-spacing: 0;
+          text-align: center;
+          white-space: normal;
+          line-height: 1.2;
+        }
+        .tab-dot { width: 8px; height: 8px; flex: 0 0 auto; }
+        .tab-label { font-size: 11px; }
+
+        /* 内容底部留出固定页签栏 + 安全区的高度。 */
+        .main { padding: 18px 16px calc(88px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
         .data-card { padding: 14px 14px; }
-        .main { padding: 20px 18px calc(32px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
         .when-row { grid-template-columns: 1fr; }
         .editor-card { padding: 16px; }
         .editor-title { font-size: 21px; }
         .status-text { max-width: 100%; }
         .editor-foot { flex-direction: column; align-items: stretch; }
         .commit-button { width: 100%; }
+        .timeline-toolbar { padding: 10px 12px; gap: 8px; }
+        .tool-field { flex: 1 1 100%; }
+        .tool-field select { max-width: none; }
+        .check-inline { padding-bottom: 4px; }
+        .timeline-card--record { padding: 16px 52px 16px 16px; }
+        .timeline-year { font-size: 21px; }
+        .calendar-card, .day-panel, .on-this-day { padding: 14px; }
+        .calendar-tools { width: 100%; margin-left: 0; }
+        .calendar-tools input { flex: 1; min-width: 0; }
+        .cal-day { min-height: 45px; }
+        .tag-dialog { width: min(100% - 20px, 560px); padding: 18px; }
+        .tag-row .button { flex: 1 1 auto; }
+        .resume-card .button { flex: 1 1 100%; }
+        .view-head-actions { width: 100%; }
+        .view-head { flex-wrap: wrap; }
+        .collect-tag { flex: 1 1 auto; justify-content: space-between; }
+        .empty-card { padding: 28px 18px; }
       }
     </style>
   </head>
@@ -630,20 +1001,7 @@
           <div class="brand-title">拾光</div>
           <span class="brand-sub">把小事留住</span>
         </div>
-        <nav class="tabs" aria-label="主要视图">
-          <button type="button" class="tab is-active" data-testid="drafts-tab" role="tab" aria-selected="true">
-            <span class="tab-dot"></span>草稿
-          </button>
-          <button type="button" class="tab" data-testid="timeline-tab" role="tab" aria-selected="false">
-            <span class="tab-dot"></span>时光
-          </button>
-          <button type="button" class="tab" data-testid="trash-tab" role="tab" aria-selected="false">
-            <span class="tab-dot"></span>回收站
-          </button>
-          <button type="button" class="tab" data-testid="data-tab" role="tab" aria-selected="false">
-            <span class="tab-dot"></span>数据
-          </button>
-        </nav>
+        <nav class="tabs" id="nav-tabs" aria-label="主要视图"></nav>
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
       </aside>
 
@@ -655,7 +1013,7 @@
           </div>
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
 
-          <section id="view-drafts" class="view">
+          <section id="view-drafts" class="view" hidden>
             <header class="view-head">
               <div>
                 <h1>草稿</h1>
@@ -710,11 +1068,97 @@
           <section id="view-timeline" class="view" hidden>
             <header class="view-head">
               <div>
-                <h1>时光</h1>
-                <p class="view-sub">已经好好收起来的小事。</p>
+                <h1>时光轴</h1>
+                <p class="view-sub">已经好好收起来的小事，按年、月、日慢慢翻。</p>
               </div>
             </header>
+
+            <div class="resume-card" id="resume-draft" data-testid="resume-draft" hidden>
+              <span class="resume-text">有一篇没写完的草稿</span>
+              <button type="button" class="button ghost" id="resume-draft-button" data-testid="resume-draft-button">继续写</button>
+            </div>
+
+            <div class="timeline-toolbar">
+              <label class="tool-field">跳到年月
+                <select id="jump-month" data-testid="jump-month"></select>
+              </label>
+              <button type="button" class="button ghost" data-testid="jump-latest" id="jump-latest">回到最近</button>
+              <button type="button" class="button ghost" data-testid="order-toggle" id="order-toggle">由近到远</button>
+              <label class="check-inline"><input type="checkbox" id="favorite-filter" data-testid="favorite-filter" /> 只看珍藏</label>
+              <button type="button" class="button ghost" data-testid="manage-tags" id="manage-tags">管理标签</button>
+            </div>
+
+            <div class="tag-filter-bar" id="tag-filter-bar" hidden>
+              <p class="tag-filter-hint">多个标签满足任一即可</p>
+              <div class="tag-filter-chips" id="tag-filter-chips"></div>
+            </div>
+
+            <p class="timeline-summary" id="timeline-summary" data-testid="timeline-summary"></p>
             <div id="timeline-list" class="timeline-list"></div>
+            <div id="timeline-sentinel" data-testid="timeline-sentinel" class="timeline-sentinel" aria-hidden="true"></div>
+          </section>
+
+          <section id="view-calendar" class="view" hidden>
+            <header class="view-head">
+              <div>
+                <h1>日历</h1>
+                <p class="view-sub">按日子翻看，也许会遇到从前的同一天。</p>
+              </div>
+            </header>
+
+            <div class="calendar-layout">
+              <section class="calendar-card">
+                <div class="calendar-toolbar">
+                  <button type="button" class="button ghost cal-nav" data-testid="cal-prev" id="cal-prev" aria-label="上个月">‹</button>
+                  <h2 class="calendar-title" id="cal-title">日历</h2>
+                  <button type="button" class="button ghost cal-nav" data-testid="cal-next" id="cal-next" aria-label="下个月">›</button>
+                  <div class="calendar-tools">
+                    <input type="month" id="cal-month-input" data-testid="cal-month-input" aria-label="选择年月" />
+                    <button type="button" class="button ghost" data-testid="cal-today" id="cal-today">回到今天</button>
+                  </div>
+                </div>
+                <div class="calendar-weekdays" aria-hidden="true">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                </div>
+                <div class="calendar-grid" id="cal-grid"></div>
+                <p class="calendar-empty" id="cal-empty" data-testid="cal-empty" hidden>
+                  这个月还没有时光。
+                  <button type="button" class="button ghost" id="cal-empty-write" data-testid="cal-empty-write">写下今天</button>
+                </p>
+              </section>
+
+              <aside class="day-panel" id="day-panel" data-testid="day-panel">
+                <h2 class="day-panel-title">当天时光</h2>
+                <p class="day-panel-date" id="day-panel-date"></p>
+                <div class="timeline-list" id="day-panel-list"></div>
+              </aside>
+
+              <section class="on-this-day" id="on-this-day" data-testid="on-this-day">
+                <h2 class="on-this-day-title" id="on-this-day-title">那年今日</h2>
+                <p class="on-this-day-sub" id="on-this-day-sub"></p>
+                <div id="on-this-day-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="view-collect" class="view" data-testid="view-collect" hidden>
+            <header class="view-head">
+              <div>
+                <h1>标签·收藏</h1>
+                <p class="view-sub">珍藏着的小事，和给它们贴过的标签。</p>
+              </div>
+              <button type="button" class="button ghost" id="collect-manage-tags" data-testid="collect-manage-tags">管理标签</button>
+            </header>
+
+            <section class="collect-block">
+              <h2 class="collect-title">收藏</h2>
+              <div id="collect-favorites" data-testid="collect-favorites" class="timeline-list"></div>
+            </section>
+
+            <section class="collect-block">
+              <h2 class="collect-title">标签</h2>
+              <div id="collect-tags" data-testid="collect-tags" class="collect-tag-list"></div>
+            </section>
           </section>
 
           <section id="view-trash" class="view" hidden>
@@ -723,7 +1167,10 @@
                 <h1>回收站</h1>
                 <p class="view-sub">删除的时光会先留在这里。</p>
               </div>
-              <button type="button" class="button danger" data-testid="empty-trash-button" id="empty-trash-button">清空回收站</button>
+              <div class="view-head-actions">
+                <button type="button" class="button ghost" id="back-to-settings" data-testid="back-to-settings">返回设置</button>
+                <button type="button" class="button danger" data-testid="empty-trash-button" id="empty-trash-button">清空回收站</button>
+              </div>
             </header>
             <p class="trash-note">回收站不会自动清空，只有你手动操作才会永久删除。</p>
             <div id="trash-list" class="timeline-list"></div>
@@ -732,10 +1179,19 @@
           <section id="view-data" class="view" hidden>
             <header class="view-head">
               <div>
-                <h1>数据与备份</h1>
+                <h1>设置</h1>
                 <p class="view-sub">备份是一份可以带走的完整副本，不是云同步。</p>
               </div>
             </header>
+
+            <article class="data-card entry-card">
+              <div>
+                <h2>回收站</h2>
+                <p class="data-desc">删除的时光会先留在回收站，可以随时恢复。</p>
+              </div>
+              <button type="button" class="button ghost" id="open-trash" data-testid="open-trash">打开回收站</button>
+            </article>
+
             <p class="trash-note" data-testid="backup-outside-hint">本机数据会随卸载或清除应用数据一起消失。请定期导出备份，并把备份文件存到这台设备以外的地方（电脑、U 盘、网盘等）。</p>
 
             <article class="data-card">
@@ -796,20 +1252,41 @@
       </main>
     </div>
 
-    <div id="store-blocked" data-testid="store-blocked" class="store-blocked" hidden>
-      <div class="store-blocked-card">
-        <h1 id="store-blocked-title"></h1>
-        <p id="store-blocked-detail"></p>
-        <p class="store-blocked-hint">这里不会写入或改动任何数据。请按上面的提示处理后再重新打开拾光。</p>
-      </div>
-    </div>
-
     <dialog id="confirm-dialog" data-testid="confirm-dialog" class="confirm-dialog">
       <h2 id="confirm-title"></h2>
       <p id="confirm-message"></p>
       <div class="confirm-actions">
         <button type="button" class="button ghost" data-testid="confirm-cancel" id="confirm-cancel">取消</button>
         <button type="button" class="button danger" data-testid="confirm-ok" id="confirm-ok">确定</button>
+      </div>
+    </dialog>
+
+    <dialog id="tag-dialog" data-testid="tag-dialog" class="confirm-dialog tag-dialog">
+      <h2>管理标签</h2>
+      <p class="dialog-hint">标签只保存在这台设备上。改名、合并或删除都不会改动记录的文字和照片。</p>
+      <div class="tag-new-row">
+        <input type="text" id="tag-new-input" data-testid="tag-new-input" maxlength="40" placeholder="新建标签名" autocomplete="off" />
+        <button type="button" class="button ghost" data-testid="tag-create" id="tag-create">新建</button>
+      </div>
+      <p class="dialog-status" id="tag-dialog-status" data-testid="tag-dialog-status" hidden></p>
+      <div class="tag-manage-list" id="tag-manage-list"></div>
+      <div class="confirm-actions">
+        <button type="button" class="button ghost" data-testid="tag-close" id="tag-close">关闭</button>
+      </div>
+    </dialog>
+
+    <dialog id="tag-picker-dialog" data-testid="tag-picker-dialog" class="confirm-dialog tag-dialog">
+      <h2>给这段时光加标签</h2>
+      <p class="dialog-hint">标签和珍藏单独保存，不会发布正在编辑的草稿。</p>
+      <div class="tag-new-row">
+        <input type="text" id="tag-picker-new" data-testid="tag-picker-new" maxlength="40" placeholder="新建标签名" autocomplete="off" />
+        <button type="button" class="button ghost" data-testid="tag-picker-create" id="tag-picker-create">新建</button>
+      </div>
+      <p class="dialog-status" id="tag-picker-status" data-testid="tag-picker-status" hidden></p>
+      <div class="tag-picker-list" id="tag-picker-list"></div>
+      <div class="confirm-actions">
+        <button type="button" class="button ghost" data-testid="tag-picker-cancel" id="tag-picker-cancel">取消</button>
+        <button type="button" class="button" data-testid="tag-picker-save" id="tag-picker-save">保存标签</button>
       </div>
     </dialog>
 

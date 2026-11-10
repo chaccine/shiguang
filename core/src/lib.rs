@@ -17,6 +17,7 @@ pub mod lock;
 pub mod model;
 pub mod persist;
 pub mod preview;
+pub mod session;
 pub mod sha256;
 pub mod store;
 pub mod time;
@@ -38,3 +39,12 @@ pub mod merge;
 pub use backup::KdfParams;
 pub use merge::{merge_states, MergePlan, MergeReport, RecordIdentity};
 pub use store::State;
+
+pub mod tags;
+pub use tags::{
+    MetaOutcome, Tag, TagAlias, TagDeleteOutcome, TagImpact, TagInfo, TagMergeOutcome, TagTombstone,
+};
+pub mod query;
+pub use query::{
+    CalendarDay, OnThisDayYear, Order, TimelineFilter, TimelineItem, TimelineMonth, TimelinePage,
+};

@@ -29,6 +29,12 @@ export interface RecordRow {
   baseRevision: number;
   formal: Snapshot | null;
   draft: Snapshot | null;
+  /** Unit-0.7（schema v3）：珍藏是独立元数据，有独立修订号，不随草稿提交（G01）。 */
+  favorite: boolean;
+  favoriteRevision: number;
+  /** Unit-0.7：标签关联（tagId 列表）与其修订号；只经标签操作修改。 */
+  tagIds: string[];
+  tagRevision: number;
 }
 
 export interface FieldIssue {
@@ -70,6 +76,8 @@ export type StoreStatus = { ok: true } | { ok: false; code: string; message: str
 export interface BackupCounts {
   formal: number; drafts: number; trashed: number; deletionMarkers: number;
   conflictCopies: number; mediaFiles: number; missingMedia: number;
+  /** Unit-0.7：旧包缺省为 0。 */
+  tags?: number; favorites?: number;
 }
 /** 来自备份包 manifest 的摘要；encryption：none = 明文包，argon2id-xchacha20poly1305 = 口令加密包（解锁后才有摘要）。 */
 export interface BackupSummary {
@@ -97,6 +105,9 @@ export interface MergeCounts {
   added: number; updated: number; unchanged: number; conflicts: number;
   keptTrashed: number; keptActive: number; skippedDeleted: number; deletedInBackup: number;
   markersAdded: number; conflictCopiesAdded: number; conflictCopiesDropped: number; mediaAdded: number; mediaMissing: number; mediaConflicts: number;
+  /** Unit-0.7：标签与珍藏的合并统计（旧版本缺省 0）。 */
+  tagsAdded?: number; tagsRemapped?: number; tagsSkippedDeleted?: number; tagsDeletedInBackup?: number;
+  favoritesUpdated?: number; tagLinksUpdated?: number;
 }
 /** 合并计划：只读预演；skippedDeleted = 本机已永久删除、旧备份里仍有的记录（不复活）。 */
 export interface MergePlan { counts: MergeCounts; skippedDeleted: string[]; deletedInBackup: string[] }
@@ -104,3 +115,29 @@ export interface MergeResult { plan: MergePlan; safetyBackup: string; mediaRepor
 export interface RestoreBackupResult {
   restored: BackupCounts; safetyBackup: string; mediaReport: MediaReport; durability: Durability;
 }
+
+// ---- Unit-0.7 时光轴 / 日历 / 珍藏 / 标签 ----
+export interface TagDef { tagId: string; name: string; normName: string; createdAt: string }
+export interface TagAlias { fromTagId: string; fromCreatedAt: string; toTagId: string; mergedAt: string }
+export interface TagTombstone { tagId: string; createdAt: string; deletedAt: string }
+export interface TagInfo { tagId: string; name: string; createdAt: string; activeCount: number; trashedCount: number }
+export interface TagImpact { active: number; trashed: number }
+export interface MetaResult {
+  recordId: string; favorite: boolean; favoriteRevision: number; tagIds: string[]; tagRevision: number; durability: Durability;
+}
+export interface TagMergeResult { into: TagInfo; affectedRecords: number; durability: Durability }
+export interface TagDeleteResult { affectedRecords: number; durability: Durability }
+export type SortOrder = "desc" | "asc";
+/** 不同条件 AND；tagIds 内部 OR（M05-S07）。日期闭区间 YYYY-MM-DD。 */
+export interface TimelineFilter {
+  from?: string | null; to?: string | null; favoriteOnly?: boolean; tagIds?: string[]; hasPhoto?: boolean | null; order?: SortOrder;
+}
+export interface TimelineItem {
+  recordId: string; eventDate: string; eventTime: string | null; title: string; excerpt: string;
+  cover: PhotoUse | null; photoCount: number; favorite: boolean; favoriteRevision: number;
+  tagIds: string[]; tagRevision: number; createdAt: string; isFuture: boolean;
+}
+export interface TimelinePage { items: TimelineItem[]; nextCursor: string | null; total: number }
+export interface MonthCount { year: number; month: number; count: number }
+export interface CalendarDay { date: string; count: number; photoCount: number; hasFavorite: boolean }
+export interface OnThisDayGroup { year: number; items: TimelineItem[] }

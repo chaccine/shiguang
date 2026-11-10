@@ -1,6 +1,8 @@
 {
   "createdAt": "2026-11-09T10:00:00Z",
   "counts": {
+    "tags": 0,
+    "favorites": 0,
     "formal": 0,
     "drafts": 1,
     "trashed": 0,

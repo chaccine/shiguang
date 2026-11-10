@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "META_REVISION_CONFLICT",
+  "message": "珍藏状态已在别处改变，请刷新后重试"
+}
+

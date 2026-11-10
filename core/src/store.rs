@@ -40,7 +40,7 @@ impl StoreConfig {
 pub struct Store {
     root: PathBuf,
     seed: String,
-    state: State,
+    pub(crate) state: State,
     last_durability: Durability,
     pub(crate) instance_lock: Option<crate::lock::LockGuard>,
     pending_conflicts: std::collections::BTreeMap<String, (Snapshot, u32)>,
@@ -48,6 +48,10 @@ pub struct Store {
 
 #[derive(Clone)]
 pub struct State {
+    pub(crate) tags: Vec<crate::Tag>,
+    pub(crate) tag_dict_revision: u64,
+    pub(crate) tag_aliases: Vec<crate::TagAlias>,
+    pub(crate) tag_tombstones: Vec<crate::TagTombstone>,
     pub(crate) version: i64,
     pub(crate) seq: u64,
     pub(crate) records: Vec<RecordRow>,
@@ -494,6 +498,10 @@ impl Store {
             }
         } else {
             State {
+                tags: Vec::new(),
+                tag_dict_revision: 0,
+                tag_aliases: Vec::new(),
+                tag_tombstones: Vec::new(),
                 version: STATE_VERSION,
                 seq: 0,
                 records: Vec::new(),
@@ -576,7 +584,7 @@ impl Store {
         Ok((value, durability))
     }
 
-    fn candidate_state(&self) -> Result<State, CoreError> {
+    pub(crate) fn candidate_state(&self) -> Result<State, CoreError> {
         // 调用方在整个重载、比较及原子替换期间持有写锁。
         match fs::read_to_string(self.root.join(STATE_FILE)) {
             Ok(text) => {
@@ -597,7 +605,7 @@ impl Store {
         }
     }
 
-    fn apply_candidate(&mut self, candidate: State) -> Result<Durability, CoreError> {
+    pub(crate) fn apply_candidate(&mut self, candidate: State) -> Result<Durability, CoreError> {
         let durability = self.persist_state(&candidate)?;
         self.state = candidate;
         self.last_durability = durability.clone();
@@ -644,6 +652,10 @@ impl Store {
                 photos: Vec::new(),
             };
             let row = RecordRow {
+                favorite: false,
+                favorite_revision: 0,
+                tag_ids: Vec::new(),
+                tag_revision: 0,
                 status: RecordStatus::Active,
                 trashed_at: None,
                 record_id,
@@ -1276,7 +1288,7 @@ impl State {
             .ok_or_else(|| self.missing_row(record_id))?;
         Ok(&mut self.records[index])
     }
-    fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
+    pub(crate) fn row_mut(&mut self, record_id: &str) -> Result<&mut RecordRow, CoreError> {
         let row = self.any_row_mut(record_id)?;
         ensure_active(row)?;
         Ok(row)
@@ -1336,6 +1348,29 @@ impl State {
 
     pub fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
+            (
+                "tags",
+                Json::Arr(self.tags.iter().map(crate::Tag::to_json).collect()),
+            ),
+            ("tagDictRevision", Json::Num(self.tag_dict_revision as i64)),
+            (
+                "tagAliases",
+                Json::Arr(
+                    self.tag_aliases
+                        .iter()
+                        .map(crate::TagAlias::to_json)
+                        .collect(),
+                ),
+            ),
+            (
+                "tagTombstones",
+                Json::Arr(
+                    self.tag_tombstones
+                        .iter()
+                        .map(crate::TagTombstone::to_json)
+                        .collect(),
+                ),
+            ),
             ("version", Json::Num(self.version)),
             (
                 "mergeOrigins",
@@ -1455,6 +1490,23 @@ impl State {
             _ => return Err(CoreError::new("STATE_CORRUPT", "mergeOrigins 必须是数组")),
         };
         let state = State {
+            tags: array("tags")?
+                .iter()
+                .map(crate::Tag::from_json)
+                .collect::<Result<_, _>>()
+                .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
+            tag_dict_revision: crate::model::req_u64(value, "tagDictRevision")
+                .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
+            tag_aliases: array("tagAliases")?
+                .iter()
+                .map(crate::TagAlias::from_json)
+                .collect::<Result<_, _>>()
+                .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
+            tag_tombstones: array("tagTombstones")?
+                .iter()
+                .map(crate::TagTombstone::from_json)
+                .collect::<Result<_, _>>()
+                .map_err(|e| CoreError::new("STATE_CORRUPT", e))?,
             version,
             seq,
             records,
@@ -1463,6 +1515,7 @@ impl State {
             merge_origins,
         };
         crate::merge::validate_ids(&state)?;
+        crate::tags::validate(&state)?;
         Ok(state)
     }
 }

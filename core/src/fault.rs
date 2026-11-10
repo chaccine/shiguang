@@ -2,6 +2,7 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FaultPoint {
+    TagTxnWrite,
     MergeStage,
     MergeMediaWrite,
     MergeStateWrite,

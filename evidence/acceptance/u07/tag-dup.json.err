@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "code": "TAG_NAME_CONFLICT",
+  "message": "已有同名标签（tag-000004），可直接使用；改名时请选择合并或取消",
+  "tagId": "tag-000004"
+}
+

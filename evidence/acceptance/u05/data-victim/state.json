@@ -1,13 +1,21 @@
 {
+  "tags": [],
+  "tagDictRevision": 0,
+  "tagAliases": [],
+  "tagTombstones": [],
   "version": 1,
   "mergeOrigins": [],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "deletionMarkers": [],
   "conflictCopies": [],
   "seed": "20261109",
   "seq": 9,
   "records": [
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000001",
@@ -26,6 +34,10 @@
       }
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000002",
@@ -44,6 +56,10 @@
       }
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000003",
@@ -62,6 +78,10 @@
       "draft": null
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000004",
@@ -80,6 +100,10 @@
       }
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000005",
@@ -115,6 +139,10 @@
       "draft": null
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000008",
@@ -133,6 +161,10 @@
       "draft": null
     },
     {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
       "status": "active",
       "trashedAt": null,
       "recordId": "rec-000009",
