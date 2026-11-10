@@ -64,6 +64,7 @@ fn summary_value(info: &BackupInfo, encrypted: bool) -> serde_json::Value {
             "formal": c.formal, "drafts": c.drafts, "trashed": c.trashed,
             "deletionMarkers": c.deletion_markers, "conflictCopies": c.conflict_copies,
             "mediaFiles": c.media_files, "missingMedia": c.missing_media,
+            "tags": c.tags, "favorites": c.favorites,
         },
     })
 }
@@ -536,6 +537,10 @@ fn plan_value(plan: &MergePlan) -> serde_json::Value {
             "conflictCopiesDropped": plan.conflict_copies_dropped,
             "mediaAdded": plan.media_added, "mediaMissing": plan.media_missing,
             "mediaConflicts": plan.media_conflicts.len(),
+            "tagsAdded": plan.tags_added, "tagsRemapped": plan.tags_remapped,
+            "tagsSkippedDeleted": plan.tags_skipped_deleted,
+            "tagsDeletedInBackup": plan.tags_deleted_in_backup,
+            "favoritesUpdated": plan.favorites_updated, "tagLinksUpdated": plan.tag_links_updated,
         },
         "skippedDeleted": identities(&plan.skipped_deleted),
         "deletedInBackup": identities(&plan.deleted_in_backup),

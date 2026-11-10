@@ -132,6 +132,9 @@ pub struct CommandError {
     #[serde(skip_serializing_if = "Option::is_none")]
     stage: Option<&'static str>,
     message: String,
+    /// TAG_NAME_CONFLICT：已存在的同名标签，界面据此提供“合并到它”。
+    #[serde(rename = "tagId", skip_serializing_if = "Option::is_none")]
+    tag_id: Option<String>,
 }
 
 impl From<CoreError> for CommandError {
@@ -140,6 +143,7 @@ impl From<CoreError> for CommandError {
             code: error.code,
             stage: error.stage,
             message: error.message,
+            tag_id: error.tag_id,
         }
     }
 }
