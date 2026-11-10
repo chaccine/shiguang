@@ -536,6 +536,22 @@
         color: var(--muted);
       }
 
+      .data-card {
+        background: var(--card, #fffaf3); border: 1px solid rgba(120, 90, 60, 0.14); border-radius: 16px;
+        padding: 18px 20px; margin: 14px 0; box-shadow: 0 6px 18px rgba(90, 66, 44, 0.06);
+      }
+      .data-card h2 { margin: 0 0 6px; font-size: 1.05rem; }
+      .data-card.muted { opacity: 0.86; }
+      .data-desc { margin: 6px 0; line-height: 1.6; color: #6b5a4c; font-size: 0.92rem; }
+      .warn-text { color: #a5432e; }
+      .card-actions.start { justify-content: flex-start; flex-wrap: wrap; }
+      .data-result { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #f7eee4; line-height: 1.7; font-size: 0.92rem; word-break: break-all; }
+      .data-result.ok { background: #eef5ea; }
+      .data-result dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
+      .data-result dt { color: #8a7666; }
+      .data-result dd { margin: 0; }
+      .todo-list { margin: 6px 0; padding-left: 0; list-style: none; line-height: 1.9; font-size: 0.92rem; }
+      .pill.todo { background: #e9e1d8; color: #7a6a5c; margin-right: 8px; }
       .confirm-dialog {
         width: min(100% - 40px, 390px);
         padding: 22px;
@@ -586,9 +602,13 @@
         .brand { padding: 0; }
         .brand-title { font-size: 19px; }
         .brand-sub { display: none; }
-        .tabs { flex-direction: row; margin-left: auto; }
-        .tab { padding: 8px 12px; }
+        .brand { flex-shrink: 0; }
+        .brand-title { white-space: nowrap; }
+        .tabs { flex-direction: row; margin-left: auto; gap: 2px; min-width: 0; }
+        .tab { padding: 8px 9px; }
         .sidebar-foot { display: none; }
+        .sidebar { gap: 10px; }
+        .data-card { padding: 14px 14px; }
         .main { padding: 20px 18px calc(32px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
         .when-row { grid-template-columns: 1fr; }
         .editor-card { padding: 16px; }
@@ -615,6 +635,9 @@
           </button>
           <button type="button" class="tab" data-testid="trash-tab" role="tab" aria-selected="false">
             <span class="tab-dot"></span>回收站
+          </button>
+          <button type="button" class="tab" data-testid="data-tab" role="tab" aria-selected="false">
+            <span class="tab-dot"></span>数据
           </button>
         </nav>
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
@@ -700,6 +723,52 @@
             </header>
             <p class="trash-note">回收站不会自动清空，只有你手动操作才会永久删除。</p>
             <div id="trash-list" class="timeline-list"></div>
+          </section>
+
+          <section id="view-data" class="view" hidden>
+            <header class="view-head">
+              <div>
+                <h1>数据与备份</h1>
+                <p class="view-sub">备份是一份可以带走的完整副本，不是云同步。</p>
+              </div>
+            </header>
+            <p class="trash-note" data-testid="backup-outside-hint">本机数据会随卸载或清除应用数据一起消失。请定期导出备份，并把备份文件存到这台设备以外的地方（电脑、U 盘、网盘等）。</p>
+
+            <article class="data-card">
+              <h2>导出备份</h2>
+              <p class="data-desc">把正式记录、草稿、回收站、冲突副本、删除记录和照片原件打包成一个 <code>.sgbak</code> 文件。导出不会改动现有数据。</p>
+              <p class="data-desc warn-text">这是未加密的明文备份，任何拿到文件的人都能读到内容，请妥善保管。</p>
+              <div class="card-actions start">
+                <button type="button" class="button" data-testid="export-backup" id="export-backup">导出备份</button>
+              </div>
+              <div id="export-result" data-testid="export-result" class="data-result" hidden></div>
+            </article>
+
+            <article class="data-card">
+              <h2>从备份恢复</h2>
+              <p class="data-desc">先选择备份文件，拾光会完整校验（文件是否完整、是否被修改、版本是否兼容），校验通过后才会让你决定是否恢复。</p>
+              <div class="card-actions start">
+                <button type="button" class="button ghost" data-testid="pick-backup" id="pick-backup">选择备份文件…</button>
+              </div>
+              <div id="picked-backup" data-testid="picked-backup" class="data-result" hidden>
+                <div id="picked-summary"></div>
+                <p class="data-desc warn-text">覆盖恢复会用这份备份替换当前全部数据；恢复前会自动在本机留一份当前数据的安全副本。</p>
+                <div class="card-actions start">
+                  <button type="button" class="button danger" data-testid="restore-backup" id="restore-backup">用这份备份覆盖恢复</button>
+                  <button type="button" class="button ghost" data-testid="discard-picked" id="discard-picked">取消</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="data-card muted" data-testid="backup-not-implemented">
+              <h2>还没做的功能</h2>
+              <ul class="todo-list">
+                <li><span class="pill todo">未实现</span>安全合并：把备份合并进现有数据（目前只有整库覆盖恢复）。</li>
+                <li><span class="pill todo">未实现</span>口令加密备份：目前导出的都是明文备份。</li>
+                <li><span class="pill todo">未实现</span>防复活检查：合并旧备份时阻止已永久删除的内容回来（依赖安全合并）。</li>
+              </ul>
+              <p class="data-desc">删除记录（墓碑）已经随备份一起保存，为以后的合并与防复活做准备。</p>
+            </article>
           </section>
         </div>
       </main>

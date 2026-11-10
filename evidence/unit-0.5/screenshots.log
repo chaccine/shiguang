@@ -1,0 +1,10 @@
+page errors: 0
+saved /workspace/shiguang-app/evidence/unit-0.5/01-data-page-not-implemented.png
+saved /workspace/shiguang-app/evidence/unit-0.5/02-export-success.png
+saved /workspace/shiguang-app/evidence/unit-0.5/03-backup-verified.png
+saved /workspace/shiguang-app/evidence/unit-0.5/04-confirm-overwrite-restore.png
+saved /workspace/shiguang-app/evidence/unit-0.5/05-restore-success.png
+saved /workspace/shiguang-app/evidence/unit-0.5/06-corrupt-backup-rejected.png
+saved /workspace/shiguang-app/evidence/unit-0.5/07-truncated-backup-rejected.png
+saved /workspace/shiguang-app/evidence/unit-0.5/08-schema-too-new-rejected.png
+saved /workspace/shiguang-app/evidence/unit-0.5/09-mobile-export.png

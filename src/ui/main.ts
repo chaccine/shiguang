@@ -3,7 +3,7 @@ import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
 import type { ErrorDescription } from "../domain/errors.ts";
 import { durabilityLabel, formalHeadline, formatEventWhen } from "../domain/format.ts";
-import type { ConflictCopy, FieldIssue, PhotoUse, RecordRow } from "../domain/types.ts";
+import type { BackupSummary, ConflictCopy, FieldIssue, PhotoUse, RecordRow } from "../domain/types.ts";
 import { formalItems } from "../domain/view.ts";
 import type { FormalListItem } from "../domain/view.ts";
 import type { ShiguangApi } from "../platform/api.ts";
@@ -13,7 +13,7 @@ import { PREVIEW_STORAGE_KEY, seedDemo } from "./demo.ts";
 
 const LAST_DRAFT_KEY = "shiguang.lastDraft";
 
-type View = "drafts" | "editor" | "timeline" | "trash";
+type View = "drafts" | "editor" | "timeline" | "trash" | "data";
 
 function byTestId<T extends HTMLElement>(testId: string): T {
   const node = document.querySelector<T>(`[data-testid="${testId}"]`);
@@ -30,6 +30,15 @@ function byId<T extends HTMLElement>(id: string): T {
 const draftsTab = byTestId<HTMLButtonElement>("drafts-tab");
 const timelineTab = byTestId<HTMLButtonElement>("timeline-tab");
 const trashTab = byTestId<HTMLButtonElement>("trash-tab");
+const dataTab = byTestId<HTMLButtonElement>("data-tab");
+const viewData = byId<HTMLElement>("view-data");
+const exportBackupButton = byTestId<HTMLButtonElement>("export-backup");
+const exportResult = byTestId<HTMLDivElement>("export-result");
+const pickBackupButton = byTestId<HTMLButtonElement>("pick-backup");
+const pickedBackup = byTestId<HTMLDivElement>("picked-backup");
+const pickedSummary = byId<HTMLDivElement>("picked-summary");
+const restoreBackupButton = byTestId<HTMLButtonElement>("restore-backup");
+const discardPickedButton = byTestId<HTMLButtonElement>("discard-picked");
 const newDraftButton = byTestId<HTMLButtonElement>("new-draft");
 const commitButton = byTestId<HTMLButtonElement>("commit-button");
 const backButton = byTestId<HTMLButtonElement>("back-to-drafts");
@@ -139,6 +148,9 @@ function setView(view: View): void {
   viewEditor.hidden = view !== "editor";
   viewTimeline.hidden = view !== "timeline";
   viewTrash.hidden = view !== "trash";
+  viewData.hidden = view !== "data";
+  dataTab.classList.toggle("is-active", view === "data");
+  dataTab.setAttribute("aria-selected", String(view === "data"));
   const draftsActive = view === "drafts" || view === "editor";
   draftsTab.classList.toggle("is-active", draftsActive);
   timelineTab.classList.toggle("is-active", view === "timeline");
@@ -830,6 +842,137 @@ async function showTrash(): Promise<void> {
   await refreshTrash();
 }
 
+// ---- Unit-0.5 数据与备份 ----
+let pickedToken: string | null = null;
+
+function summaryList(summary: BackupSummary, extra: Array<[string, string]> = []): HTMLDListElement {
+  const dl = document.createElement("dl");
+  const c = summary.counts;
+  const rows: Array<[string, string]> = [
+    ["导出时间", formatUpdated(summary.exportedAt)],
+    ["正式记录", `${c.formal} 条`],
+    ["草稿", `${c.drafts} 份`],
+    ["回收站", `${c.trashed} 条`],
+    ["冲突副本", `${c.conflictCopies} 份`],
+    ["删除记录", `${c.deletionMarkers} 条`],
+    ["照片原件", `${c.mediaFiles} 张${c.missingMedia > 0 ? `（另有 ${c.missingMedia} 张原图缺失，未包含）` : ""}`],
+    ["文件大小", formatBytes(summary.bytes)],
+    ["拾光版本", summary.appVersion],
+    ...extra,
+  ];
+  for (const [k, v] of rows) {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    dl.append(dt, dd);
+  }
+  return dl;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function showData(): Promise<void> {
+  if (!(await flushBeforeLeave())) return;
+  setView("data");
+}
+
+async function exportBackupNow(): Promise<void> {
+  clearErrorBox();
+  exportBackupButton.disabled = true;
+  exportBackupButton.textContent = "正在导出…";
+  try {
+    const result = await api.exportBackup();
+    if (result.cancelled) { showAppNotice("已取消导出，没有生成文件", "calm"); return; }
+    const head = document.createElement("strong");
+    head.textContent = "备份已导出并校验通过";
+    const where = document.createElement("p");
+    where.className = "data-desc";
+    where.textContent = `${result.fileName} → ${result.location}`;
+    const nodes: Node[] = [head, where, summaryList(result.summary, [["校验和", `sha256 ${result.sha256.slice(0, 16)}…`]])];
+    if (result.missingMedia.length > 0) {
+      const warn = document.createElement("p");
+      warn.className = "data-desc warn-text";
+      warn.textContent = `有 ${result.missingMedia.length} 张原图在本机已缺失，未包含在备份中。`;
+      nodes.push(warn);
+    }
+    exportResult.replaceChildren(...nodes);
+    exportResult.className = "data-result ok";
+    exportResult.hidden = false;
+    showAppNotice("备份已导出。建议把它再拷到这台设备以外的地方。", "ok");
+  } catch (error) {
+    showError(error);
+  } finally {
+    exportBackupButton.disabled = false;
+    exportBackupButton.textContent = "导出备份";
+  }
+}
+
+async function clearPicked(): Promise<void> {
+  const token = pickedToken;
+  pickedToken = null;
+  pickedBackup.hidden = true;
+  pickedSummary.replaceChildren();
+  if (token !== null) await api.discardPickedBackup(token).catch(() => undefined);
+}
+
+async function pickBackupNow(): Promise<void> {
+  clearErrorBox();
+  await clearPicked();
+  pickBackupButton.disabled = true;
+  pickBackupButton.textContent = "正在校验…";
+  try {
+    const result = await api.pickBackup();
+    if (result.cancelled) { showAppNotice("没有选择文件，当前数据未改动", "calm"); return; }
+    pickedToken = result.token;
+    const head = document.createElement("strong");
+    head.textContent = `校验通过：${result.fileName}`;
+    pickedSummary.replaceChildren(head, summaryList(result.summary));
+    pickedBackup.hidden = false;
+  } catch (error) {
+    showError(error);
+  } finally {
+    pickBackupButton.disabled = false;
+    pickBackupButton.textContent = "选择备份文件…";
+  }
+}
+
+async function restoreBackupNow(): Promise<void> {
+  const token = pickedToken;
+  if (token === null) return;
+  const confirmed = await askConfirm(
+    "用这份备份替换当前全部数据？",
+    "恢复会用这份备份替换当前全部数据，包括正式记录、草稿、回收站和冲突副本；你在备份之后新写的内容会被替换掉。"
+      + "旧备份里也可能包含你后来已经删除的内容，它们会重新出现。"
+      + "恢复前拾光会自动在本机保留一份当前数据的安全副本。确定要继续吗？",
+    "确认覆盖恢复",
+  );
+  if (!confirmed) return;
+  clearErrorBox();
+  restoreBackupButton.disabled = true;
+  restoreBackupButton.textContent = "正在恢复…";
+  try {
+    if (!(await flushBeforeLeave())) return;
+    const result = await api.restoreBackup(token);
+    pickedToken = null;
+    pickedBackup.hidden = true;
+    session = createSession();
+    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    const r = result.restored;
+    showAppNotice(`恢复完成：${r.formal} 条正式记录、${r.drafts} 份草稿、${r.trashed} 条回收站记录。恢复前的数据已保存在 ${result.safetyBackup}`, "ok");
+    exportResult.hidden = true;
+    await refreshDrafts();
+    await refreshTimeline();
+  } catch (error) {
+    showError(error);
+  } finally {
+    restoreBackupButton.disabled = false;
+    restoreBackupButton.textContent = "用这份备份覆盖恢复";
+  }
+}
+
 async function commitCurrent(): Promise<void> {
   if (currentView !== "editor") return;
   clearErrorBox();
@@ -934,6 +1077,11 @@ commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
 
 trashTab.addEventListener("click", () => { void showTrash(); });
+dataTab.addEventListener("click", () => { void showData(); });
+exportBackupButton.addEventListener("click", () => { void exportBackupNow(); });
+pickBackupButton.addEventListener("click", () => { void pickBackupNow(); });
+restoreBackupButton.addEventListener("click", () => { void restoreBackupNow(); });
+discardPickedButton.addEventListener("click", () => { void clearPicked(); });
 emptyTrashButton.addEventListener("click", () => { void emptyTrash(); });
 keepMineButton.addEventListener("click", () => { void resolveKeepMine(); });
 keepFormalButton.addEventListener("click", () => { void resolveKeepFormal(); });
@@ -980,6 +1128,10 @@ async function boot(): Promise<void> {
   await reportMedia();
   await refreshDrafts();
   await refreshTimeline();
+  if (params.get("view") === "data") {
+    setView("data");
+    return;
+  }
   if (demo) {
     setView("drafts");
     return;
