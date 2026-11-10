@@ -1,7 +1,7 @@
 {
   "name": "shiguang-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.4",
   "type": "module",
   "description": "拾光 Unit-0：草稿/正式分离与媒体持久化纵切",
   "scripts": {

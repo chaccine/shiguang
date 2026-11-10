@@ -2679,7 +2679,7 @@ dependencies = [
 
 [[package]]
 name = "shiguang-desktop"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "shiguang_core"
-version = "0.1.0"
+version = "0.1.4"
 
 [[package]]
 name = "shlex"

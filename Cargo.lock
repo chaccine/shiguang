@@ -4,11 +4,11 @@ version = 4
 
 [[package]]
 name = "shiguang"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "shiguang_core",
 ]
 
 [[package]]
 name = "shiguang_core"
-version = "0.1.0"
+version = "0.1.4"
