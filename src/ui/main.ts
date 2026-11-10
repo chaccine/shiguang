@@ -39,6 +39,16 @@ const pickedBackup = byTestId<HTMLDivElement>("picked-backup");
 const pickedSummary = byId<HTMLDivElement>("picked-summary");
 const restoreBackupButton = byTestId<HTMLButtonElement>("restore-backup");
 const discardPickedButton = byTestId<HTMLButtonElement>("discard-picked");
+const encryptToggle = byTestId<HTMLInputElement>("encrypt-toggle");
+const encryptFields = byId<HTMLDivElement>("encrypt-fields");
+const plainWarning = byId<HTMLParagraphElement>("plain-warning");
+const backupPassword = byTestId<HTMLInputElement>("backup-password");
+const backupPassword2 = byTestId<HTMLInputElement>("backup-password2");
+const unlockArea = byId<HTMLDivElement>("unlock-area");
+const unlockPassword = byTestId<HTMLInputElement>("unlock-password");
+const unlockButton = byTestId<HTMLButtonElement>("unlock-backup");
+const pickedActions = byId<HTMLDivElement>("picked-actions");
+const mergeBackupButton = byTestId<HTMLButtonElement>("merge-backup");
 const newDraftButton = byTestId<HTMLButtonElement>("new-draft");
 const commitButton = byTestId<HTMLButtonElement>("commit-button");
 const backButton = byTestId<HTMLButtonElement>("back-to-drafts");
@@ -881,13 +891,20 @@ async function showData(): Promise<void> {
 
 async function exportBackupNow(): Promise<void> {
   clearErrorBox();
+  let password: string | undefined;
+  if (encryptToggle.checked) {
+    if (backupPassword.value.length === 0) { showErrorDescription({ kind: "validation", title: "请设置口令", detail: "勾选了加密就需要设置口令；不想加密请取消勾选。" }); return; }
+    if (backupPassword.value !== backupPassword2.value) { showErrorDescription({ kind: "validation", title: "两次输入的口令不一致", detail: "请重新输入。口令不会被保存。" }); return; }
+    password = backupPassword.value;
+  }
   exportBackupButton.disabled = true;
-  exportBackupButton.textContent = "正在导出…";
+  exportBackupButton.textContent = password ? "正在加密导出…" : "正在导出…";
   try {
-    const result = await api.exportBackup();
+    const result = await api.exportBackup(password ? { password } : {});
+    backupPassword.value = ""; backupPassword2.value = "";
     if (result.cancelled) { showAppNotice("已取消导出，没有生成文件", "calm"); return; }
     const head = document.createElement("strong");
-    head.textContent = "备份已导出并校验通过";
+    head.textContent = password ? "加密备份已导出并校验通过" : "备份已导出并校验通过";
     const where = document.createElement("p");
     where.className = "data-desc";
     where.textContent = `${result.fileName} → ${result.location}`;
@@ -915,6 +932,9 @@ async function clearPicked(): Promise<void> {
   pickedToken = null;
   pickedBackup.hidden = true;
   pickedSummary.replaceChildren();
+  unlockPassword.value = "";
+  unlockArea.hidden = true;
+  pickedActions.hidden = true;
   if (token !== null) await api.discardPickedBackup(token).catch(() => undefined);
 }
 
@@ -928,14 +948,84 @@ async function pickBackupNow(): Promise<void> {
     if (result.cancelled) { showAppNotice("没有选择文件，当前数据未改动", "calm"); return; }
     pickedToken = result.token;
     const head = document.createElement("strong");
-    head.textContent = `校验通过：${result.fileName}`;
-    pickedSummary.replaceChildren(head, summaryList(result.summary));
+    if (result.encrypted || result.summary === null) {
+      head.textContent = `已选择加密备份：${result.fileName}`;
+      pickedSummary.replaceChildren(head);
+      unlockArea.hidden = false;
+      pickedActions.hidden = true;
+    } else {
+      head.textContent = `校验通过：${result.fileName}`;
+      pickedSummary.replaceChildren(head, summaryList(result.summary));
+      unlockArea.hidden = true;
+      pickedActions.hidden = false;
+    }
     pickedBackup.hidden = false;
   } catch (error) {
     showError(error);
   } finally {
     pickBackupButton.disabled = false;
     pickBackupButton.textContent = "选择备份文件…";
+  }
+}
+
+async function unlockBackupNow(): Promise<void> {
+  const token = pickedToken;
+  if (token === null) return;
+  if (unlockPassword.value.length === 0) { showErrorDescription({ kind: "validation", title: "请输入口令", detail: "加密备份需要导出时设置的口令。" }); return; }
+  clearErrorBox();
+  unlockButton.disabled = true;
+  unlockButton.textContent = "正在解锁…";
+  try {
+    const { summary } = await api.unlockBackup(token, unlockPassword.value);
+    unlockPassword.value = "";
+    const head = document.createElement("strong");
+    head.textContent = "口令正确，校验通过";
+    pickedSummary.replaceChildren(head, summaryList(summary));
+    unlockArea.hidden = true;
+    pickedActions.hidden = false;
+  } catch (error) {
+    showError(error);
+  } finally {
+    unlockButton.disabled = false;
+    unlockButton.textContent = "解锁并校验";
+  }
+}
+
+async function mergeBackupNow(): Promise<void> {
+  const token = pickedToken;
+  if (token === null) return;
+  clearErrorBox();
+  let plan;
+  try { plan = await api.planMerge(token); } catch (error) { showError(error); return; }
+  const c = plan.counts;
+  const lines = [
+    `将新增 ${c.added} 条记录，更新 ${c.updated} 条较新的版本，${c.unchanged} 条无变化。`,
+    c.conflicts + c.conflictCopiesAdded > 0 ? `有分歧的内容会两份都保留：新增 ${c.conflictCopiesAdded} 份冲突副本。` : "",
+    c.skippedDeleted > 0 ? `备份里有 ${c.skippedDeleted} 条你已经永久删除的记录，不会被带回来。` : "",
+    c.keptTrashed > 0 ? `${c.keptTrashed} 条在回收站的记录保持在回收站。` : "",
+    c.deletedInBackup > 0 ? `备份里删除了 ${c.deletedInBackup} 条本机仍保留的记录：本机这几条保持不动。` : "",
+    c.mediaAdded > 0 ? `将复制 ${c.mediaAdded} 张本机没有的照片原件。` : "",
+    "现有数据只会被添加或更新，不会被整体替换；合并前会自动保留一份当前数据的安全副本。",
+  ].filter(Boolean).join("");
+  const confirmed = await askConfirm("合并导入这份备份？", lines, "确认合并");
+  if (!confirmed) return;
+  mergeBackupButton.disabled = true;
+  mergeBackupButton.textContent = "正在合并…";
+  try {
+    if (!(await flushBeforeLeave())) return;
+    const result = await api.mergeBackup(token);
+    pickedToken = null;
+    pickedBackup.hidden = true;
+    session = createSession();
+    const m = result.plan.counts;
+    showAppNotice(`合并完成：新增 ${m.added} 条、更新 ${m.updated} 条、冲突副本 ${m.conflictCopiesAdded} 份、已删除未复活 ${m.skippedDeleted} 条。合并前的数据已保存在 ${result.safetyBackup}`, "ok");
+    await refreshDrafts();
+    await refreshTimeline();
+  } catch (error) {
+    showError(error);
+  } finally {
+    mergeBackupButton.disabled = false;
+    mergeBackupButton.textContent = "合并导入";
   }
 }
 
@@ -969,7 +1059,7 @@ async function restoreBackupNow(): Promise<void> {
     showError(error);
   } finally {
     restoreBackupButton.disabled = false;
-    restoreBackupButton.textContent = "用这份备份覆盖恢复";
+    restoreBackupButton.textContent = "覆盖恢复";
   }
 }
 
@@ -1082,6 +1172,13 @@ exportBackupButton.addEventListener("click", () => { void exportBackupNow(); });
 pickBackupButton.addEventListener("click", () => { void pickBackupNow(); });
 restoreBackupButton.addEventListener("click", () => { void restoreBackupNow(); });
 discardPickedButton.addEventListener("click", () => { void clearPicked(); });
+unlockButton.addEventListener("click", () => { void unlockBackupNow(); });
+mergeBackupButton.addEventListener("click", () => { void mergeBackupNow(); });
+encryptToggle.addEventListener("change", () => {
+  encryptFields.hidden = !encryptToggle.checked;
+  plainWarning.hidden = encryptToggle.checked;
+  if (!encryptToggle.checked) { backupPassword.value = ""; backupPassword2.value = ""; }
+});
 emptyTrashButton.addEventListener("click", () => { void emptyTrash(); });
 keepMineButton.addEventListener("click", () => { void resolveKeepMine(); });
 keepFormalButton.addEventListener("click", () => { void resolveKeepFormal(); });

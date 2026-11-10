@@ -552,6 +552,10 @@
       .data-result dd { margin: 0; }
       .todo-list { margin: 6px 0; padding-left: 0; list-style: none; line-height: 1.9; font-size: 0.92rem; }
       .pill.todo { background: #e9e1d8; color: #7a6a5c; margin-right: 8px; }
+      .pill.ok-pill { background: #e2efdc; color: #4c6b3f; margin-right: 8px; }
+      .check-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 0.95rem; color: #5a4a3d; }
+      .encrypt-fields { display: grid; gap: 8px; margin: 8px 0; max-width: 360px; }
+      .encrypt-fields input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(120, 90, 60, 0.25); background: #fffdf9; font-size: 0.95rem; }
       .confirm-dialog {
         width: min(100% - 40px, 390px);
         padding: 22px;
@@ -737,7 +741,13 @@
             <article class="data-card">
               <h2>导出备份</h2>
               <p class="data-desc">把正式记录、草稿、回收站、冲突副本、删除记录和照片原件打包成一个 <code>.sgbak</code> 文件。导出不会改动现有数据。</p>
-              <p class="data-desc warn-text">这是未加密的明文备份，任何拿到文件的人都能读到内容，请妥善保管。</p>
+              <label class="check-row"><input type="checkbox" id="encrypt-toggle" data-testid="encrypt-toggle" /> 使用口令加密（可选）</label>
+              <div id="encrypt-fields" class="encrypt-fields" hidden>
+                <input type="password" id="backup-password" data-testid="backup-password" placeholder="设置口令" autocomplete="new-password" />
+                <input type="password" id="backup-password2" data-testid="backup-password2" placeholder="再输入一次" autocomplete="new-password" />
+                <p class="data-desc warn-text">口令丢失将无法找回备份内容——拾光不保存口令，也无法帮你重置。</p>
+              </div>
+              <p class="data-desc warn-text" id="plain-warning">不加密时是明文备份，任何拿到文件的人都能读到内容，请妥善保管。</p>
               <div class="card-actions start">
                 <button type="button" class="button" data-testid="export-backup" id="export-backup">导出备份</button>
               </div>
@@ -752,22 +762,34 @@
               </div>
               <div id="picked-backup" data-testid="picked-backup" class="data-result" hidden>
                 <div id="picked-summary"></div>
-                <p class="data-desc warn-text">覆盖恢复会用这份备份替换当前全部数据；恢复前会自动在本机留一份当前数据的安全副本。</p>
+                <div id="unlock-area" class="encrypt-fields" hidden>
+                  <p class="data-desc">这是加密备份，请输入导出时设置的口令。</p>
+                  <input type="password" id="unlock-password" data-testid="unlock-password" placeholder="备份口令" autocomplete="current-password" />
+                  <div class="card-actions start">
+                    <button type="button" class="button" data-testid="unlock-backup" id="unlock-backup">解锁并校验</button>
+                  </div>
+                </div>
+                <div id="picked-actions" hidden>
+                  <p class="data-desc"><strong>合并导入</strong>：保留现有数据，只添加新记录、更新较新的版本；有分歧时两份都留（冲突副本）；本机已永久删除的记录不会被旧备份带回来。</p>
+                  <p class="data-desc warn-text"><strong>覆盖恢复</strong>：用这份备份替换当前全部数据。两种方式都会先在本机自动留一份当前数据的安全副本。</p>
+                  <div class="card-actions start">
+                    <button type="button" class="button" data-testid="merge-backup" id="merge-backup">合并导入</button>
+                    <button type="button" class="button danger" data-testid="restore-backup" id="restore-backup">覆盖恢复</button>
+                  </div>
+                </div>
                 <div class="card-actions start">
-                  <button type="button" class="button danger" data-testid="restore-backup" id="restore-backup">用这份备份覆盖恢复</button>
                   <button type="button" class="button ghost" data-testid="discard-picked" id="discard-picked">取消</button>
                 </div>
               </div>
             </article>
 
             <article class="data-card muted" data-testid="backup-not-implemented">
-              <h2>还没做的功能</h2>
+              <h2>说明与尚未做的</h2>
               <ul class="todo-list">
-                <li><span class="pill todo">未实现</span>安全合并：把备份合并进现有数据（目前只有整库覆盖恢复）。</li>
-                <li><span class="pill todo">未实现</span>口令加密备份：目前导出的都是明文备份。</li>
-                <li><span class="pill todo">未实现</span>防复活检查：合并旧备份时阻止已永久删除的内容回来（依赖安全合并）。</li>
+                <li><span class="pill ok-pill">已支持</span>安全合并、防复活（本机已永久删除的记录不会被旧备份带回）、口令加密（Argon2id + XChaCha20-Poly1305）。</li>
+                <li><span class="pill todo">未实现</span>多设备自动同步：备份是手动的完整副本，不是同步。</li>
+                <li><span class="pill todo">注意</span>新设备如果只有一份删除前的旧备份，无法知道后来删除过什么。</li>
               </ul>
-              <p class="data-desc">删除记录（墓碑）已经随备份一起保存，为以后的合并与防复活做准备。</p>
             </article>
           </section>
         </div>
