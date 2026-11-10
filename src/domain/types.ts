@@ -65,3 +65,31 @@ export interface MediaReport {
 export type PhotoStatus = "available" | "missing" | "corrupt";
 export interface PurgeResult { deletionMarkers: DeletionMarker[]; quarantined: QuarantinedMedia[]; durability: Durability }
 export type StoreStatus = { ok: true } | { ok: false; code: string; message: string };
+
+// ---- Unit-0.5 备份/恢复（G03 最小版）----
+export interface BackupCounts {
+  formal: number; drafts: number; trashed: number; deletionMarkers: number;
+  conflictCopies: number; mediaFiles: number; missingMedia: number;
+}
+/** 来自备份包 manifest 的摘要；encryption 目前只有 "none"（口令加密未实现）。 */
+export interface BackupSummary {
+  formatVersion: number; schemaVersion: number; appVersion: string; exportedAt: string;
+  bytes: number; encryption: "none"; counts: BackupCounts;
+}
+export type BackupPlatform = "desktop" | "android" | "preview";
+/** 本单元只实现覆盖恢复；以下能力如实报告为未实现。 */
+export interface BackupCapabilities {
+  platform: BackupPlatform; overwriteRestore: true;
+  merge: false; encryption: false; antiResurrection: false;
+  /** android: "saf"=系统文件选择器；"appDir"=仅应用专属目录（退路） */
+  fileAccess: "dialog" | "saf" | "appDir" | "preview";
+}
+export type ExportBackupResult =
+  | { cancelled: true }
+  | { cancelled: false; fileName: string; location: string; sha256: string; summary: BackupSummary; missingMedia: string[] };
+export type PickBackupResult =
+  | { cancelled: true }
+  | { cancelled: false; token: string; fileName: string; summary: BackupSummary };
+export interface RestoreBackupResult {
+  restored: BackupCounts; safetyBackup: string; mediaReport: MediaReport; durability: Durability;
+}
