@@ -77,6 +77,9 @@ fn interrupted_export_then_reopen() {
     }
 }
 
+// 陈旧 owner 的判定依赖 /proc（Android / Linux）；没有 /proc 的平台按设计
+// 从不抢占未知 owner（见 lock.rs without_proc_an_unknown_owner_is_never_stolen）。
+#[cfg(any(target_os = "linux", target_os = "android"))]
 #[test]
 fn process_killed_during_export_then_reopen() {
     android();
