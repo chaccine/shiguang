@@ -1,0 +1,19 @@
+{
+  "restoredCounts": {
+    "formal": 4,
+    "drafts": 3,
+    "trashed": 0,
+    "deletionMarkers": 0,
+    "conflictCopies": 0,
+    "mediaFiles": 2,
+    "missingMedia": 0
+  },
+  "safetyBackupDir": "/workspace/shiguang-app/evidence/acceptance/u05/data-victim/backups/pre-restore-20261109T100000Z-652446-0",
+  "mediaReport": {
+    "quarantined": [],
+    "missing": [],
+    "corrupt": [],
+    "checkedAt": "2026-11-09T10:00:00Z"
+  }
+}
+

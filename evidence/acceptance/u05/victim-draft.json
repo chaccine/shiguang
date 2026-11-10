@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "record": {
+    "status": "active",
+    "trashedAt": null,
+    "recordId": "rec-000001",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "",
+      "body": "受害库的合成草稿",
+      "eventDate": "2026-11-10",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "6ad57198a259a463afae84e3950c6b55f1bbd0bd754ae47ead43fcd8c2326612",
+  "formalContentHash": null,
+  "durability": "durable"
+}
+

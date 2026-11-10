@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "BACKUP_TRUNCATED",
+  "message": "备份文件不完整（可能拷贝中断）"
+}
+

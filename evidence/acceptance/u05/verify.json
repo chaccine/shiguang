@@ -1,0 +1,17 @@
+{
+  "counts": {
+    "formal": 4,
+    "drafts": 3,
+    "trashed": 0,
+    "deletionMarkers": 0,
+    "conflictCopies": 0,
+    "mediaFiles": 2,
+    "missingMedia": 0
+  },
+  "exportedAt": "2026-11-09T10:00:00Z",
+  "appVersion": "0.1.4",
+  "schemaVersion": 2,
+  "bytes": 60461,
+  "missingMedia": []
+}
+

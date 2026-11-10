@@ -37,10 +37,8 @@ CAPTURED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "- npm：$NPM_VERSION"
   echo "- 验收固定时钟：SHIGUANG_CLOCK=2026-11-09T10:00:00Z"
   echo "- SHIGUANG_SEED：20261109"
-  echo "- pkg-config：未安装（command -v pkg-config 无结果）"
-  echo "- webkit2gtk-4.1 / gtk+-3.0：无法通过 pkg-config 探测；环境无 sudo/apt/全局安装权限"
-  echo "- Tauri 构建：BLOCKED，详见 evidence/tauri-cargo-check.log 与 UNIT0_REPORT.md"
-  echo "- Android / 第二桌面 OS：NOT_RUN"
+  echo "- box 缺 webkit2gtk（无 sudo），本机不构建桌面壳；Tauri 三端打包与 Android APK 由 GitHub Actions 构建"
+  echo "- 真机（Android / macOS / Windows）行为：见各单元报告，未实测项为 NOT_RUN"
   echo
   echo "## 工具链原位输出"
   echo
@@ -60,6 +58,7 @@ cargo build --offline -p shiguang >"$ACC/cargo-build.log" 2>&1
 
 echo "== 2/6 Rust 与前端测试 =="
 cargo test --offline >"$ACC/cargo-test.log" 2>&1
+cargo test --offline -p shiguang_core --features fault-injection >"$ACC/cargo-fault.log" 2>&1
 npm run test >"$ACC/frontend-test.log" 2>&1
 npm run typecheck >"$ACC/frontend-typecheck.log" 2>&1
 npm run build >"$ACC/frontend-build.log" 2>&1
@@ -177,6 +176,54 @@ FUTURE_ID="$(jget "$ACC/future-draft.json" "record.recordId")"
 shg commit "$FUTURE_ID" >"$ACC/future-commit.json"
 shg get "$FUTURE_ID" >"$ACC/future-get.json"
 shg dump >"$ACC/dump.json"
+
+echo "== U05 备份导出/校验/覆盖恢复（CLI，合成数据）=="
+U05="$ACC/u05"
+mkdir -p "$U05"
+tree_sha() {
+  # 数据根下除锁文件外每个文件的 sha256（相对路径排序）
+  (cd "$1" && find . -type f ! -name '.write.lock' ! -name '.instance.lock' ! -name '*.owner' | LC_ALL=C sort | while read -r f; do
+    printf '%s  %s\n' "$(sha_file "$f")" "$f"; done)
+}
+tree_sha "$DATA" >"$U05/source-before-export.sha"
+shg export-backup "$U05/full.sgbak" >"$U05/export.json"
+tree_sha "$DATA" >"$U05/source-after-export.sha"
+cmp "$U05/source-before-export.sha" "$U05/source-after-export.sha" || { echo "FAIL: 导出改动了源数据" >&2; exit 1; }
+"$BIN" verify-backup "$U05/full.sgbak" >"$U05/verify.json"
+expect_fail "$U05/restore-without-yes.json" "$BIN" --data-dir "$U05/data-restored" restore-backup "$U05/full.sgbak"
+node -e '
+const fs = require("fs");
+const buf = fs.readFileSync(process.argv[1]);
+const flipped = Buffer.from(buf); flipped[Math.floor(buf.length / 2)] ^= 0xff;
+fs.writeFileSync(process.argv[2], flipped);
+fs.writeFileSync(process.argv[3], buf.subarray(0, buf.length - 20));
+' "$U05/full.sgbak" "$U05/corrupt.sgbak" "$U05/truncated.sgbak"
+expect_fail "$U05/verify-corrupt.json" "$BIN" verify-backup "$U05/corrupt.sgbak"
+expect_fail "$U05/verify-truncated.json" "$BIN" verify-backup "$U05/truncated.sgbak"
+# 坏包覆盖恢复到“现有数据”必须被拒绝且现有数据逐字节不变
+mkdir -p "$U05/data-victim"
+"$BIN" --data-dir "$U05/data-victim" draft-new --body "受害库的合成草稿" --date "2026-11-10" >"$U05/victim-draft.json"
+tree_sha "$U05/data-victim" >"$U05/victim-before.sha"
+expect_fail "$U05/restore-corrupt.json" "$BIN" --data-dir "$U05/data-victim" restore-backup "$U05/corrupt.sgbak" --yes
+tree_sha "$U05/data-victim" >"$U05/victim-after.sha"
+cmp "$U05/victim-before.sha" "$U05/victim-after.sha" || { echo "FAIL: 坏包恢复改动了现有数据" >&2; exit 1; }
+# 好包覆盖恢复到受害库：内容 = 源库，且留下安全副本
+"$BIN" --data-dir "$U05/data-victim" restore-backup "$U05/full.sgbak" --yes >"$U05/restore.json"
+"$BIN" --data-dir "$U05/data-victim" dump >"$U05/restored-dump.json"
+shg dump >"$U05/source-dump.json"
+node -e '
+const fs = require("fs");
+const a = JSON.parse(fs.readFileSync(process.argv[1], "utf8")).state;
+const b = JSON.parse(fs.readFileSync(process.argv[2], "utf8")).state;
+const pick = (s) => JSON.stringify({ records: s.records, deletionMarkers: s.deletionMarkers, conflictCopies: s.conflictCopies, seq: s.seq, seed: s.seed, schemaVersion: s.schemaVersion });
+if (pick(a) !== pick(b)) { console.error("FAIL: 恢复后状态与源库不一致"); process.exit(1); }
+const r = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+if (!fs.existsSync(r.safetyBackupDir)) { console.error("FAIL: 缺少安全副本"); process.exit(1); }
+console.log("U05 往返一致，记录数", a.records.length, "安全副本", r.safetyBackupDir);
+' "$U05/source-dump.json" "$U05/restored-dump.json" "$U05/restore.json" >"$U05/roundtrip.log"
+(cd "$DATA/media" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha_file "$f")" "$f"; done) >"$U05/media-source.sha"
+(cd "$U05/data-victim/media" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha_file "$f")" "$f"; done) >"$U05/media-restored.sha"
+cmp "$U05/media-source.sha" "$U05/media-restored.sha" || { echo "FAIL: 恢复后原图与源库不一致" >&2; exit 1; }
 
 echo "== 6/6 AC-U0-11 manifest 与总校验 =="
 shg manifest --out "$EVID/manifest.json" \
