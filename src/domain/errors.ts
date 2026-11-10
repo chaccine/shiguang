@@ -52,6 +52,25 @@ export function describeError(error: unknown): ErrorDescription {
     STORE_NOT_EXCLUSIVE: "请先关闭其他拾光窗口，再重新打开以检查照片；原数据未改动。",
   };
   if (storeErrors[code]) return { kind: "io", title: "暂时无法打开或写入数据", detail: storeErrors[code] + diagnostic };
+  const backupErrors: Record<string, [string, string]> = {
+    BACKUP_INVALID: ["这不是可用的拾光备份", "所选文件不是拾光备份，或文件结构已损坏。当前数据没有任何改动。"],
+    BACKUP_TRUNCATED: ["备份文件不完整", "文件可能在拷贝或下载时中断，请重新拷贝完整的备份文件。当前数据没有任何改动。"],
+    BACKUP_CORRUPT: ["备份文件已损坏或被修改", "校验和不一致，为保护你的数据已拒绝恢复。当前数据没有任何改动。"],
+    BACKUP_SCHEMA_TOO_NEW: ["备份来自更新版本的拾光", "请先把拾光升级到新版本再恢复这份备份。当前数据没有任何改动。"],
+    BACKUP_FORMAT_TOO_NEW: ["备份格式来自更新版本的拾光", "请先升级拾光再恢复。当前数据没有任何改动。"],
+    BACKUP_ENCRYPTED_UNSUPPORTED: ["暂不支持加密备份", "这份备份使用了口令加密，当前版本尚未实现口令解密。当前数据没有任何改动。"],
+    BACKUP_TOKEN_INVALID: ["请重新选择备份文件", "之前选择的备份已失效（可能应用重启过）。当前数据没有任何改动。"],
+    BACKUP_DEST_EXISTS: ["目标位置已有同名文件", "请换一个文件名或位置再导出。"],
+    BACKUP_SOURCE_CHANGED: ["导出时数据发生了变化", "为保证备份一致，这次导出已取消，请重试。当前数据没有任何改动。"],
+    BACKUP_WRITE_FAILED: ["备份没有写完", "可能是空间不足或没有写入权限；未生成不完整的备份文件，当前数据没有任何改动。"],
+    BACKUP_IO_FAILED: ["备份文件读写失败", "请检查所选位置是否可访问、空间是否充足后重试。当前数据没有任何改动。"],
+    RESTORE_SAFETY_BACKUP_FAILED: ["无法先保存当前数据的安全副本", "为了不丢数据，恢复已取消。请检查可用空间后重试。当前数据没有任何改动。"],
+    RESTORE_FAILED: ["恢复没有完成，已回到恢复前的数据", "切换过程中出错，已整体回滚，现有数据保持原样。"],
+  };
+  if (backupErrors[code]) {
+    const [title, detail] = backupErrors[code]!;
+    return { kind: "io", title, detail: `${detail}${diagnostic}` };
+  }
   if (code.startsWith("MIGRATION_")) {
     const detail = code === "MIGRATION_BACKUP_FAILED"
       ? "迁移前备份未完成，原数据未改动。请检查可用空间与目录权限后重新打开。"

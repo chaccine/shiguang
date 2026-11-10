@@ -39,6 +39,11 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     getRecord: (recordId) => invoke("get_record", { recordId }),
     photoDataUrl: (assetId) => invoke("photo_data_url", { assetId }),
     exportManifest: (outPath) => invoke("export_manifest", { outPath }),
+    backupCapabilities: () => invoke("backup_capabilities"),
+    exportBackup: () => invoke("export_backup"),
+    pickBackup: () => invoke("pick_backup"),
+    restoreBackup: (token) => invoke("restore_backup", { token }),
+    discardPickedBackup: (token) => invoke("discard_picked_backup", { token }),
   };
 }
 

@@ -1,4 +1,4 @@
-import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus } from "../domain/types.ts";
+import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus, BackupCapabilities, BackupCounts, BackupSummary, ExportBackupResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
 import { isValidDate, isValidTime, validateForCommit } from "../domain/rules.ts";
 import type { AttachPhotoBytesInput, CreateDraftInput, DiscardResult, SaveDraftInput, SaveResult, ShiguangApi } from "./api.ts";
@@ -17,6 +17,10 @@ interface MemoryState {
   quarantine: Record<string, MemoryAsset>;
 }
 type Operation = keyof ShiguangApi;
+/** 浏览器预览的备份包：manifest + 完整状态 + 整包哈希（模拟 .sgbak 的校验语义，不是真实文件）。 */
+interface PreviewBackup { magic: "SGBAK-PREVIEW"; body: string; sha256: string; bytes: number }
+export type PreviewPickKind = "lastExport" | "corrupt" | "truncated" | "schemaTooNew" | "encrypted" | "notBackup";
+const encoder = new TextEncoder();
 const copy = <T>(value: T): T => structuredClone(value);
 const fail = (code: string, message = code): never => { throw { code, message }; };
 const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, photos: [] });
@@ -33,6 +37,9 @@ export class MemoryAdapter implements ShiguangApi {
   private startupError?: { code: string; message: string };
   private lastMediaReport: MediaReport | null = null;
   private storage?: StorageLike;
+  private lastExport: PreviewBackup | null = null;
+  private picked = new Map<string, MemoryState>();
+  private nextPick: PreviewPickKind = "lastExport";
   private key: string;
   private now: () => string;
 
@@ -46,6 +53,8 @@ export class MemoryAdapter implements ShiguangApi {
     if (code) this.startupError = { code, message: describeError({ code }).detail };
     if (params.get("missing") === "1" || params.get("media") === "missing") this.simulateAllPhotos = "missing";
     if (params.get("media") === "corrupt") this.simulateAllPhotos = "corrupt";
+    const pick = params.get("backup");
+    if (pick && ["corrupt", "truncated", "schemaTooNew", "encrypted", "notBackup"].includes(pick)) this.nextPick = pick as PreviewPickKind;
     for (const id of options.missingAssets ?? []) this.simulatedPhotos.set(id, "missing");
     for (const id of options.corruptAssets ?? []) this.simulatedPhotos.set(id, "corrupt");
     if (!this.startupError) this.state = this.reload();
@@ -398,6 +407,102 @@ export class MemoryAdapter implements ShiguangApi {
     // 预览环境没有文件系统，明确报告无法导出，避免假装写入成功。
     return fail("IO_ERROR", `浏览器预览无法写入文件：${outPath}`);
   }
+
+  // ---- Unit-0.5 备份/恢复（预览：同语义的内存实现，供截图与 TS 测试）----
+  /** 预览中模拟“用户选中的文件”。默认选最近一次导出的包。 */
+  setNextPickedBackup(kind: PreviewPickKind): void { this.nextPick = kind; }
+  private counts(state: MemoryState): BackupCounts {
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const present = [...referenced].filter((id) => state.assets[id]);
+    return {
+      formal: state.records.filter((r) => r.status === "active" && r.formal !== null).length,
+      drafts: state.records.filter((r) => r.draft !== null).length,
+      trashed: state.records.filter((r) => r.status === "trashed").length,
+      deletionMarkers: state.deletionMarkers.length,
+      conflictCopies: state.conflictCopies.length,
+      mediaFiles: present.length,
+      missingMedia: referenced.size - present.length,
+    };
+  }
+  private packBackup(state: MemoryState, overrides: Partial<BackupSummary> = {}): PreviewBackup {
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const assets: Record<string, MemoryAsset> = {};
+    for (const id of referenced) if (state.assets[id]) assets[id] = state.assets[id]!;
+    const packed = { ...copy(state), assets, quarantine: {} };
+    const manifest = {
+      format: "shiguang-backup", formatVersion: 1, schemaVersion: 2, appVersion: "preview",
+      exportedAt: this.now(), encryption: { mode: "none" }, compression: "none", counts: this.counts(state), ...overrides,
+    };
+    const body = JSON.stringify({ manifest, state: packed });
+    const bytes = encoder.encode(body);
+    return { magic: "SGBAK-PREVIEW", body, sha256: sha256(bytes), bytes: bytes.length };
+  }
+  private verifyPreview(pkg: PreviewBackup): { summary: BackupSummary; state: MemoryState } {
+    if (!pkg || pkg.magic !== "SGBAK-PREVIEW" || typeof pkg.body !== "string") fail("BACKUP_INVALID", "这不是拾光备份文件，或文件已损坏");
+    const bytes = encoder.encode(pkg.body);
+    if (bytes.length !== pkg.bytes) fail("BACKUP_TRUNCATED", "备份文件不完整（可能拷贝中断）");
+    if (sha256(bytes) !== pkg.sha256) fail("BACKUP_CORRUPT", "备份文件内容被修改或损坏");
+    let parsed: { manifest: Record<string, unknown> & { counts: BackupCounts; encryption: { mode: string } }; state: MemoryState };
+    try { parsed = JSON.parse(pkg.body); } catch { return fail("BACKUP_CORRUPT", "备份清单无法解析"); }
+    const m = parsed.manifest;
+    if (m.format !== "shiguang-backup") fail("BACKUP_INVALID", "这不是拾光备份文件");
+    if (Number(m.formatVersion) > 1) fail("BACKUP_FORMAT_TOO_NEW", "备份格式来自更新版本的拾光");
+    if (m.encryption?.mode !== "none") fail("BACKUP_ENCRYPTED_UNSUPPORTED", "此备份已加密，当前版本尚不支持口令解密");
+    if (Number(m.schemaVersion) > 2) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
+    const summary: BackupSummary = {
+      formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
+      exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: "none", counts: m.counts,
+    };
+    return { summary, state: parsed.state };
+  }
+  async backupCapabilities(): Promise<BackupCapabilities> {
+    return { platform: "preview", overwriteRestore: true, merge: false, encryption: false, antiResurrection: false, fileAccess: "preview" };
+  }
+  async exportBackup(): Promise<ExportBackupResult> {
+    this.check("exportBackup");
+    const state = this.reload(), pkg = this.packBackup(state);
+    // 导出只读：不改动当前状态与存储。
+    this.lastExport = pkg;
+    const { summary } = this.verifyPreview(pkg);
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const missingMedia = [...referenced].filter((id) => !state.assets[id] || this.assetStatus(state, id) === "missing").sort();
+    const stamp = this.now().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-").replace(/Z$/, "");
+    return { cancelled: false, fileName: `拾光备份-${stamp}.sgbak`, location: "浏览器预览（内存，未写入文件）", sha256: pkg.sha256, summary, missingMedia };
+  }
+  async pickBackup(): Promise<PickBackupResult> {
+    this.check("pickBackup");
+    let pkg: PreviewBackup | null = this.lastExport ? copy(this.lastExport) : null;
+    const base = () => pkg ?? this.packBackup(this.reload());
+    switch (this.nextPick) {
+      case "lastExport": break;
+      case "corrupt": { const b = base(); pkg = { ...b, body: b.body.replace("合成", "篡改") }; if (pkg.body === b.body) pkg.sha256 = "0".repeat(64); break; }
+      case "truncated": { const b = base(); pkg = { ...b, body: b.body.slice(0, Math.floor(b.body.length / 2)) }; break; }
+      case "schemaTooNew": pkg = this.packBackup(this.reload(), { schemaVersion: 99 }); break;
+      case "encrypted": pkg = this.packBackup(this.reload(), { encryption: { mode: "aead-preview" } } as unknown as Partial<BackupSummary>); break;
+      case "notBackup": pkg = { magic: "PNG" as "SGBAK-PREVIEW", body: "", sha256: "", bytes: 0 }; break;
+    }
+    if (!pkg) return { cancelled: true };
+    const { summary, state } = this.verifyPreview(pkg);
+    const token = `pick-${this.picked.size + 1}-${Date.now()}`;
+    this.picked.set(token, state);
+    return { cancelled: false, token, fileName: "拾光备份-预览.sgbak", summary };
+  }
+  async restoreBackup(token: string): Promise<RestoreBackupResult> {
+    this.check("restoreBackup");
+    const incoming = this.picked.get(token) ?? fail("BACKUP_TOKEN_INVALID", "请重新选择备份文件");
+    const current = this.reload();
+    const stamp = this.now().replace(/[-:.]/g, "");
+    const safetyKey = `${this.key}.pre-restore.${stamp}`;
+    // 先留安全副本；写入失败则整体中止，当前数据不变。
+    try { this.storage?.setItem(safetyKey, JSON.stringify(current)); }
+    catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
+    const next: MemoryState = { ...copy(incoming), quarantine: copy(current.quarantine) };
+    this.persist(next);
+    this.picked.delete(token);
+    const mediaReport = await this.mediaReport();
+    return { restored: this.counts(next), safetyBackup: `backups/pre-restore-${stamp}`, mediaReport, durability: this.durabilityMode };
+  }
+  async discardPickedBackup(token: string): Promise<void> { this.picked.delete(token); }
 }
 
 export function createMemoryApi(options: ConstructorParameters<typeof MemoryAdapter>[0] = {}): MemoryAdapter {
