@@ -2,6 +2,14 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FaultPoint {
+    BackupWrite,
+    BackupFinalize,
+    RestoreStage,
+    RestoreSafety,
+    RestoreSwitchMedia,
+    RestoreSwitchState,
+    RestoreAfterCommit,
+    CrashAfterMediaSwap,
     MigrationBackup,
     MigrationWrite,
     AfterMediaWrite,

@@ -1,0 +1,328 @@
+Unit-0.5 core + CLI evidence (synthetic data only)
+Toolchain: rustc 1.90.0 (1159e78c4 2025-09-14); cargo 1.90.0.
+Branch: feat/unit-0.5-backup. No commit, network, sudo, or third-party dependency added.
+
+Tests first: core/tests/unit05_backup.rs, unit05_faults.rs, CLI test were written before implementation.
+Initial core test run failed to compile because backup module / Store backup APIs did not yet exist.
+Additional regressions were first reproduced for identical state commit detection and non-JSON leading-zero integers.
+Existing test files / assertions are unchanged.
+
+Public APIs:
+Store::export_backup(&Path, &str) -> Result<ExportReport, CoreError>
+backup::verify_backup(&Path) -> Result<BackupInfo, CoreError>
+Store::restore_backup_overwrite(&mut self, &Path) -> Result<RestoreReport, CoreError>
+Types (backup module and crate reexports): BackupCounts, MissingMedia, BackupInfo, ExportReport, RestoreReport; each has to_json().
+sha256::Sha256::{new, update, finalize}, Default (streaming; existing digest APIs retained).
+CLI: export-backup <dest>; verify-backup <file>; restore-backup <file> --yes.
+verify-backup does not open/create a Store; missing --yes is rejected before opening/creating a Store.
+
+Format:
+8-byte SGBAK\0\0\x01; u64 LE manifest length; UTF-8 camelCase JSON; raw entries;
+48-byte trailer = SGBAKEND + SHA-256(all preceding bytes) + u64 LE preceding length.
+No compression/encryption; manifest cap 8 MiB; entry cap 100000; sizes bounded by actual package length.
+State entry first, referenced media sorted by filename; missing/corrupt referenced originals omitted and reported once per asset.
+Formal/draft counts count active rows with the corresponding snapshot; trashed counts count rows in trash.
+ExportReport.sha256 hashes the COMPLETE package, including trailer (distinct from trailer digest).
+Manifest and domain state JSON are materialized for parsing; container, media and state commit copy use 64 KiB buffers.
+
+Deliberate implementation refinements / deviations:
+- Reject Windows reserved device names, trailing dots, and case-insensitive path duplicates on every platform, in addition to SPEC whitelist.
+- Backup JSON parsing rejects >128 nesting and leading-zero integers before the shared strict parser.
+- Export publication uses same-directory hard_link + unlink instead of an overwriting rename: atomic no-clobber publication even if another exporter creates dest concurrently.
+  Filesystems without hard-link support fail safely and leave no destination/partial; internal app data/cache filesystems are the intended path.
+- Journal additionally stores stateSha256; delete journal LAST after archiving old and removing staging, so crashes during cleanup remain recoverable.
+- If staged state bytes exactly equal current state bytes, append one legal JSON newline to staged state before switching. This distinguishes the commit point without changing records/markers/conflicts/seq/seed.
+- Safety copies are permanent; replaced old media goes under safety/replaced/ and is never hard-deleted.
+- Windows atomic state replacement uses MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH), with temp handles closed first.
+- Existing preview.rs modulo expression changed to is_multiple_of to resolve its pre-existing Clippy warning; behavior unchanged.
+
+Scope / limits:
+Sections 1-7 implemented. Section 8 (Tauri/TS/UI), merge, encryption and cross-backup anti-resurrection are not implemented by design.
+Windows MSVC and Android cross-compilation checked offline; runtime tests executed on Linux only. macOS toolchain is not installed.
+Unrelated concurrent src-tauri/Cargo.toml and src-tauri/Cargo.lock changes were observed and left untouched.
+
+Safety cleanup ownership: only a directory successfully created by the current safety-copy attempt can be removed on failure; existing safety directories are preserved. Restore path allocation skips old/staging/safety name collisions.
+
+New test inventory (52 tests: 35 core integration + 15 fault-injection + 1 CLI + 1 internal safety regression):
+absent_reference
+absolute
+after_commit_plain_open_finishes_new_state
+after_commit_reopen_exclusive_finishes_new_state
+backslash
+backup::tests::existing_safety_directory_is_never_removed_on_create_failure
+backup_finalize_cleans_partial_and_preserves_source
+backup_write_cleans_partial_and_preserves_source
+cli_backup_roundtrip_requires_yes_and_verify_is_store_free
+committed_cleanup_is_idempotent_after_old_archive_and_staging_removal
+counts
+crash_after_media_swap_plain_open_restores_old
+crash_after_media_swap_reopen_exclusive_restores_old
+crash_between_media_renames_recovers_old_and_cleans_temps_afterwards
+dot
+double_dot
+duplicate
+empty_unpersisted_library_roundtrips
+encrypted
+entry_sha
+export_is_read_only_including_mtimes_and_refuses_existing_dest
+export_reloads_disk_snapshot_and_reports_corrupt_media
+format
+identical_state_crash_before_commit_restores_exact_old_media
+identical_state_switch_failure_still_rolls_back_media
+invalid_state
+large_original_roundtrips_across_multiple_stream_buffers
+legacy_v1_container_restores_and_migrates_to_v2
+long_name
+malformed_json_and_excessive_nesting_fail_before_any_restore_write
+manifest_limits_and_portable_path_aliases_are_rejected_without_writes
+media_inner
+media_outer
+media_switch_failure_rolls_back
+missing_field
+missing_state
+open_removes_only_abandoned_staging_without_journal
+overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews
+portable_locks_support_export_restore_without_nested_write_lock
+restore_requires_exclusive_and_verify_does_not_create_store
+restored_seed_is_preserved_across_reopen_and_future_writes
+rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts
+safety_failure_cleans_incomplete_copy
+schema
+size
+stage_failure_preserves_target
+state_switch_failure_rolls_back
+streaming_sha256_matches_standard_vectors_at_every_block_boundary
+symlink_media_and_journal_escape_never_write_outside_root
+traversal_media
+traversal_state
+truncation_and_nonbackup_never_modify_target
+
+Required final command output tails (and additional offline cross checks):
+$ cargo test --locked --offline
+Exit status: 0; test passes across suites: 130
+     Running tests/unit04_lock_unsupported.rs (target/debug/deps/unit04_lock_unsupported-ffb2c561b74df4cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_media.rs (target/debug/deps/unit04_media-1cf8848f2dafb7c5)
+
+running 6 tests
+test reconciliation_requires_exclusive_instance_and_does_not_touch_files ... ok
+test orphan_and_partial_originals_move_to_quarantine_with_identical_sha ... ok
+test referenced_missing_original_is_reported_without_record_mutation ... ok
+test referenced_wrong_size_is_reported_as_corrupt ... ok
+test referenced_same_size_wrong_sha_is_reported_as_corrupt ... ok
+test references_in_formal_draft_and_trash_are_never_quarantined ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit04_schema.rs (target/debug/deps/unit04_schema-9b7df9834d2999e9)
+
+running 5 tests
+test migration_function_and_table_expose_v1_to_v2 ... ok
+test too_new_schema_rejects_without_touching_state_temps_or_directories ... ok
+test transaction_reloading_legacy_schema_refuses_to_overwrite ... ok
+test explicit_v1_uses_same_migration_chain ... ok
+test missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-6014a2d8956a148c)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_attach_is_write_protected ... ok
+test trashed_commit_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_create_edit_is_write_protected ... ok
+test trashed_discard_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-8811ec0813275cdf)
+
+running 35 tests
+test empty_unpersisted_library_roundtrips ... ok
+test double_dot ... ok
+test backslash ... ok
+test counts ... ok
+test absolute ... ok
+test dot ... ok
+test duplicate ... ok
+test absent_reference ... ok
+test export_reloads_disk_snapshot_and_reports_corrupt_media ... ok
+test encrypted ... ok
+test export_is_read_only_including_mtimes_and_refuses_existing_dest ... ok
+test entry_sha ... ok
+test invalid_state ... ok
+test format ... ok
+test long_name ... ok
+test legacy_v1_container_restores_and_migrates_to_v2 ... ok
+test open_removes_only_abandoned_staging_without_journal ... ok
+test malformed_json_and_excessive_nesting_fail_before_any_restore_write ... ok
+test restore_requires_exclusive_and_verify_does_not_create_store ... ok
+test media_inner ... ok
+test media_outer ... ok
+test missing_field ... ok
+test missing_state ... ok
+test overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews ... ok
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test schema ... ok
+test size ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test traversal_media ... ok
+test traversal_state ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-305dbde29b1b7f05)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo test --locked --offline -p shiguang_core --features fault-injection
+Exit status: 0; test passes across suites: 157
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit04_schema.rs (target/debug/deps/unit04_schema-bd656b5bbe077317)
+
+running 5 tests
+test migration_function_and_table_expose_v1_to_v2 ... ok
+test too_new_schema_rejects_without_touching_state_temps_or_directories ... ok
+test transaction_reloading_legacy_schema_refuses_to_overwrite ... ok
+test explicit_v1_uses_same_migration_chain ... ok
+test missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-b95a1fbd44094b15)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_attach_is_write_protected ... ok
+test trashed_commit_is_write_protected ... ok
+test trashed_create_edit_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_discard_is_write_protected ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-c6c678c475c818b0)
+
+running 35 tests
+test empty_unpersisted_library_roundtrips ... ok
+test absent_reference ... ok
+test absolute ... ok
+test duplicate ... ok
+test backslash ... ok
+test double_dot ... ok
+test dot ... ok
+test counts ... ok
+test export_reloads_disk_snapshot_and_reports_corrupt_media ... ok
+test encrypted ... ok
+test export_is_read_only_including_mtimes_and_refuses_existing_dest ... ok
+test entry_sha ... ok
+test format ... ok
+test invalid_state ... ok
+test legacy_v1_container_restores_and_migrates_to_v2 ... ok
+test long_name ... ok
+test open_removes_only_abandoned_staging_without_journal ... ok
+test malformed_json_and_excessive_nesting_fail_before_any_restore_write ... ok
+test restore_requires_exclusive_and_verify_does_not_create_store ... ok
+test media_outer ... ok
+test missing_field ... ok
+test media_inner ... ok
+test missing_state ... ok
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews ... ok
+test schema ... ok
+test size ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test traversal_media ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test traversal_state ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-73f8bb25f51ac641)
+
+running 15 tests
+test backup_write_cleans_partial_and_preserves_source ... ok
+test backup_finalize_cleans_partial_and_preserves_source ... ok
+test crash_between_media_renames_recovers_old_and_cleans_temps_afterwards ... ok
+test crash_after_media_swap_plain_open_restores_old ... ok
+test committed_cleanup_is_idempotent_after_old_archive_and_staging_removal ... ok
+test crash_after_media_swap_reopen_exclusive_restores_old ... ok
+test after_commit_plain_open_finishes_new_state ... ok
+test after_commit_reopen_exclusive_finishes_new_state ... ok
+test identical_state_crash_before_commit_restores_exact_old_media ... ok
+test identical_state_switch_failure_still_rolls_back_media ... ok
+test stage_failure_preserves_target ... ok
+test portable_locks_support_export_restore_without_nested_write_lock ... ok
+test safety_failure_cleans_incomplete_copy ... ok
+test media_switch_failure_rolls_back ... ok
+test state_switch_failure_rolls_back ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo clippy --locked --offline --all-targets -- -D warnings
+Exit status: 0; test passes across suites: 0
+    Checking shiguang_core v0.1.4 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.4 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.85s
+
+$ cargo check --locked --offline --workspace --all-targets --target x86_64-pc-windows-msvc
+Exit status: 0; test passes across suites: 0
+    Checking shiguang_core v0.1.4 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.4 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s
+
+$ cargo check --locked --offline --workspace --all-targets --target aarch64-linux-android
+Exit status: 0; test passes across suites: 0
+    Checking shiguang_core v0.1.4 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.4 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.66s
+
+$ cargo clippy --locked --offline -p shiguang_core --features fault-injection --all-targets -- -D warnings
+Exit status: 0; test passes across suites: 0
+    Checking shiguang_core v0.1.4 (/workspace/shiguang-app/core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.67s

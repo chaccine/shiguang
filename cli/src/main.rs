@@ -54,6 +54,21 @@ fn run() -> Result<Json, CoreError> {
 
     let root = data_dir.unwrap_or_else(|| PathBuf::from(".shiguang-data"));
     let rest = &args[1..];
+    if command == "verify-backup" {
+        if rest.len() != 1 {
+            return Err(CoreError::new("USAGE", "verify-backup <file>"));
+        }
+        return Ok(shiguang_core::backup::verify_backup(std::path::Path::new(&rest[0]))?.to_json());
+    }
+    if command == "restore-backup" && (rest.len() != 2 || rest[1] != "--yes") {
+        return Err(CoreError::new(
+            "USAGE",
+            "覆盖恢复会替换全部数据；请显式使用 restore-backup <file> --yes",
+        ));
+    }
+    if command == "export-backup" && rest.len() != 1 {
+        return Err(CoreError::new("USAGE", "export-backup <dest>"));
+    }
     // Test driver: announce readiness only after the requested lock is held.
     if command == "hold-lock" {
         let ms = rest
@@ -98,13 +113,19 @@ fn run() -> Result<Json, CoreError> {
             }
         }
     }
-    let mut store = if command == "reconcile" {
+    let mut store = if command == "reconcile" || command == "restore-backup" {
         Store::open_exclusive(root)?
     } else {
         Store::open(root)?
     };
 
     match command.as_str() {
+        "export-backup" => Ok(store
+            .export_backup(std::path::Path::new(&rest[0]), env!("CARGO_PKG_VERSION"))?
+            .to_json()),
+        "restore-backup" => Ok(store
+            .restore_backup_overwrite(std::path::Path::new(&rest[0]))?
+            .to_json()),
         "init" => Ok(Json::obj(vec![
             ("ok", Json::Bool(true)),
             ("dataDir", Json::str(store.root().display().to_string())),
@@ -536,6 +557,7 @@ fn usage() -> String {
         "",
         "命令:",
         "  init                                    初始化数据目录",
+        "  export-backup <dest> / verify-backup <file> / restore-backup <file> --yes",
         "  trash ID / restore ID / purge ID / empty-trash / list-trash",
         "  reconcile / resolve-conflict ID --choice keepMine|keepFormal / list-conflicts",
         "  restore-conflict-copy ID",

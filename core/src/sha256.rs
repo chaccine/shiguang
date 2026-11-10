@@ -66,28 +66,69 @@ fn compress(state: &mut [u32; 8], block: &[u8]) {
     state[7] = state[7].wrapping_add(h);
 }
 
+/// 增量 SHA-256；仅保留一个 64 字节分块。
+#[derive(Clone)]
+pub struct Sha256 {
+    state: [u32; 8],
+    block: [u8; 64],
+    used: usize,
+    bytes: u64,
+}
+impl Default for Sha256 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Sha256 {
+    pub fn new() -> Self {
+        Self {
+            state: H0,
+            block: [0; 64],
+            used: 0,
+            bytes: 0,
+        }
+    }
+    pub fn update(&mut self, mut data: &[u8]) {
+        self.bytes = self.bytes.wrapping_add(data.len() as u64);
+        if self.used != 0 {
+            let n = (64 - self.used).min(data.len());
+            self.block[self.used..self.used + n].copy_from_slice(&data[..n]);
+            self.used += n;
+            data = &data[n..];
+            if self.used < 64 {
+                return;
+            }
+            compress(&mut self.state, &self.block);
+            self.used = 0;
+        }
+        let mut chunks = data.chunks_exact(64);
+        for block in &mut chunks {
+            compress(&mut self.state, block);
+        }
+        let rem = chunks.remainder();
+        self.block[..rem.len()].copy_from_slice(rem);
+        self.used = rem.len();
+    }
+    pub fn finalize(mut self) -> [u8; 32] {
+        self.block[self.used] = 0x80;
+        self.block[self.used + 1..].fill(0);
+        if self.used >= 56 {
+            compress(&mut self.state, &self.block);
+            self.block.fill(0);
+        }
+        self.block[56..].copy_from_slice(&self.bytes.wrapping_mul(8).to_be_bytes());
+        compress(&mut self.state, &self.block);
+        let mut out = [0; 32];
+        for (i, word) in self.state.iter().enumerate() {
+            out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+        }
+        out
+    }
+}
 pub fn digest(data: &[u8]) -> [u8; 32] {
-    let mut state = H0;
-    let mut chunks = data.chunks_exact(64);
-    for block in &mut chunks {
-        compress(&mut state, block);
-    }
-    let rem = chunks.remainder();
-    let mut tail = Vec::with_capacity(128);
-    tail.extend_from_slice(rem);
-    tail.push(0x80);
-    while tail.len() % 64 != 56 {
-        tail.push(0);
-    }
-    tail.extend_from_slice(&((data.len() as u64) * 8).to_be_bytes());
-    for block in tail.chunks_exact(64) {
-        compress(&mut state, block);
-    }
-    let mut out = [0u8; 32];
-    for (i, word) in state.iter().enumerate() {
-        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
-    }
-    out
+    let mut hash = Sha256::new();
+    hash.update(data);
+    hash.finalize()
 }
 
 pub fn hex(bytes: &[u8]) -> String {

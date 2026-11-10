@@ -42,12 +42,12 @@ pub struct Store {
     seed: String,
     state: State,
     last_durability: Durability,
-    instance_lock: Option<crate::lock::LockGuard>,
+    pub(crate) instance_lock: Option<crate::lock::LockGuard>,
     pending_conflicts: std::collections::BTreeMap<String, (Snapshot, u32)>,
 }
 
 #[derive(Clone)]
-struct State {
+pub(crate) struct State {
     version: i64,
     seq: u64,
     records: Vec<RecordRow>,
@@ -220,6 +220,9 @@ impl Store {
             ));
         }
         let _write_lock = write_lock(&self.root)?;
+        self.reconcile_media_locked()
+    }
+    pub(crate) fn reconcile_media_locked(&mut self) -> Result<MediaReport, CoreError> {
         let state = self.candidate_state()?;
         let referenced = state.referenced_assets();
         let mut report = MediaReport {
@@ -263,18 +266,16 @@ impl Store {
         let Some(path) = self.find_asset_path(&photo.asset_id) else {
             return Ok(PhotoStatus::Missing);
         };
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
+        let (size, hash) = match crate::backup::hash_file(&path) {
+            Ok(result) => result,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(PhotoStatus::Missing),
             Err(e) => return Err(e.into()),
         };
-        Ok(
-            if bytes.len() as u64 != photo.bytes || sha256::hex_digest(&bytes) != photo.sha256 {
-                PhotoStatus::Corrupt
-            } else {
-                PhotoStatus::Available
-            },
-        )
+        Ok(if size != photo.bytes || hash != photo.sha256 {
+            PhotoStatus::Corrupt
+        } else {
+            PhotoStatus::Available
+        })
     }
     pub fn photo_status(&self, asset_id: &str) -> Result<PhotoStatus, CoreError> {
         let photos: Vec<_> = self
@@ -375,7 +376,12 @@ impl Store {
             .ok_or_else(|| CoreError::new("NO_DRAFT", "没有待保存的冲突草稿"))?;
         let (copy, _) = self.transact(|state| {
             ensure_active(state.row(record_id)?)?;
-            state.add_conflict(record_id, base_revision, snapshot.clone(), "revision_conflict");
+            state.add_conflict(
+                record_id,
+                base_revision,
+                snapshot.clone(),
+                "revision_conflict",
+            );
             state
                 .conflict_copies
                 .iter()
@@ -425,11 +431,17 @@ impl Store {
         preflight(&root)?;
         fs::create_dir_all(&root)?;
         let _write_lock = write_lock(&root)?;
-        let seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
+        crate::backup::recover(&root)?;
+        let mut seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
         let state_path = root.join(STATE_FILE);
         let state = if state_path.exists() {
             let text = fs::read_to_string(&state_path)?;
             let value = parse_state(&text)?;
+            seed = value
+                .get("seed")
+                .and_then(Json::as_str)
+                .unwrap_or(&seed)
+                .to_string();
             let from = schema::version(&value)?;
             if from < schema::CURRENT_SCHEMA_VERSION {
                 let backup_error = |e| {
@@ -508,6 +520,24 @@ impl Store {
         })
     }
 
+    pub(crate) fn backup_snapshot(&self) -> Result<Json, CoreError> {
+        let state = self.candidate_state()?;
+        match fs::read_to_string(self.root.join(STATE_FILE)) {
+            Ok(text) => parse_state(&text),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(state.to_json(&self.seed)),
+            Err(e) => Err(e.into()),
+        }
+    }
+    pub(crate) fn install_restored_state(&mut self, value: &Json) -> Result<(), CoreError> {
+        self.state = State::from_json(value)?;
+        self.seed = value
+            .get("seed")
+            .and_then(Json::as_str)
+            .ok_or_else(|| CoreError::io("seed 缺失"))?
+            .to_string();
+        self.pending_conflicts.clear();
+        Ok(())
+    }
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -1247,7 +1277,7 @@ impl State {
         ensure_active(row)?;
         Ok(row)
     }
-    fn photo_refs(&self) -> Vec<(&str, &PhotoUse)> {
+    pub(crate) fn photo_refs(&self) -> Vec<(&str, &PhotoUse)> {
         self.records
             .iter()
             .flat_map(|r| {
@@ -1331,7 +1361,7 @@ impl State {
         ])
     }
 
-    fn from_json(value: &Json) -> Result<Self, CoreError> {
+    pub(crate) fn from_json(value: &Json) -> Result<Self, CoreError> {
         let version = value
             .get("version")
             .and_then(Json::as_i64)
@@ -1473,7 +1503,7 @@ fn unique_path(dir: &Path, stem: &str, suffix: &str) -> PathBuf {
     }
 }
 
-fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
+pub(crate) fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
     let start = Instant::now();
     loop {
         match crate::lock::try_acquire(root, ".write.lock")? {
