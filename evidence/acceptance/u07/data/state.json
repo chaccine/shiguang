@@ -1,0 +1,103 @@
+{
+  "tags": [
+    {
+      "tagId": "tag-000004",
+      "name": "家人",
+      "normName": "家人",
+      "createdAt": "2026-11-09T10:00:00Z"
+    }
+  ],
+  "tagDictRevision": 3,
+  "tagAliases": [],
+  "tagTombstones": [
+    {
+      "tagId": "tag-000005",
+      "createdAt": "2026-11-09T10:00:00Z",
+      "deletedAt": "2026-11-09T10:00:00Z"
+    }
+  ],
+  "version": 1,
+  "mergeOrigins": [
+    {
+      "kind": "tag-skipped",
+      "sourceId": "tag-000005",
+      "createdAt": "2026-11-09T10:00:00Z",
+      "localId": ""
+    }
+  ],
+  "schemaVersion": 3,
+  "deletionMarkers": [],
+  "conflictCopies": [],
+  "seed": "20261109",
+  "seq": 5,
+  "records": [
+    {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [
+        "tag-000004"
+      ],
+      "tagRevision": 2,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000001",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "updatedAt": "2026-11-09T10:00:00Z",
+      "committedAt": "2026-11-09T10:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成：那年今日",
+        "body": "虚构的旧记录",
+        "eventDate": "2025-11-10",
+        "eventTime": "18:20",
+        "photos": []
+      },
+      "draft": null
+    },
+    {
+      "favorite": true,
+      "favoriteRevision": 1,
+      "tagIds": [],
+      "tagRevision": 2,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000002",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "updatedAt": "2026-11-09T10:00:00Z",
+      "committedAt": "2026-11-09T10:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成：今天下午",
+        "body": "虚构的今日记录",
+        "eventDate": "2026-11-10",
+        "eventTime": "16:45",
+        "photos": []
+      },
+      "draft": null
+    },
+    {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000003",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "updatedAt": "2026-11-09T10:00:00Z",
+      "committedAt": "2026-11-09T10:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成：没有时间",
+        "body": "虚构的无时间记录",
+        "eventDate": "2026-11-10",
+        "eventTime": null,
+        "photos": []
+      },
+      "draft": null
+    }
+  ]
+}

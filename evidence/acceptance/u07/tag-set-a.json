@@ -1,0 +1,12 @@
+{
+  "recordId": "rec-000001",
+  "favorite": false,
+  "favoriteRevision": 0,
+  "tagIds": [
+    "tag-000004",
+    "tag-000005"
+  ],
+  "tagRevision": 1,
+  "durability": "durable"
+}
+

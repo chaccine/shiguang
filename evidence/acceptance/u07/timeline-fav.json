@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "recordId": "rec-000002",
+      "eventDate": "2026-11-10",
+      "eventTime": "16:45",
+      "title": "合成：今天下午",
+      "excerpt": "虚构的今日记录",
+      "cover": null,
+      "photoCount": 0,
+      "favorite": true,
+      "favoriteRevision": 1,
+      "tagIds": [
+        "tag-000005"
+      ],
+      "tagRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "isFuture": true
+    }
+  ],
+  "nextCursor": null,
+  "total": 1
+}
+

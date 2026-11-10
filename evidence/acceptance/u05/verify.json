@@ -1,5 +1,7 @@
 {
   "counts": {
+    "tags": 0,
+    "favorites": 0,
     "formal": 4,
     "drafts": 3,
     "trashed": 0,
@@ -9,9 +11,9 @@
     "missingMedia": 0
   },
   "exportedAt": "2026-11-09T10:00:00Z",
-  "appVersion": "0.1.5",
-  "schemaVersion": 2,
-  "bytes": 60483,
+  "appVersion": "0.1.7",
+  "schemaVersion": 3,
+  "bytes": 61273,
   "missingMedia": []
 }
 

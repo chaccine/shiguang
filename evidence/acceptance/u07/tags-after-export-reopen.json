@@ -1,0 +1,19 @@
+{
+  "tags": [
+    {
+      "tagId": "tag-000004",
+      "name": "家人",
+      "createdAt": "2026-11-09T10:00:00Z",
+      "activeCount": 1,
+      "trashedCount": 0
+    },
+    {
+      "tagId": "tag-000005",
+      "name": "旅行",
+      "createdAt": "2026-11-09T10:00:00Z",
+      "activeCount": 2,
+      "trashedCount": 0
+    }
+  ]
+}
+

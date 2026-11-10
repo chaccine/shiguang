@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "record": {
+    "favorite": false,
+    "favoriteRevision": 0,
+    "tagIds": [],
+    "tagRevision": 0,
+    "status": "active",
+    "trashedAt": null,
+    "recordId": "rec-000003",
+    "contentRevision": 0,
+    "createdAt": "2026-11-09T10:00:00Z",
+    "updatedAt": "2026-11-09T10:00:00Z",
+    "committedAt": null,
+    "baseRevision": 0,
+    "formal": null,
+    "draft": {
+      "title": "合成：没有时间",
+      "body": "虚构的无时间记录",
+      "eventDate": "2026-11-10",
+      "eventTime": null,
+      "photos": []
+    }
+  },
+  "draftContentHash": "51aa36c3e15605dce83b46d3864a479a4de8056888e2c9d7a6857eab21493e3f",
+  "formalContentHash": null,
+  "durability": "durable"
+}
+

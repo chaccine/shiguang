@@ -273,6 +273,70 @@ if grep -rqF -- "$SHIGUANG_BACKUP_PASSWORD" "$U06" "$ACC"/*.log 2>/dev/null; the
 unset SHIGUANG_BACKUP_PASSWORD
 echo "U06 加密：错口令/缺口令/篡改均拒绝且数据不变；正确口令合并成功；口令未出现在任何输出中" >"$U06/crypto-check.log"
 
+echo "== U07 时光轴 / 日历 / 收藏 / 标签 + 热修复（导出后重开） =="
+U07="$ACC/u07"
+mkdir -p "$U07"
+u7() { "$BIN" --data-dir "$U07/data" "$@"; }
+u7_new() {
+  u7 draft-new --title "$1" --body "$2" --date "$3" ${4:+--time "$4"} >"$U07/new.json"
+  local id; id="$(jget "$U07/new.json" "record.recordId")"
+  u7 commit "$id" >/dev/null
+  printf '%s' "$id"
+}
+A_ID="$(u7_new "合成：那年今日" "虚构的旧记录" "2025-11-10" "18:20")"
+B_ID="$(u7_new "合成：今天下午" "虚构的今日记录" "2026-11-10" "16:45")"
+C_ID="$(u7_new "合成：没有时间" "虚构的无时间记录" "2026-11-10")"
+u7 favorite "$B_ID" on --expect 0 >"$U07/fav-on.json"
+expect_fail "$U07/fav-stale.json" u7 favorite "$B_ID" off --expect 0
+u7 tag-create "家人" >"$U07/tag-family.json"
+u7 tag-create "旅行" >"$U07/tag-travel.json"
+expect_fail "$U07/tag-dup.json" u7 tag-create " 家人 "
+FAM="$(jget "$U07/tag-family.json" "tagId")"; TRV="$(jget "$U07/tag-travel.json" "tagId")"
+u7 tag-set "$A_ID" "$FAM" "$TRV" --expect 0 >"$U07/tag-set-a.json"
+u7 tag-set "$B_ID" "$TRV" --expect 0 >"$U07/tag-set-b.json"
+u7 timeline --limit 2 >"$U07/timeline-p1.json"
+u7 timeline --limit 2 --cursor "$(jget "$U07/timeline-p1.json" "nextCursor")" >"$U07/timeline-p2.json"
+u7 timeline --favorites >"$U07/timeline-fav.json"
+u7 timeline --tag "$FAM" >"$U07/timeline-tag.json"
+u7 calendar 2026-11 >"$U07/calendar.json"
+u7 day 2026-11-10 >"$U07/day.json"
+u7 on-this-day 11-10 --today 2026-11-10 >"$U07/on-this-day.json"
+# 热修复：导出备份后，数据根逐字节不变，且立即可再次打开。
+tree_sha "$U07/data" >"$U07/before-export.sha"
+u7 export-backup "$U07/u07.sgbak" >"$U07/export.json"
+tree_sha "$U07/data" >"$U07/after-export.sha"
+cmp "$U07/before-export.sha" "$U07/after-export.sha" || { echo "FAIL: U07 导出改动了数据" >&2; exit 1; }
+u7 tags >"$U07/tags-after-export-reopen.json"
+# 删除标签后合并旧包：不复活。
+expect_fail "$U07/tag-delete-noyes.json" u7 tag-delete "$TRV"
+u7 tag-delete "$TRV" --yes >"$U07/tag-delete.json"
+u7 merge-backup "$U07/u07.sgbak" --yes >"$U07/merge1.json"
+u7 merge-backup "$U07/u07.sgbak" --yes >"$U07/merge2.json"
+u7 tags >"$U07/tags-after-merge.json"
+node -e '
+const fs = require("fs"); const r = (f) => JSON.parse(fs.readFileSync(process.argv[1] + "/" + f, "utf8"));
+const fail = (m, v) => { console.error("FAIL: " + m, v === undefined ? "" : JSON.stringify(v)); process.exit(1); };
+const [A, B, C] = process.argv.slice(2);
+const p1 = r("timeline-p1.json"), p2 = r("timeline-p2.json");
+const ids = [...p1.items, ...p2.items].map((x) => x.recordId);
+if (JSON.stringify(ids) !== JSON.stringify([B, C, A])) fail("时间轴顺序/分页", ids);
+if (p1.total !== 3 || p2.nextCursor != null) fail("分页总数/游标", [p1.total, p2.nextCursor]);
+if (r("timeline-fav.json").items.map((x) => x.recordId).join() !== B) fail("收藏筛选");
+if (r("timeline-tag.json").items.map((x) => x.recordId).join() !== A) fail("标签筛选");
+if (!fs.readFileSync(process.argv[1] + "/fav-stale.json.err", "utf8").includes("META_REVISION_CONFLICT")) fail("收藏 CAS");
+const day = r("calendar.json").days.find((d) => d.date === "2026-11-10");
+if (!day || day.count !== 2) fail("日历计数", day);
+if (r("day.json").items.length !== 2) fail("当天条目");
+const otd = r("on-this-day.json").years;
+if (otd.length !== 1 || otd[0].year !== 2025) fail("那年今日", otd);
+const names = r("tags-after-merge.json").tags.map((t) => t.name);
+if (names.includes("旅行") || !names.includes("家人")) fail("删除的标签被旧包复活", names);
+const m1 = r("merge1.json").plan, m2 = r("merge2.json").plan;
+if (m1.tagsAdded !== 0 || m1.tagsSkippedDeleted !== 1 || m1.added !== 0) fail("首次合并：删除的标签应被跳过", m1);
+if (m2.tagsAdded !== 0 || m2.added !== 0 || m2.updated !== 0 || m2.tagLinksUpdated !== 0 || r("merge2.json").safetyBackupDir !== null) fail("重复合并不幂等", m2);
+console.log("U07 通过：排序分页无重漏、收藏/标签筛选、CAS、日历、那年今日、导出后重开、删除标签不复活、合并幂等");
+' "$U07" "$A_ID" "$B_ID" "$C_ID" >"$U07/check.log"
+
 echo "== 6/6 AC-U0-11 manifest 与总校验 =="
 shg manifest --out "$EVID/manifest.json" \
   --rustc "$RUSTC_VERSION" \

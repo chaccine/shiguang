@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "recordId": "rec-000002",
+      "eventDate": "2026-11-10",
+      "eventTime": "16:45",
+      "title": "合成：今天下午",
+      "excerpt": "虚构的今日记录",
+      "cover": null,
+      "photoCount": 0,
+      "favorite": true,
+      "favoriteRevision": 1,
+      "tagIds": [
+        "tag-000005"
+      ],
+      "tagRevision": 1,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "isFuture": true
+    },
+    {
+      "recordId": "rec-000003",
+      "eventDate": "2026-11-10",
+      "eventTime": null,
+      "title": "合成：没有时间",
+      "excerpt": "虚构的无时间记录",
+      "cover": null,
+      "photoCount": 0,
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "isFuture": true
+    }
+  ],
+  "nextCursor": "5b22736737222c22323032362d31312d3130222c6e756c6c2c22323032362d31312d30395431303a30303a30305a222c227265632d303030303033222c2264657363225d",
+  "total": 3
+}
+

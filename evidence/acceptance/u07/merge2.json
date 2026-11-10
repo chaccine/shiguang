@@ -1,0 +1,32 @@
+{
+  "plan": {
+    "tagsAdded": 0,
+    "tagsRemapped": 0,
+    "tagsSkippedDeleted": 0,
+    "tagsDeletedInBackup": 0,
+    "favoritesUpdated": 0,
+    "tagLinksUpdated": 0,
+    "added": 0,
+    "updated": 0,
+    "unchanged": 3,
+    "conflicts": 0,
+    "keptTrashed": 0,
+    "keptActive": 0,
+    "skippedDeleted": [],
+    "deletedInBackup": [],
+    "markersAdded": 0,
+    "conflictCopiesAdded": 0,
+    "conflictCopiesDropped": 0,
+    "mediaAdded": 0,
+    "mediaMissing": 0,
+    "mediaConflicts": []
+  },
+  "safetyBackupDir": null,
+  "mediaReport": {
+    "quarantined": [],
+    "missing": [],
+    "corrupt": [],
+    "checkedAt": "2026-11-09T10:00:00Z"
+  }
+}
+
