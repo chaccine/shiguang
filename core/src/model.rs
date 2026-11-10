@@ -187,7 +187,7 @@ impl Snapshot {
     }
 }
 
-fn req_str(value: &Json, key: &str) -> Result<String, String> {
+pub(crate) fn req_str(value: &Json, key: &str) -> Result<String, String> {
     value
         .get(key)
         .and_then(Json::as_str)
@@ -195,7 +195,7 @@ fn req_str(value: &Json, key: &str) -> Result<String, String> {
         .ok_or_else(|| format!("字段 {key} 缺失或不是字符串"))
 }
 
-fn req_u32(value: &Json, key: &str) -> Result<u32, String> {
+pub(crate) fn req_u32(value: &Json, key: &str) -> Result<u32, String> {
     let n = value
         .get(key)
         .and_then(Json::as_i64)
@@ -206,7 +206,7 @@ fn req_u32(value: &Json, key: &str) -> Result<u32, String> {
     u32::try_from(n).map_err(|_| format!("字段 {key} 超出 u32 范围：{n}"))
 }
 
-fn req_u64(value: &Json, key: &str) -> Result<u64, String> {
+pub(crate) fn req_u64(value: &Json, key: &str) -> Result<u64, String> {
     let n = value
         .get(key)
         .and_then(Json::as_i64)
@@ -229,6 +229,10 @@ fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
 /// 记录的持久化形态：正式快照与草稿分字段保存。
 #[derive(Clone, Debug, Default)]
 pub struct RecordRow {
+    pub favorite: bool,
+    pub favorite_revision: u32,
+    pub tag_ids: Vec<String>,
+    pub tag_revision: u32,
     pub status: RecordStatus,
     pub trashed_at: Option<String>,
     pub record_id: String,
@@ -249,6 +253,13 @@ impl RecordRow {
 
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("favorite", Json::Bool(self.favorite)),
+            ("favoriteRevision", Json::Num(self.favorite_revision as i64)),
+            (
+                "tagIds",
+                Json::Arr(self.tag_ids.iter().map(Json::str).collect()),
+            ),
+            ("tagRevision", Json::Num(self.tag_revision as i64)),
             ("status", Json::str(self.status.as_str())),
             (
                 "trashedAt",
@@ -300,6 +311,23 @@ impl RecordRow {
             Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
         };
         Ok(RecordRow {
+            favorite: match value.get("favorite") {
+                Some(Json::Bool(v)) => *v,
+                _ => return Err("字段 favorite 必须是布尔值".into()),
+            },
+            favorite_revision: req_u32(value, "favoriteRevision")?,
+            tag_revision: req_u32(value, "tagRevision")?,
+            tag_ids: value
+                .get("tagIds")
+                .and_then(Json::as_arr)
+                .ok_or("字段 tagIds 必须是数组")?
+                .iter()
+                .map(|v| {
+                    v.as_str()
+                        .map(str::to_owned)
+                        .ok_or_else(|| "tagId 必须是字符串".to_string())
+                })
+                .collect::<Result<_, _>>()?,
             status: match value.get("status").and_then(Json::as_str) {
                 Some("active") => RecordStatus::Active,
                 Some("trashed") => RecordStatus::Trashed,

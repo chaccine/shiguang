@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Manager;
 
 mod backup_cmd;
+mod u07_cmd;
 
 /// 进程级共享状态：在注册命令前就交给 Tauri 管理（热修复：不再只在 setup 里 manage）。
 /// Android Activity 重建会在同一进程里再次进入 `run()`；此时复用同一个 Store，
@@ -707,7 +708,20 @@ pub fn run() {
             backup_cmd::discard_picked_backup,
             backup_cmd::unlock_backup,
             backup_cmd::plan_merge,
-            backup_cmd::merge_backup
+            backup_cmd::merge_backup,
+            u07_cmd::set_favorite,
+            u07_cmd::set_record_tags,
+            u07_cmd::list_tags,
+            u07_cmd::create_tag,
+            u07_cmd::rename_tag,
+            u07_cmd::merge_tags,
+            u07_cmd::delete_tag,
+            u07_cmd::tag_impact,
+            u07_cmd::timeline_page,
+            u07_cmd::timeline_months,
+            u07_cmd::calendar_month,
+            u07_cmd::day_entries,
+            u07_cmd::on_this_day
         ])
         .run(tauri::generate_context!())
         .expect("启动拾光桌面壳失败");

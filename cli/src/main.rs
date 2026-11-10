@@ -2,6 +2,8 @@
 //!
 //! 每次调用都是独立进程 —— 因而天然覆盖“杀进程/重启后读回”的持久化路径。
 
+mod local_date;
+
 use shiguang_core::json::Json;
 use shiguang_core::model::RecordRow;
 use shiguang_core::{preview, ConflictChoice, CoreError, Store};
@@ -115,6 +117,23 @@ fn run() -> Result<Json, CoreError> {
         Store::open(root)?
     };
 
+    if [
+        "favorite",
+        "tags",
+        "tag-create",
+        "tag-rename",
+        "tag-merge",
+        "tag-delete",
+        "tag-set",
+        "timeline",
+        "calendar",
+        "day",
+        "on-this-day",
+    ]
+    .contains(&command.as_str())
+    {
+        return metadata_command(&mut store, &command, rest);
+    }
     match command.as_str() {
         "init" => Ok(Json::obj(vec![
             ("ok", Json::Bool(true)),
@@ -549,6 +568,12 @@ fn usage() -> String {
         "  init                                    初始化数据目录",
         "  export-backup <dest> [--encrypt] [--kdf-fast] [--password-stdin] / verify-backup <file> [--password-stdin] / restore-backup <file> --yes [--password-stdin]",
         "  plan-merge <file> [--password-stdin] / merge-backup <file> --yes [--password-stdin]",
+        "  favorite <recordId> <on|off> [--expect REV]",
+        "  tags / tag-create <name> / tag-rename <tagId> <name>",
+        "  tag-merge <fromTagId> <intoTagId> --yes / tag-delete <tagId> --yes",
+        "  tag-set <recordId> [tagId...] [--expect REV]",
+        "  timeline [--from D] [--to D] [--favorites] [--tag ID]... [--asc] [--limit N] [--cursor C] [--today D]",
+        "  calendar <YYYY-MM> / day <YYYY-MM-DD> [--today D] / on-this-day <MM-DD> [--today D]",
         "  trash ID / restore ID / purge ID / empty-trash / list-trash",
         "  reconcile / resolve-conflict ID --choice keepMine|keepFormal / list-conflicts",
         "  restore-conflict-copy ID",
@@ -661,5 +686,214 @@ fn backup_command(
         }
         .to_json()),
         _ => unreachable!(),
+    }
+}
+
+fn metadata_command(store: &mut Store, command: &str, args: &[String]) -> Result<Json, CoreError> {
+    use shiguang_core::{query::*, TagInfo};
+    let usage = || CoreError::new("USAGE", "参数无效，请查看 help 中的命令格式");
+    // Strict parsing preserves repeated --tag options and never treats positional tag IDs as flags.
+    let mut positional = Vec::new();
+    let mut values = Vec::<(String, String)>::new();
+    let mut flags = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a.starts_with("--") {
+            let takes_value = matches!(
+                (command, a.as_str()),
+                ("favorite" | "tag-set", "--expect")
+                    | (
+                        "timeline",
+                        "--from" | "--to" | "--tag" | "--limit" | "--cursor" | "--today"
+                    )
+                    | ("on-this-day", "--today")
+                    | ("day", "--today")
+            );
+            let flag = matches!(
+                (command, a.as_str()),
+                ("tag-merge" | "tag-delete", "--yes") | ("timeline", "--favorites" | "--asc")
+            );
+            if takes_value {
+                let next = args
+                    .get(i + 1)
+                    .filter(|v| !v.starts_with("--"))
+                    .ok_or_else(usage)?;
+                values.push((a.clone(), next.clone()));
+                i += 2;
+            } else if flag {
+                flags.push(a.as_str());
+                i += 1;
+            } else {
+                return Err(usage());
+            }
+        } else {
+            positional.push(a.as_str());
+            i += 1;
+        }
+    }
+    let value = |key: &str| {
+        values
+            .iter()
+            .rev()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    };
+    let has = |key: &str| flags.contains(&key);
+    let expect = value("--expect")
+        .map(|v| v.parse::<u32>().map_err(|_| usage()))
+        .transpose()?;
+    let count = |n: usize| {
+        if positional.len() == n {
+            Ok(())
+        } else {
+            Err(usage())
+        }
+    };
+    let local_today;
+    let today = if let Some(today) = value("--today") {
+        today
+    } else if matches!(command, "timeline" | "day" | "on-this-day") {
+        local_today = local_date::today()?;
+        &local_today
+    } else {
+        ""
+    };
+    match command {
+        "favorite" => {
+            count(2)?;
+            let favorite = match positional[1] {
+                "on" => true,
+                "off" => false,
+                _ => return Err(usage()),
+            };
+            Ok(store
+                .set_favorite(positional[0], favorite, expect)?
+                .to_json())
+        }
+        "tags" => {
+            count(0)?;
+            Ok(Json::obj(vec![(
+                "tags",
+                Json::Arr(store.list_tags().iter().map(TagInfo::to_json).collect()),
+            )]))
+        }
+        "tag-create" => {
+            count(1)?;
+            Ok(store.create_tag(positional[0])?.to_json())
+        }
+        "tag-rename" => {
+            count(2)?;
+            Ok(store.rename_tag(positional[0], positional[1])?.to_json())
+        }
+        "tag-merge" => {
+            count(2)?;
+            if !has("--yes") {
+                return Err(CoreError::new("USAGE", "标签合并需要 --yes 确认"));
+            }
+            Ok(store.merge_tags(positional[0], positional[1])?.to_json())
+        }
+        "tag-delete" => {
+            count(1)?;
+            if !has("--yes") {
+                return Err(CoreError::new("USAGE", "标签删除需要 --yes 确认"));
+            }
+            Ok(store.delete_tag(positional[0])?.to_json())
+        }
+        "tag-set" => {
+            if positional.is_empty() {
+                return Err(usage());
+            }
+            Ok(store
+                .set_record_tags(
+                    positional[0],
+                    &positional[1..]
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>(),
+                    expect,
+                )?
+                .to_json())
+        }
+        "timeline" => {
+            count(0)?;
+            let f = TimelineFilter {
+                from: value("--from").map(str::to_owned),
+                to: value("--to").map(str::to_owned),
+                favorite_only: has("--favorites"),
+                tag_ids: values
+                    .iter()
+                    .filter(|(k, _)| k == "--tag")
+                    .map(|(_, v)| v.clone())
+                    .collect(),
+                order: if has("--asc") {
+                    Order::Asc
+                } else {
+                    Order::Desc
+                },
+                ..Default::default()
+            };
+            let limit = value("--limit")
+                .unwrap_or("50")
+                .parse::<usize>()
+                .map_err(|_| usage())?;
+            Ok(store
+                .timeline_page(&f, value("--cursor").map(str::to_owned), limit, today)?
+                .to_json())
+        }
+        "calendar" => {
+            count(1)?;
+            let parts = positional[0].split('-').collect::<Vec<_>>();
+            if parts.len() != 2 || parts[0].len() != 4 || parts[1].len() != 2 {
+                return Err(usage());
+            }
+            let year = parts[0].parse().map_err(|_| usage())?;
+            let month = parts[1].parse().map_err(|_| usage())?;
+            Ok(Json::obj(vec![(
+                "days",
+                Json::Arr(
+                    store
+                        .calendar_month(year, month, None)?
+                        .iter()
+                        .map(CalendarDay::to_json)
+                        .collect(),
+                ),
+            )]))
+        }
+        "day" => {
+            count(1)?;
+            Ok(Json::obj(vec![(
+                "items",
+                Json::Arr(
+                    store
+                        .day_entries(positional[0], Order::Desc, today)?
+                        .iter()
+                        .map(TimelineItem::to_json)
+                        .collect(),
+                ),
+            )]))
+        }
+        "on-this-day" => {
+            count(1)?;
+            let parts = positional[0].split('-').collect::<Vec<_>>();
+            if parts.len() != 2 || parts.iter().any(|p| p.len() != 2) {
+                return Err(usage());
+            }
+            Ok(Json::obj(vec![(
+                "years",
+                Json::Arr(
+                    store
+                        .on_this_day(
+                            parts[0].parse().map_err(|_| usage())?,
+                            parts[1].parse().map_err(|_| usage())?,
+                            today,
+                        )?
+                        .iter()
+                        .map(OnThisDayYear::to_json)
+                        .collect(),
+                ),
+            )]))
+        }
+        _ => Err(usage()),
     }
 }

@@ -21,6 +21,13 @@ impl RecordIdentity {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MergePlan {
+    pub tags_added: u64,
+    pub tags_remapped: u64,
+    pub tags_skipped_deleted: u64,
+    pub tags_deleted_in_backup: u64,
+    pub favorites_updated: u64,
+    pub tag_links_updated: u64,
+
     pub added: u64,
     pub updated: u64,
     pub unchanged: u64,
@@ -39,6 +46,18 @@ pub struct MergePlan {
 impl MergePlan {
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("tagsAdded", Json::Num(self.tags_added as i64)),
+            ("tagsRemapped", Json::Num(self.tags_remapped as i64)),
+            (
+                "tagsSkippedDeleted",
+                Json::Num(self.tags_skipped_deleted as i64),
+            ),
+            (
+                "tagsDeletedInBackup",
+                Json::Num(self.tags_deleted_in_backup as i64),
+            ),
+            ("favoritesUpdated", Json::Num(self.favorites_updated as i64)),
+            ("tagLinksUpdated", Json::Num(self.tag_links_updated as i64)),
             ("added", Json::Num(self.added as i64)),
             ("updated", Json::Num(self.updated as i64)),
             ("unchanged", Json::Num(self.unchanged as i64)),
@@ -132,7 +151,7 @@ impl MergeOrigin {
             created_at: field("createdAt")?,
             local_id: field("localId")?,
         };
-        if !["record", "photo"].contains(&o.kind.as_str()) {
+        if !["record", "photo", "tag", "tag-skipped", "tag-marker"].contains(&o.kind.as_str()) {
             return Err(bad("无效的映射类型"));
         }
         Ok(o)
@@ -339,9 +358,12 @@ fn conflict(
 pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan), CoreError> {
     validate_ids(local)?;
     validate_ids(incoming)?;
+    crate::tags::validate(local)?;
+    crate::tags::validate(incoming)?;
     let mut s = local.clone();
     let mut p = MergePlan::default();
     s.seq = s.seq.max(incoming.seq);
+    let tag_mapping = merge_dictionary(&mut s, incoming, &mut p)?;
     let mut mapping = BTreeMap::new();
     for original in &incoming.records {
         let key = origin(incoming, original);
@@ -351,6 +373,11 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
         }
         let index = find_record(&s, &key);
         let mut r = original.clone();
+        r.tag_ids = crate::tags::dedup(
+            r.tag_ids
+                .iter()
+                .filter_map(|id| tag_mapping.get(id).cloned().flatten()),
+        );
         r.record_id = if let Some(i) = index {
             s.records[i].record_id.clone()
         } else if s.records.iter().any(|x| x.record_id == r.record_id)
@@ -388,6 +415,16 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
             continue;
         };
         let mut l = s.records[index].clone();
+        if r.favorite_revision > l.favorite_revision {
+            l.favorite = r.favorite;
+            l.favorite_revision = r.favorite_revision;
+            p.favorites_updated += 1;
+        }
+        if r.tag_revision > l.tag_revision {
+            l.tag_ids = r.tag_ids.clone();
+            l.tag_revision = r.tag_revision;
+            p.tag_links_updated += 1;
+        }
         let kept_trashed = l.status == RecordStatus::Trashed && r.status == RecordStatus::Active;
         if kept_trashed {
             p.kept_trashed += 1;
@@ -492,9 +529,224 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
         && s.deletion_markers == local.deletion_markers
         && s.conflict_copies == local.conflict_copies
         && s.merge_origins.len() == local.merge_origins.len()
+        && s.tags == local.tags
+        && s.tag_aliases == local.tag_aliases
+        && s.tag_tombstones == local.tag_tombstones
     {
         s.seq = local.seq;
     }
     let s = State::from_json(&s.to_json("validated-merge"))?;
     Ok((s, p))
+}
+
+fn tag_origin<'a>(s: &'a State, t: &'a crate::Tag) -> (&'a str, &'a str) {
+    let id = s
+        .merge_origins
+        .iter()
+        .find(|o| o.kind == "tag" && o.local_id == t.tag_id && o.created_at == t.created_at)
+        .map(|o| o.source_id.as_str())
+        .unwrap_or(&t.tag_id);
+    (id, &t.created_at)
+}
+fn remember_tag(s: &mut State, kind: &str, source: &str, created: &str, target: &str) -> bool {
+    if s.merge_origins
+        .iter()
+        .any(|o| o.kind == kind && o.source_id == source && o.created_at == created)
+    {
+        return false;
+    }
+    s.merge_origins.push(MergeOrigin {
+        kind: kind.into(),
+        source_id: source.into(),
+        created_at: created.into(),
+        local_id: target.into(),
+    });
+    true
+}
+/// Keep local live tags when a backup carries a tombstone. Histories carry no display names.
+fn merge_dictionary(
+    s: &mut State,
+    incoming: &State,
+    p: &mut MergePlan,
+) -> Result<BTreeMap<String, Option<String>>, CoreError> {
+    let before = (
+        s.tags.clone(),
+        s.tag_aliases.clone(),
+        s.tag_tombstones.clone(),
+    );
+    let mut map = BTreeMap::new();
+    for t in &incoming.tags {
+        let (source, created) = tag_origin(incoming, t);
+        let exclusively_deleted = incoming
+            .records
+            .iter()
+            .any(|r| r.tag_ids.contains(&t.tag_id))
+            && incoming
+                .records
+                .iter()
+                .filter(|r| r.tag_ids.contains(&t.tag_id))
+                .all(|r| deleted(s, &origin(incoming, r)));
+        if exclusively_deleted {
+            map.insert(t.tag_id.clone(), None);
+            continue;
+        }
+        // Origin mappings retain collision identity across subsequent imports/re-exports.
+        let previous = s
+            .merge_origins
+            .iter()
+            .find(|o| o.kind == "tag" && o.source_id == source && o.created_at == created)
+            .map(|o| o.local_id.clone());
+        let candidate_id = previous.as_deref().unwrap_or(source);
+        let tomb = s.tag_tombstones.iter().any(|x| {
+            (x.tag_id == candidate_id && (previous.is_some() || x.created_at == created))
+                || (x.tag_id == source && x.created_at == created)
+        });
+        if s.merge_origins
+            .iter()
+            .any(|o| o.kind == "tag-skipped" && o.source_id == source && o.created_at == created)
+        {
+            map.insert(t.tag_id.clone(), None);
+            continue;
+        }
+        if tomb {
+            if remember_tag(s, "tag-skipped", source, created, "") {
+                p.tags_skipped_deleted += 1;
+            }
+            map.insert(t.tag_id.clone(), None);
+            continue;
+        }
+        let alias = s
+            .tag_aliases
+            .iter()
+            .find(|a| {
+                (a.from_tag_id == candidate_id
+                    && (previous.is_some() || a.from_created_at == created))
+                    || (a.from_tag_id == source && a.from_created_at == created)
+            })
+            .map(|a| a.to_tag_id.clone());
+        if let Some(target) = alias {
+            if remember_tag(s, "tag", source, created, &target) {
+                p.tags_remapped += 1;
+            }
+            map.insert(t.tag_id.clone(), Some(target));
+            continue;
+        }
+        if let Some(target) = previous.filter(|id| s.tags.iter().any(|t| t.tag_id == *id)) {
+            map.insert(t.tag_id.clone(), Some(target));
+            continue;
+        }
+        let existing = s
+            .tags
+            .iter()
+            .find(|x| x.norm_name == t.norm_name)
+            .map(|x| x.tag_id.clone());
+        let target = if let Some(id) = existing {
+            id
+        } else {
+            let mut new = t.clone();
+            // IDs mentioned by histories cannot be reused: strict validation forbids it.
+            if s.tags.iter().any(|x| x.tag_id == new.tag_id)
+                || s.tag_aliases.iter().any(|a| a.from_tag_id == new.tag_id)
+                || s.tag_tombstones.iter().any(|x| x.tag_id == new.tag_id)
+            {
+                new.tag_id = allocate(s, "tag")?;
+            }
+            let id = new.tag_id.clone();
+            s.tags.push(new);
+            p.tags_added += 1;
+            id
+        };
+        if target != source && remember_tag(s, "tag", source, created, &target) {
+            p.tags_remapped += 1;
+        }
+        map.insert(t.tag_id.clone(), Some(target));
+    }
+    for tomb in &incoming.tag_tombstones {
+        let target = s
+            .merge_origins
+            .iter()
+            .find(|o| {
+                o.kind == "tag" && o.source_id == tomb.tag_id && o.created_at == tomb.created_at
+            })
+            .map(|o| o.local_id.clone())
+            .unwrap_or_else(|| tomb.tag_id.clone());
+        if let Some(live) = s.tags.iter().find(|t| t.tag_id == target) {
+            let same = live.created_at == tomb.created_at || target != tomb.tag_id;
+            if remember_tag(s, "tag-marker", &tomb.tag_id, &tomb.created_at, &target) {
+                p.tags_deleted_in_backup += u64::from(same);
+            }
+            if !same {
+                remember_tag(s, "tag-skipped", &tomb.tag_id, &tomb.created_at, "");
+            }
+            continue;
+        }
+        if !s
+            .tag_tombstones
+            .iter()
+            .any(|x| x.tag_id == target && x.created_at == tomb.created_at)
+        {
+            // Local aliases are authoritative; an incoming tombstone cannot delete their terminal tag.
+            if s.tag_aliases
+                .iter()
+                .any(|a| a.from_tag_id == target && a.from_created_at == tomb.created_at)
+            {
+                continue;
+            }
+            let mut t = tomb.clone();
+            t.tag_id = target;
+            s.tag_tombstones.push(t);
+        }
+    }
+    for a in &incoming.tag_aliases {
+        if s.tag_tombstones
+            .iter()
+            .any(|t| t.tag_id == a.from_tag_id && t.created_at == a.from_created_at)
+            || s.tag_aliases
+                .iter()
+                .any(|x| x.from_tag_id == a.from_tag_id && x.from_created_at == a.from_created_at)
+        {
+            continue;
+        }
+        match map.get(&a.to_tag_id).cloned().flatten() {
+            Some(target) => {
+                if let Some(live) = s.tags.iter().find(|t| t.tag_id == a.from_tag_id) {
+                    if live.created_at != a.from_created_at {
+                        remember_tag(s, "tag", &a.from_tag_id, &a.from_created_at, &target);
+                    }
+                } else {
+                    let mut a = a.clone();
+                    a.to_tag_id = target;
+                    s.tag_aliases.push(a);
+                }
+            }
+            None => {
+                // A source alias whose terminal was locally deleted must also stay deleted.
+                if s.tags.iter().any(|t| t.tag_id == a.from_tag_id) {
+                    remember_tag(s, "tag-skipped", &a.from_tag_id, &a.from_created_at, "");
+                } else {
+                    let deleted_at = s
+                        .tag_tombstones
+                        .iter()
+                        .find(|t| t.tag_id == a.to_tag_id)
+                        .map(|t| t.deleted_at.clone())
+                        .unwrap_or_else(|| a.merged_at.clone());
+                    s.tag_tombstones.push(crate::TagTombstone {
+                        tag_id: a.from_tag_id.clone(),
+                        created_at: a.from_created_at.clone(),
+                        deleted_at,
+                    });
+                }
+            }
+        }
+    }
+    if before
+        != (
+            s.tags.clone(),
+            s.tag_aliases.clone(),
+            s.tag_tombstones.clone(),
+        )
+    {
+        crate::tags::bump_dict(s)?;
+    }
+    Ok(map)
 }

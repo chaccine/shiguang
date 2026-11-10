@@ -30,6 +30,8 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BackupCounts {
+    pub tags: u64,
+    pub favorites: u64,
     pub formal: u64,
     pub drafts: u64,
     pub trashed: u64,
@@ -41,6 +43,8 @@ pub struct BackupCounts {
 impl BackupCounts {
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("tags", num(self.tags)),
+            ("favorites", num(self.favorites)),
             ("formal", num(self.formal)),
             ("drafts", num(self.drafts)),
             ("trashed", num(self.trashed)),
@@ -52,6 +56,16 @@ impl BackupCounts {
     }
     fn parse(v: &Json) -> Result<Self, CoreError> {
         Ok(Self {
+            tags: if v.get("tags").is_none() {
+                0
+            } else {
+                uint(v, "tags")?
+            },
+            favorites: if v.get("favorites").is_none() {
+                0
+            } else {
+                uint(v, "favorites")?
+            },
             formal: uint(v, "formal")?,
             drafts: uint(v, "drafts")?,
             trashed: uint(v, "trashed")?,
@@ -355,7 +369,11 @@ fn counts(state: &Json, media: u64, missing: u64) -> Result<BackupCounts, CoreEr
         missing_media: missing,
         ..BackupCounts::default()
     };
+    c.tags = array(state, "tags")?.len() as u64;
     for row in array(state, "records")? {
+        if row.get("favorite") == Some(&Json::Bool(true)) {
+            c.favorites += 1;
+        }
         if text(row, "status")? == RecordStatus::Trashed.as_str() {
             c.trashed += 1;
         } else {

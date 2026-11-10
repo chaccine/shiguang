@@ -39,3 +39,12 @@ pub mod merge;
 pub use backup::KdfParams;
 pub use merge::{merge_states, MergePlan, MergeReport, RecordIdentity};
 pub use store::State;
+
+pub mod tags;
+pub use tags::{
+    MetaOutcome, Tag, TagAlias, TagDeleteOutcome, TagImpact, TagInfo, TagMergeOutcome, TagTombstone,
+};
+pub mod query;
+pub use query::{
+    CalendarDay, OnThisDayYear, Order, TimelineFilter, TimelineItem, TimelineMonth, TimelinePage,
+};
