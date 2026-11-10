@@ -7,6 +7,8 @@ use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoreError {
+    /// Existing tag to use or merge into when a name conflicts.
+    pub tag_id: Option<String>,
     pub code: &'static str,
     pub stage: Option<&'static str>,
     pub message: String,
@@ -16,6 +18,7 @@ impl CoreError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
+            tag_id: None,
             stage: None,
             message: message.into(),
         }
@@ -23,6 +26,7 @@ impl CoreError {
     pub fn with_stage(code: &'static str, stage: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
+            tag_id: None,
             stage: Some(stage),
             message: message.into(),
         }
@@ -38,6 +42,9 @@ impl CoreError {
         ];
         if let Some(stage) = self.stage {
             entries.push(("stage", Json::str(stage)));
+        }
+        if let Some(tag_id) = &self.tag_id {
+            entries.push(("tagId", Json::str(tag_id)));
         }
         Json::obj(entries)
     }

@@ -65,6 +65,7 @@ impl<T> OpenOnce<T> {
                 finished: false,
                 value: Err(CoreError {
                     code: STORE_STARTING,
+                    tag_id: None,
                     stage: None,
                     message: String::new(),
                 }),

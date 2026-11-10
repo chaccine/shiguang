@@ -178,7 +178,7 @@ impl TagImpact {
 
 pub fn normalize_name(raw: &str) -> Result<(String, String), CoreError> {
     let name = raw.trim();
-    if raw
+    if name
         .chars()
         .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
         || name.is_empty()
@@ -212,13 +212,15 @@ fn name_available(s: &State, norm: &str, except: Option<&str>) -> Result<(), Cor
         .iter()
         .find(|t| t.norm_name == norm && Some(t.tag_id.as_str()) != except)
     {
-        return Err(CoreError::new(
+        let mut error = CoreError::new(
             "TAG_NAME_CONFLICT",
             format!(
                 "已有同名标签（{}），可直接使用；改名时请选择合并或取消",
                 t.tag_id
             ),
-        ));
+        );
+        error.tag_id = Some(t.tag_id.clone());
+        return Err(error);
     }
     Ok(())
 }

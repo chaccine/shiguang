@@ -85,12 +85,21 @@ fn paging_3000_is_complete_fast_and_insertions_do_not_repeat() {
         let first = timeline_page(&state, &f, None, 50, TODAY).unwrap();
         let seen = ids(&first.items);
         let mut more = r.clone();
-        let mut new = more[0].clone();
+        let mut new = more
+            .iter()
+            .find(|row| row.record_id == seen[0])
+            .unwrap()
+            .clone();
+        // Insert before the cursor; offset pagination would repeat a boundary item.
+        new.created_at = if order == Order::Asc { "0000" } else { "zzzz" }.into();
         new.record_id = "rec-009999".into();
         more.push(new);
+        // A cursor remains valid after the last returned record itself disappears.
+        more.retain(|row| Some(&row.record_id) != seen.last());
         let changed = with_rows(&s, &more);
         let next = timeline_page(&changed, &f, first.next_cursor, 500, TODAY).unwrap();
         assert!(ids(&next.items).iter().all(|id| !seen.contains(id)));
+        assert_eq!(ids(&next.items), expected[50..550]);
     }
     assert!(
         start.elapsed().as_secs() < 5,

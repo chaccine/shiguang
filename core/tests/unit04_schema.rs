@@ -12,14 +12,15 @@ fn missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once() {
     let t = TempRoot::new("migration");
     let original = legacy(&t);
     let s = Store::open(t.path()).unwrap();
-    assert_eq!(CURRENT_SCHEMA_VERSION, 2);
+    // Unit-0.7: v1 → v2 → v3 chain; the migrated file lands on the latest schema.
+    assert_eq!(CURRENT_SCHEMA_VERSION, 3);
     assert_eq!(
         s.state_json().get("version").and_then(Json::as_i64),
         Some(1)
     );
     assert_eq!(
         s.state_json().get("schemaVersion").and_then(Json::as_i64),
-        Some(2)
+        Some(CURRENT_SCHEMA_VERSION)
     );
     assert_eq!(s.list_formal()[0].status, RecordStatus::Active);
     assert_eq!(s.list_formal()[0].trashed_at, None);
@@ -56,7 +57,10 @@ fn explicit_v1_uses_same_migration_chain() {
     fs::write(t.path().join("state.json"), v.pretty()).unwrap();
     let before = t.bytes();
     let s = Store::open(t.path()).unwrap();
-    assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(2)));
+    assert_eq!(
+        s.state_json().get("schemaVersion"),
+        Some(&Json::Num(CURRENT_SCHEMA_VERSION))
+    );
     assert_eq!(fs::read(&backups(&t)[0]).unwrap(), before);
 }
 #[test]

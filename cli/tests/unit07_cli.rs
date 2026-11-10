@@ -41,6 +41,8 @@ fn all_unit07_commands_end_to_end_and_confirmation_guards() {
         .as_str()
         .unwrap()
         .to_string();
+    let duplicate = call(&root, &["tag-create", "a"], false);
+    assert_eq!(duplicate.get("tagId"), Some(&Json::str(&a)));
     let b = call(&root, &["tag-create", "B"], true)
         .get("tagId")
         .unwrap()

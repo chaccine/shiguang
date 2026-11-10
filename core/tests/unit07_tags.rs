@@ -13,6 +13,10 @@ fn names_rename_conflicts_and_normalization() {
     let e = s.create_tag("SUMMER Trip").unwrap_err();
     assert_eq!(e.code, "TAG_NAME_CONFLICT");
     assert!(e.message.contains(&a.tag_id));
+    assert_eq!(
+        e.to_json().get("tagId"),
+        Some(&shiguang_core::json::Json::str(&a.tag_id))
+    );
     for name in [
         "".to_string(),
         " \t ".into(),
@@ -97,5 +101,13 @@ fn merge_delete_atomic_links_alias_chain_and_content_survives() {
 }
 #[test]
 fn trimming_precedes_display_name_validation() {
-    let t=Temp::new("u07-trim");let mut s=Store::open(&t.0).unwrap();let tag=s.create_tag("\t 合成名称 \t").unwrap();assert_eq!(tag.name,"合成名称");assert_eq!(tag.norm_name,"合成名称");assert_eq!(s.create_tag("合成\t名称").unwrap_err().code,"TAG_NAME_INVALID");
+    let t = Temp::new("u07-trim");
+    let mut s = Store::open(&t.0).unwrap();
+    let tag = s.create_tag("\t 合成名称 \t").unwrap();
+    assert_eq!(tag.name, "合成名称");
+    assert_eq!(tag.norm_name, "合成名称");
+    assert_eq!(
+        s.create_tag("合成\t名称").unwrap_err().code,
+        "TAG_NAME_INVALID"
+    );
 }
