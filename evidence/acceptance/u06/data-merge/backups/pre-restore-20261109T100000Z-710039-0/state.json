@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "mergeOrigins": [],
+  "schemaVersion": 2,
+  "deletionMarkers": [],
+  "conflictCopies": [],
+  "seed": "20261109",
+  "seq": 1,
+  "records": [
+    {
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000001",
+      "contentRevision": 0,
+      "createdAt": "2026-11-09T10:00:00Z",
+      "updatedAt": "2026-11-09T10:00:00Z",
+      "committedAt": null,
+      "baseRevision": 0,
+      "formal": null,
+      "draft": {
+        "title": "",
+        "body": "受害库的合成草稿",
+        "eventDate": "2026-11-10",
+        "eventTime": null,
+        "photos": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "plan": {
+    "added": 0,
+    "updated": 0,
+    "unchanged": 6,
+    "conflicts": 0,
+    "keptTrashed": 0,
+    "keptActive": 0,
+    "skippedDeleted": [
+      {
+        "recordId": "rec-000009",
+        "createdAt": "2026-11-09T10:00:00Z"
+      }
+    ],
+    "deletedInBackup": [],
+    "markersAdded": 0,
+    "conflictCopiesAdded": 0,
+    "conflictCopiesDropped": 0,
+    "mediaAdded": 0,
+    "mediaMissing": 0,
+    "mediaConflicts": []
+  },
+  "safetyBackupDir": null,
+  "mediaReport": {
+    "quarantined": [],
+    "missing": [],
+    "corrupt": [],
+    "checkedAt": "2026-11-09T10:00:00Z"
+  }
+}
+

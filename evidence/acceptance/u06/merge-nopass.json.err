@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "BACKUP_PASSWORD_REQUIRED",
+  "message": "请通过环境变量或 --password-stdin 提供口令"
+}
+

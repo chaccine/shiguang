@@ -1,6 +1,6 @@
 {
   "ok": false,
   "code": "USAGE",
-  "message": "覆盖恢复会替换全部数据；请显式使用 restore-backup <file> --yes"
+  "message": "请显式使用 --yes 确认恢复或合并"
 }
 

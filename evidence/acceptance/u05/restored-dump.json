@@ -2,6 +2,7 @@
   "ok": true,
   "state": {
     "version": 1,
+    "mergeOrigins": [],
     "schemaVersion": 2,
     "deletionMarkers": [],
     "conflictCopies": [],

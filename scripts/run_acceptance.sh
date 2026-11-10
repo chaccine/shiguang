@@ -225,6 +225,54 @@ console.log("U05 往返一致，记录数", a.records.length, "安全副本", r.
 (cd "$U05/data-victim/media" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha_file "$f")" "$f"; done) >"$U05/media-restored.sha"
 cmp "$U05/media-source.sha" "$U05/media-restored.sha" || { echo "FAIL: 恢复后原图与源库不一致" >&2; exit 1; }
 
+echo "== U06 合并导入/防复活/口令加密（CLI，合成数据；口令只走环境变量，不落日志）=="
+U06="$ACC/u06"
+rm -rf "$U06"; mkdir -p "$U06"
+cp -R "$U05/data-victim" "$U06/data-merge"
+rm -f "$U06/data-merge/.write.lock" "$U06/data-merge/.instance.lock"
+first_id() { node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));const rows=Array.isArray(j)?j:(j.records??j.rows??[]);process.stdout.write(rows[0].recordId)'; }
+VICTIM_ID="$("$BIN" --data-dir "$U06/data-merge" list | first_id)"
+"$BIN" --data-dir "$U06/data-merge" trash "$VICTIM_ID" >"$U06/trash.json"
+"$BIN" --data-dir "$U06/data-merge" purge "$VICTIM_ID" >"$U06/purge.json"
+"$BIN" --data-dir "$U06/data-merge" plan-merge "$U05/full.sgbak" >"$U06/plan.json"
+expect_fail "$U06/merge-without-yes.json" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak"
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak" --yes >"$U06/merge1.json"
+expect_fail "$U06/get-purged.json" "$BIN" --data-dir "$U06/data-merge" get "$VICTIM_ID"
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak" --yes >"$U06/merge2.json"
+node -e '
+const fs = require("fs");
+const read = (f) => { const j = JSON.parse(fs.readFileSync(f, "utf8")); return j.plan ?? j; };
+const plan = read(process.argv[1]), m1 = read(process.argv[2]), m2 = read(process.argv[3]);
+const id = process.argv[4];
+if (!plan.skippedDeleted.some((x) => x.recordId === id)) { console.error("FAIL: 计划未列出已永久删除的记录"); process.exit(1); }
+if (m1.added !== 0) { console.error("FAIL: 旧包合并新增了记录", m1.added); process.exit(1); }
+if (m2.added !== 0 || m2.updated !== 0 || m2.conflictCopiesAdded !== 0 || m2.mediaAdded !== 0) { console.error("FAIL: 重复合并不幂等"); process.exit(1); }
+console.log("U06 防复活 + 幂等通过；skippedDeleted =", plan.skippedDeleted.length);
+' "$U06/plan.json" "$U06/merge1.json" "$U06/merge2.json" "$VICTIM_ID" >"$U06/merge-check.log"
+# 口令加密：随机合成口令，仅存在于本脚本进程环境变量中。
+SHIGUANG_BACKUP_PASSWORD="$(node -e 'process.stdout.write(require("crypto").randomBytes(18).toString("base64"))')"
+export SHIGUANG_BACKUP_PASSWORD
+shg export-backup "$U06/enc.sgbak" --encrypt --kdf-fast >"$U06/export-enc.json"
+if grep -q "合成" "$U06/enc.sgbak"; then echo "FAIL: 加密包里出现明文" >&2; exit 1; fi
+"$BIN" verify-backup "$U06/enc.sgbak" >"$U06/verify-enc.json"
+tree_sha "$U06/data-merge" >"$U06/merge-before-wrong.sha"
+expect_fail "$U06/verify-wrong.json" env SHIGUANG_BACKUP_PASSWORD="wrong-synthetic" "$BIN" verify-backup "$U06/enc.sgbak"
+expect_fail "$U06/merge-wrong.json" env SHIGUANG_BACKUP_PASSWORD="wrong-synthetic" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes
+expect_fail "$U06/merge-nopass.json" env -u SHIGUANG_BACKUP_PASSWORD "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes
+node -e '
+const fs = require("fs");
+const buf = fs.readFileSync(process.argv[1]);
+const flipped = Buffer.from(buf); flipped[buf.length - 40] ^= 0x01;
+fs.writeFileSync(process.argv[2], flipped);
+' "$U06/enc.sgbak" "$U06/enc-tampered.sgbak"
+expect_fail "$U06/merge-tampered.json" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc-tampered.sgbak" --yes
+tree_sha "$U06/data-merge" >"$U06/merge-after-wrong.sha"
+cmp "$U06/merge-before-wrong.sha" "$U06/merge-after-wrong.sha" || { echo "FAIL: 错口令/篡改改动了现有数据" >&2; exit 1; }
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes >"$U06/merge-enc.json"
+if grep -rqF -- "$SHIGUANG_BACKUP_PASSWORD" "$U06" "$ACC"/*.log 2>/dev/null; then echo "FAIL: 口令出现在输出/日志里" >&2; exit 1; fi
+unset SHIGUANG_BACKUP_PASSWORD
+echo "U06 加密：错口令/缺口令/篡改均拒绝且数据不变；正确口令合并成功；口令未出现在任何输出中" >"$U06/crypto-check.log"
+
 echo "== 6/6 AC-U0-11 manifest 与总校验 =="
 shg manifest --out "$EVID/manifest.json" \
   --rustc "$RUSTC_VERSION" \

@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "BACKUP_PASSWORD_WRONG",
+  "message": "口令不正确，或文件已损坏"
+}
+
