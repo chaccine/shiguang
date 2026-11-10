@@ -54,6 +54,17 @@ fn run() -> Result<Json, CoreError> {
 
     let root = data_dir.unwrap_or_else(|| PathBuf::from(".shiguang-data"));
     let rest = &args[1..];
+    if [
+        "export-backup",
+        "verify-backup",
+        "restore-backup",
+        "plan-merge",
+        "merge-backup",
+    ]
+    .contains(&command.as_str())
+    {
+        return backup_command(&root, &command, rest);
+    }
     // Test driver: announce readiness only after the requested lock is held.
     if command == "hold-lock" {
         let ms = rest
@@ -536,6 +547,8 @@ fn usage() -> String {
         "",
         "命令:",
         "  init                                    初始化数据目录",
+        "  export-backup <dest> [--encrypt] [--kdf-fast] [--password-stdin] / verify-backup <file> [--password-stdin] / restore-backup <file> --yes [--password-stdin]",
+        "  plan-merge <file> [--password-stdin] / merge-backup <file> --yes [--password-stdin]",
         "  trash ID / restore ID / purge ID / empty-trash / list-trash",
         "  reconcile / resolve-conflict ID --choice keepMine|keepFormal / list-conflicts",
         "  restore-conflict-copy ID",
@@ -555,7 +568,98 @@ fn usage() -> String {
         "  sleep --ms N                            用于强杀演练",
         "  draft-save ... --hold-ms N              落盘后保持进程（强杀演练）",
         "",
-        "环境: SHIGUANG_DATA_DIR, SHIGUANG_SEED(默认 20261109), SHIGUANG_CLOCK(固定时间)",
+        "环境: SHIGUANG_DATA_DIR, SHIGUANG_SEED(默认 20261109), SHIGUANG_CLOCK(固定时间), SHIGUANG_BACKUP_PASSWORD(备份口令)",
     ]
     .join("\n")
+}
+
+fn backup_command(
+    root: &std::path::Path,
+    command: &str,
+    args: &[String],
+) -> Result<Json, CoreError> {
+    use shiguang_core::backup::{self, BackupPassword, KdfParams};
+    let file = args
+        .first()
+        .filter(|s| !s.starts_with("--"))
+        .ok_or_else(|| CoreError::new("USAGE", "备份命令需要文件路径"))?;
+    let mut encrypt = false;
+    let mut stdin = false;
+    let mut yes = false;
+    let mut fast = false;
+    for flag in &args[1..] {
+        match flag.as_str() {
+            "--encrypt" if command == "export-backup" => encrypt = true,
+            "--kdf-fast" if command == "export-backup" => fast = true,
+            "--password-stdin" => stdin = true,
+            "--yes" if command == "merge-backup" || command == "restore-backup" => yes = true,
+            _ => {
+                return Err(CoreError::new(
+                    "USAGE",
+                    "备份命令参数无效；口令仅支持环境变量或 --password-stdin",
+                ))
+            }
+        }
+    }
+    if (command == "restore-backup" || command == "merge-backup") && !yes {
+        return Err(CoreError::new("USAGE", "请显式使用 --yes 确认恢复或合并"));
+    }
+    if fast && !encrypt {
+        return Err(CoreError::new("USAGE", "--kdf-fast 需要 --encrypt"));
+    }
+    let path = std::path::Path::new(file);
+    let password = if encrypt || (command != "export-backup" && backup::is_encrypted(path)) {
+        Some(BackupPassword::read(stdin)?)
+    } else {
+        None
+    };
+    if command == "verify-backup" {
+        return Ok(match password {
+            Some(ref p) => backup::verify_backup_with_password(path, p.as_str())?,
+            None => backup::verify_backup(path)?,
+        }
+        .to_json());
+    }
+    let mut store = if command == "export-backup" {
+        Store::open(root)?
+    } else {
+        Store::open_exclusive(root)?
+    };
+    let secret = password.as_ref().map(BackupPassword::as_str);
+    match command {
+        "export-backup" => Ok(if let Some(p) = secret {
+            store.export_backup_encrypted(
+                path,
+                env!("CARGO_PKG_VERSION"),
+                p,
+                if fast {
+                    KdfParams::fast()
+                } else {
+                    KdfParams::default()
+                },
+            )?
+        } else {
+            store.export_backup(path, env!("CARGO_PKG_VERSION"))?
+        }
+        .to_json()),
+        "plan-merge" => Ok(if let Some(p) = secret {
+            store.plan_merge_with_password(path, p)?
+        } else {
+            store.plan_merge(path)?
+        }
+        .to_json()),
+        "merge-backup" => Ok(if let Some(p) = secret {
+            store.merge_backup_with_password(path, p)?
+        } else {
+            store.merge_backup(path)?
+        }
+        .to_json()),
+        "restore-backup" => Ok(if let Some(p) = secret {
+            store.restore_backup_overwrite_with_password(path, p)?
+        } else {
+            store.restore_backup_overwrite(path)?
+        }
+        .to_json()),
+        _ => unreachable!(),
+    }
 }

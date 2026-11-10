@@ -65,3 +65,42 @@ export interface MediaReport {
 export type PhotoStatus = "available" | "missing" | "corrupt";
 export interface PurgeResult { deletionMarkers: DeletionMarker[]; quarantined: QuarantinedMedia[]; durability: Durability }
 export type StoreStatus = { ok: true } | { ok: false; code: string; message: string };
+
+// ---- Unit-0.5 备份/恢复（G03 最小版）----
+export interface BackupCounts {
+  formal: number; drafts: number; trashed: number; deletionMarkers: number;
+  conflictCopies: number; mediaFiles: number; missingMedia: number;
+}
+/** 来自备份包 manifest 的摘要；encryption：none = 明文包，argon2id-xchacha20poly1305 = 口令加密包（解锁后才有摘要）。 */
+export interface BackupSummary {
+  formatVersion: number; schemaVersion: number; appVersion: string; exportedAt: string;
+  bytes: number; encryption: "none" | "argon2id-xchacha20poly1305"; counts: BackupCounts;
+}
+export type BackupPlatform = "desktop" | "android" | "preview";
+/** 本单元只实现覆盖恢复；以下能力如实报告为未实现。 */
+export interface BackupCapabilities {
+  platform: BackupPlatform; overwriteRestore: true;
+  merge: boolean; encryption: boolean; antiResurrection: boolean;
+  /** android: "saf"=系统文件选择器；"appDir"=仅应用专属目录（退路） */
+  fileAccess: "dialog" | "saf" | "appDir" | "preview";
+}
+export type ExportBackupResult =
+  | { cancelled: true }
+  | { cancelled: false; fileName: string; location: string; sha256: string; summary: BackupSummary; missingMedia: string[] };
+/** encrypted=true 时 summary 为 null，需先 unlockBackup 输入口令。 */
+export type PickBackupResult =
+  | { cancelled: true }
+  | { cancelled: false; token: string; fileName: string; encrypted: boolean; summary: BackupSummary | null };
+export interface ExportBackupOptions { /** 非空即用口令加密（Argon2id + XChaCha20-Poly1305）；拾光不保存口令。 */ password?: string }
+// ---- Unit-0.6 安全合并 + 防复活 ----
+export interface MergeCounts {
+  added: number; updated: number; unchanged: number; conflicts: number;
+  keptTrashed: number; keptActive: number; skippedDeleted: number; deletedInBackup: number;
+  markersAdded: number; conflictCopiesAdded: number; conflictCopiesDropped: number; mediaAdded: number; mediaMissing: number; mediaConflicts: number;
+}
+/** 合并计划：只读预演；skippedDeleted = 本机已永久删除、旧备份里仍有的记录（不复活）。 */
+export interface MergePlan { counts: MergeCounts; skippedDeleted: string[]; deletedInBackup: string[] }
+export interface MergeResult { plan: MergePlan; safetyBackup: string; mediaReport: MediaReport; durability: Durability }
+export interface RestoreBackupResult {
+  restored: BackupCounts; safetyBackup: string; mediaReport: MediaReport; durability: Durability;
+}

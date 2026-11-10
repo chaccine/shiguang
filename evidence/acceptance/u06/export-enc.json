@@ -1,0 +1,23 @@
+{
+  "path": "/workspace/shiguang-app/evidence/acceptance/u06/enc.sgbak",
+  "bytes": 60782,
+  "sha256": "92094d53386194418baac4b52d506ae1a79b5373a4e4f76ed8f580c534887026",
+  "manifest": {
+    "counts": {
+      "formal": 4,
+      "drafts": 3,
+      "trashed": 0,
+      "deletionMarkers": 0,
+      "conflictCopies": 0,
+      "mediaFiles": 2,
+      "missingMedia": 0
+    },
+    "exportedAt": "2026-11-09T10:00:00Z",
+    "appVersion": "0.1.5",
+    "schemaVersion": 2,
+    "bytes": 60483,
+    "missingMedia": []
+  },
+  "missingMedia": []
+}
+

@@ -536,6 +536,26 @@
         color: var(--muted);
       }
 
+      .data-card {
+        background: var(--card, #fffaf3); border: 1px solid rgba(120, 90, 60, 0.14); border-radius: 16px;
+        padding: 18px 20px; margin: 14px 0; box-shadow: 0 6px 18px rgba(90, 66, 44, 0.06);
+      }
+      .data-card h2 { margin: 0 0 6px; font-size: 1.05rem; }
+      .data-card.muted { opacity: 0.86; }
+      .data-desc { margin: 6px 0; line-height: 1.6; color: #6b5a4c; font-size: 0.92rem; }
+      .warn-text { color: #a5432e; }
+      .card-actions.start { justify-content: flex-start; flex-wrap: wrap; }
+      .data-result { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #f7eee4; line-height: 1.7; font-size: 0.92rem; word-break: break-all; }
+      .data-result.ok { background: #eef5ea; }
+      .data-result dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
+      .data-result dt { color: #8a7666; }
+      .data-result dd { margin: 0; }
+      .todo-list { margin: 6px 0; padding-left: 0; list-style: none; line-height: 1.9; font-size: 0.92rem; }
+      .pill.todo { background: #e9e1d8; color: #7a6a5c; margin-right: 8px; }
+      .pill.ok-pill { background: #e2efdc; color: #4c6b3f; margin-right: 8px; }
+      .check-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 0.95rem; color: #5a4a3d; }
+      .encrypt-fields { display: grid; gap: 8px; margin: 8px 0; max-width: 360px; }
+      .encrypt-fields input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(120, 90, 60, 0.25); background: #fffdf9; font-size: 0.95rem; }
       .confirm-dialog {
         width: min(100% - 40px, 390px);
         padding: 22px;
@@ -586,9 +606,13 @@
         .brand { padding: 0; }
         .brand-title { font-size: 19px; }
         .brand-sub { display: none; }
-        .tabs { flex-direction: row; margin-left: auto; }
-        .tab { padding: 8px 12px; }
+        .brand { flex-shrink: 0; }
+        .brand-title { white-space: nowrap; }
+        .tabs { flex-direction: row; margin-left: auto; gap: 2px; min-width: 0; }
+        .tab { padding: 8px 9px; }
         .sidebar-foot { display: none; }
+        .sidebar { gap: 10px; }
+        .data-card { padding: 14px 14px; }
         .main { padding: 20px 18px calc(32px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
         .when-row { grid-template-columns: 1fr; }
         .editor-card { padding: 16px; }
@@ -615,6 +639,9 @@
           </button>
           <button type="button" class="tab" data-testid="trash-tab" role="tab" aria-selected="false">
             <span class="tab-dot"></span>回收站
+          </button>
+          <button type="button" class="tab" data-testid="data-tab" role="tab" aria-selected="false">
+            <span class="tab-dot"></span>数据
           </button>
         </nav>
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
@@ -700,6 +727,70 @@
             </header>
             <p class="trash-note">回收站不会自动清空，只有你手动操作才会永久删除。</p>
             <div id="trash-list" class="timeline-list"></div>
+          </section>
+
+          <section id="view-data" class="view" hidden>
+            <header class="view-head">
+              <div>
+                <h1>数据与备份</h1>
+                <p class="view-sub">备份是一份可以带走的完整副本，不是云同步。</p>
+              </div>
+            </header>
+            <p class="trash-note" data-testid="backup-outside-hint">本机数据会随卸载或清除应用数据一起消失。请定期导出备份，并把备份文件存到这台设备以外的地方（电脑、U 盘、网盘等）。</p>
+
+            <article class="data-card">
+              <h2>导出备份</h2>
+              <p class="data-desc">把正式记录、草稿、回收站、冲突副本、删除记录和照片原件打包成一个 <code>.sgbak</code> 文件。导出不会改动现有数据。</p>
+              <label class="check-row"><input type="checkbox" id="encrypt-toggle" data-testid="encrypt-toggle" /> 使用口令加密（可选）</label>
+              <div id="encrypt-fields" class="encrypt-fields" hidden>
+                <input type="password" id="backup-password" data-testid="backup-password" placeholder="设置口令" autocomplete="new-password" />
+                <input type="password" id="backup-password2" data-testid="backup-password2" placeholder="再输入一次" autocomplete="new-password" />
+                <p class="data-desc warn-text">口令丢失将无法找回备份内容——拾光不保存口令，也无法帮你重置。</p>
+              </div>
+              <p class="data-desc warn-text" id="plain-warning">不加密时是明文备份，任何拿到文件的人都能读到内容，请妥善保管。</p>
+              <div class="card-actions start">
+                <button type="button" class="button" data-testid="export-backup" id="export-backup">导出备份</button>
+              </div>
+              <div id="export-result" data-testid="export-result" class="data-result" hidden></div>
+            </article>
+
+            <article class="data-card">
+              <h2>从备份恢复</h2>
+              <p class="data-desc">先选择备份文件，拾光会完整校验（文件是否完整、是否被修改、版本是否兼容），校验通过后才会让你决定是否恢复。</p>
+              <div class="card-actions start">
+                <button type="button" class="button ghost" data-testid="pick-backup" id="pick-backup">选择备份文件…</button>
+              </div>
+              <div id="picked-backup" data-testid="picked-backup" class="data-result" hidden>
+                <div id="picked-summary"></div>
+                <div id="unlock-area" class="encrypt-fields" hidden>
+                  <p class="data-desc">这是加密备份，请输入导出时设置的口令。</p>
+                  <input type="password" id="unlock-password" data-testid="unlock-password" placeholder="备份口令" autocomplete="current-password" />
+                  <div class="card-actions start">
+                    <button type="button" class="button" data-testid="unlock-backup" id="unlock-backup">解锁并校验</button>
+                  </div>
+                </div>
+                <div id="picked-actions" hidden>
+                  <p class="data-desc"><strong>合并导入</strong>：保留现有数据，只添加新记录、更新较新的版本；有分歧时两份都留（冲突副本）；本机已永久删除的记录不会被旧备份带回来。</p>
+                  <p class="data-desc warn-text"><strong>覆盖恢复</strong>：用这份备份替换当前全部数据。两种方式都会先在本机自动留一份当前数据的安全副本。</p>
+                  <div class="card-actions start">
+                    <button type="button" class="button" data-testid="merge-backup" id="merge-backup">合并导入</button>
+                    <button type="button" class="button danger" data-testid="restore-backup" id="restore-backup">覆盖恢复</button>
+                  </div>
+                </div>
+                <div class="card-actions start">
+                  <button type="button" class="button ghost" data-testid="discard-picked" id="discard-picked">取消</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="data-card muted" data-testid="backup-not-implemented">
+              <h2>说明与尚未做的</h2>
+              <ul class="todo-list">
+                <li><span class="pill ok-pill">已支持</span>安全合并、防复活（本机已永久删除的记录不会被旧备份带回）、口令加密（Argon2id + XChaCha20-Poly1305）。</li>
+                <li><span class="pill todo">未实现</span>多设备自动同步：备份是手动的完整副本，不是同步。</li>
+                <li><span class="pill todo">注意</span>新设备如果只有一份删除前的旧备份，无法知道后来删除过什么。</li>
+              </ul>
+            </article>
           </section>
         </div>
       </main>

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "outcome": {
+    "deletionMarkers": [
+      {
+        "recordId": "rec-000009",
+        "deletedAt": "2026-11-09T10:00:00Z",
+        "createdAt": "2026-11-09T10:00:00Z",
+        "lastContentRevision": 1
+      }
+    ],
+    "quarantined": []
+  }
+}
+

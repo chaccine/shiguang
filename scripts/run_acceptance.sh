@@ -37,10 +37,8 @@ CAPTURED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "- npm：$NPM_VERSION"
   echo "- 验收固定时钟：SHIGUANG_CLOCK=2026-11-09T10:00:00Z"
   echo "- SHIGUANG_SEED：20261109"
-  echo "- pkg-config：未安装（command -v pkg-config 无结果）"
-  echo "- webkit2gtk-4.1 / gtk+-3.0：无法通过 pkg-config 探测；环境无 sudo/apt/全局安装权限"
-  echo "- Tauri 构建：BLOCKED，详见 evidence/tauri-cargo-check.log 与 UNIT0_REPORT.md"
-  echo "- Android / 第二桌面 OS：NOT_RUN"
+  echo "- box 缺 webkit2gtk（无 sudo），本机不构建桌面壳；Tauri 三端打包与 Android APK 由 GitHub Actions 构建"
+  echo "- 真机（Android / macOS / Windows）行为：见各单元报告，未实测项为 NOT_RUN"
   echo
   echo "## 工具链原位输出"
   echo
@@ -60,6 +58,7 @@ cargo build --offline -p shiguang >"$ACC/cargo-build.log" 2>&1
 
 echo "== 2/6 Rust 与前端测试 =="
 cargo test --offline >"$ACC/cargo-test.log" 2>&1
+cargo test --offline -p shiguang_core --features fault-injection >"$ACC/cargo-fault.log" 2>&1
 npm run test >"$ACC/frontend-test.log" 2>&1
 npm run typecheck >"$ACC/frontend-typecheck.log" 2>&1
 npm run build >"$ACC/frontend-build.log" 2>&1
@@ -177,6 +176,102 @@ FUTURE_ID="$(jget "$ACC/future-draft.json" "record.recordId")"
 shg commit "$FUTURE_ID" >"$ACC/future-commit.json"
 shg get "$FUTURE_ID" >"$ACC/future-get.json"
 shg dump >"$ACC/dump.json"
+
+echo "== U05 备份导出/校验/覆盖恢复（CLI，合成数据）=="
+U05="$ACC/u05"
+mkdir -p "$U05"
+tree_sha() {
+  # 数据根下除锁文件外每个文件的 sha256（相对路径排序）
+  (cd "$1" && find . -type f ! -name '.write.lock' ! -name '.instance.lock' ! -name '*.owner' | LC_ALL=C sort | while read -r f; do
+    printf '%s  %s\n' "$(sha_file "$f")" "$f"; done)
+}
+tree_sha "$DATA" >"$U05/source-before-export.sha"
+shg export-backup "$U05/full.sgbak" >"$U05/export.json"
+tree_sha "$DATA" >"$U05/source-after-export.sha"
+cmp "$U05/source-before-export.sha" "$U05/source-after-export.sha" || { echo "FAIL: 导出改动了源数据" >&2; exit 1; }
+"$BIN" verify-backup "$U05/full.sgbak" >"$U05/verify.json"
+expect_fail "$U05/restore-without-yes.json" "$BIN" --data-dir "$U05/data-restored" restore-backup "$U05/full.sgbak"
+node -e '
+const fs = require("fs");
+const buf = fs.readFileSync(process.argv[1]);
+const flipped = Buffer.from(buf); flipped[Math.floor(buf.length / 2)] ^= 0xff;
+fs.writeFileSync(process.argv[2], flipped);
+fs.writeFileSync(process.argv[3], buf.subarray(0, buf.length - 20));
+' "$U05/full.sgbak" "$U05/corrupt.sgbak" "$U05/truncated.sgbak"
+expect_fail "$U05/verify-corrupt.json" "$BIN" verify-backup "$U05/corrupt.sgbak"
+expect_fail "$U05/verify-truncated.json" "$BIN" verify-backup "$U05/truncated.sgbak"
+# 坏包覆盖恢复到“现有数据”必须被拒绝且现有数据逐字节不变
+mkdir -p "$U05/data-victim"
+"$BIN" --data-dir "$U05/data-victim" draft-new --body "受害库的合成草稿" --date "2026-11-10" >"$U05/victim-draft.json"
+tree_sha "$U05/data-victim" >"$U05/victim-before.sha"
+expect_fail "$U05/restore-corrupt.json" "$BIN" --data-dir "$U05/data-victim" restore-backup "$U05/corrupt.sgbak" --yes
+tree_sha "$U05/data-victim" >"$U05/victim-after.sha"
+cmp "$U05/victim-before.sha" "$U05/victim-after.sha" || { echo "FAIL: 坏包恢复改动了现有数据" >&2; exit 1; }
+# 好包覆盖恢复到受害库：内容 = 源库，且留下安全副本
+"$BIN" --data-dir "$U05/data-victim" restore-backup "$U05/full.sgbak" --yes >"$U05/restore.json"
+"$BIN" --data-dir "$U05/data-victim" dump >"$U05/restored-dump.json"
+shg dump >"$U05/source-dump.json"
+node -e '
+const fs = require("fs");
+const a = JSON.parse(fs.readFileSync(process.argv[1], "utf8")).state;
+const b = JSON.parse(fs.readFileSync(process.argv[2], "utf8")).state;
+const pick = (s) => JSON.stringify({ records: s.records, deletionMarkers: s.deletionMarkers, conflictCopies: s.conflictCopies, seq: s.seq, seed: s.seed, schemaVersion: s.schemaVersion });
+if (pick(a) !== pick(b)) { console.error("FAIL: 恢复后状态与源库不一致"); process.exit(1); }
+const r = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+if (!fs.existsSync(r.safetyBackupDir)) { console.error("FAIL: 缺少安全副本"); process.exit(1); }
+console.log("U05 往返一致，记录数", a.records.length, "安全副本", r.safetyBackupDir);
+' "$U05/source-dump.json" "$U05/restored-dump.json" "$U05/restore.json" >"$U05/roundtrip.log"
+(cd "$DATA/media" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha_file "$f")" "$f"; done) >"$U05/media-source.sha"
+(cd "$U05/data-victim/media" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha_file "$f")" "$f"; done) >"$U05/media-restored.sha"
+cmp "$U05/media-source.sha" "$U05/media-restored.sha" || { echo "FAIL: 恢复后原图与源库不一致" >&2; exit 1; }
+
+echo "== U06 合并导入/防复活/口令加密（CLI，合成数据；口令只走环境变量，不落日志）=="
+U06="$ACC/u06"
+rm -rf "$U06"; mkdir -p "$U06"
+cp -R "$U05/data-victim" "$U06/data-merge"
+rm -f "$U06/data-merge/.write.lock" "$U06/data-merge/.instance.lock"
+first_id() { node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));const rows=Array.isArray(j)?j:(j.records??j.rows??[]);process.stdout.write(rows[0].recordId)'; }
+VICTIM_ID="$("$BIN" --data-dir "$U06/data-merge" list | first_id)"
+"$BIN" --data-dir "$U06/data-merge" trash "$VICTIM_ID" >"$U06/trash.json"
+"$BIN" --data-dir "$U06/data-merge" purge "$VICTIM_ID" >"$U06/purge.json"
+"$BIN" --data-dir "$U06/data-merge" plan-merge "$U05/full.sgbak" >"$U06/plan.json"
+expect_fail "$U06/merge-without-yes.json" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak"
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak" --yes >"$U06/merge1.json"
+expect_fail "$U06/get-purged.json" "$BIN" --data-dir "$U06/data-merge" get "$VICTIM_ID"
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U05/full.sgbak" --yes >"$U06/merge2.json"
+node -e '
+const fs = require("fs");
+const read = (f) => { const j = JSON.parse(fs.readFileSync(f, "utf8")); return j.plan ?? j; };
+const plan = read(process.argv[1]), m1 = read(process.argv[2]), m2 = read(process.argv[3]);
+const id = process.argv[4];
+if (!plan.skippedDeleted.some((x) => x.recordId === id)) { console.error("FAIL: 计划未列出已永久删除的记录"); process.exit(1); }
+if (m1.added !== 0) { console.error("FAIL: 旧包合并新增了记录", m1.added); process.exit(1); }
+if (m2.added !== 0 || m2.updated !== 0 || m2.conflictCopiesAdded !== 0 || m2.mediaAdded !== 0) { console.error("FAIL: 重复合并不幂等"); process.exit(1); }
+console.log("U06 防复活 + 幂等通过；skippedDeleted =", plan.skippedDeleted.length);
+' "$U06/plan.json" "$U06/merge1.json" "$U06/merge2.json" "$VICTIM_ID" >"$U06/merge-check.log"
+# 口令加密：随机合成口令，仅存在于本脚本进程环境变量中。
+SHIGUANG_BACKUP_PASSWORD="$(node -e 'process.stdout.write(require("crypto").randomBytes(18).toString("base64"))')"
+export SHIGUANG_BACKUP_PASSWORD
+shg export-backup "$U06/enc.sgbak" --encrypt --kdf-fast >"$U06/export-enc.json"
+if grep -q "合成" "$U06/enc.sgbak"; then echo "FAIL: 加密包里出现明文" >&2; exit 1; fi
+"$BIN" verify-backup "$U06/enc.sgbak" >"$U06/verify-enc.json"
+tree_sha "$U06/data-merge" >"$U06/merge-before-wrong.sha"
+expect_fail "$U06/verify-wrong.json" env SHIGUANG_BACKUP_PASSWORD="wrong-synthetic" "$BIN" verify-backup "$U06/enc.sgbak"
+expect_fail "$U06/merge-wrong.json" env SHIGUANG_BACKUP_PASSWORD="wrong-synthetic" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes
+expect_fail "$U06/merge-nopass.json" env -u SHIGUANG_BACKUP_PASSWORD "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes
+node -e '
+const fs = require("fs");
+const buf = fs.readFileSync(process.argv[1]);
+const flipped = Buffer.from(buf); flipped[buf.length - 40] ^= 0x01;
+fs.writeFileSync(process.argv[2], flipped);
+' "$U06/enc.sgbak" "$U06/enc-tampered.sgbak"
+expect_fail "$U06/merge-tampered.json" "$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc-tampered.sgbak" --yes
+tree_sha "$U06/data-merge" >"$U06/merge-after-wrong.sha"
+cmp "$U06/merge-before-wrong.sha" "$U06/merge-after-wrong.sha" || { echo "FAIL: 错口令/篡改改动了现有数据" >&2; exit 1; }
+"$BIN" --data-dir "$U06/data-merge" merge-backup "$U06/enc.sgbak" --yes >"$U06/merge-enc.json"
+if grep -rqF -- "$SHIGUANG_BACKUP_PASSWORD" "$U06" "$ACC"/*.log 2>/dev/null; then echo "FAIL: 口令出现在输出/日志里" >&2; exit 1; fi
+unset SHIGUANG_BACKUP_PASSWORD
+echo "U06 加密：错口令/缺口令/篡改均拒绝且数据不变；正确口令合并成功；口令未出现在任何输出中" >"$U06/crypto-check.log"
 
 echo "== 6/6 AC-U0-11 manifest 与总校验 =="
 shg manifest --out "$EVID/manifest.json" \

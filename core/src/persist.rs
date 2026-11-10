@@ -2,10 +2,8 @@
 
 use crate::fault::{self, FaultPoint};
 use crate::model::CoreError;
-#[cfg(unix)]
-use std::fs::File;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -29,6 +27,32 @@ impl Durability {
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> {
+    write_atomic_inner(path, |file| file.write_all(bytes), None)
+}
+
+pub(crate) fn write_atomic_restore(path: &Path, source: &Path) -> Result<Durability, CoreError> {
+    let mut source = File::open(source)?;
+    write_atomic_inner(
+        path,
+        |output| {
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let n = source.read(&mut buffer)?;
+                if n == 0 {
+                    return Ok(());
+                }
+                output.write_all(&buffer[..n])?;
+            }
+        },
+        Some(FaultPoint::RestoreSwitchState),
+    )
+}
+
+fn write_atomic_inner(
+    path: &Path,
+    write: impl FnOnce(&mut File) -> std::io::Result<()>,
+    before_replace: Option<FaultPoint>,
+) -> Result<Durability, CoreError> {
     let dir = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -51,7 +75,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> 
         .map_err(temp_error)?;
     let result = (|| {
         fault::hit(FaultPoint::TempWrite)
-            .and_then(|()| file.write_all(bytes))
+            .and_then(|()| write(&mut file))
             .map_err(|e| {
                 CoreError::with_stage(
                     "PERSIST_TEMP_WRITE_FAILED",
@@ -70,8 +94,13 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> 
             })?;
         // Windows 删除/替换前也先关闭句柄。
         drop(file);
+        if let Some(point) = before_replace {
+            fault::hit(point).map_err(|e| {
+                CoreError::with_stage("PERSIST_REPLACE_FAILED", "replace", e.to_string())
+            })?;
+        }
         fault::hit(FaultPoint::Replace)
-            .and_then(|()| fs::rename(&tmp, path))
+            .and_then(|()| replace_file(&tmp, path))
             .map_err(|e| {
                 CoreError::with_stage(
                     "PERSIST_REPLACE_FAILED",
@@ -85,6 +114,30 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> 
         return Err(error);
     }
     Ok(parent_sync(dir))
+}
+
+#[cfg(not(windows))]
+fn replace_file(source: &Path, dest: &Path) -> std::io::Result<()> {
+    fs::rename(source, dest)
+}
+
+// std::fs::rename cannot replace an existing target on Windows. MoveFileExW
+// preserves the same atomic replacement semantics without a remove/rename gap.
+#[cfg(windows)]
+fn replace_file(source: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+    }
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let dest: Vec<u16> = dest.as_os_str().encode_wide().chain(Some(0)).collect();
+    // Both buffers are NUL terminated and live until the synchronous call returns.
+    if unsafe { MoveFileExW(source.as_ptr(), dest.as_ptr(), 1 | 8) } == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 pub(crate) fn parent_sync(dir: &Path) -> Durability {

@@ -1,6 +1,6 @@
 //! Tauri v2 命令层：只做参数适配与错误转换，权威逻辑全部在 shiguang_core。
 //!
-//! 注意：本目录在 Unit-0 环境因缺少 pkg-config / webkit2gtk 无法构建，状态记 BLOCKED。
+//! box 本机缺 webkit2gtk 无法构建桌面壳；三端构建由 GitHub Actions 验证。
 
 use serde::{Deserialize, Serialize};
 use shiguang_core::json::Json;
@@ -11,9 +11,12 @@ use shiguang_core::Store;
 use std::sync::Mutex;
 use tauri::Manager;
 
+mod backup_cmd;
+
 pub struct AppState {
     store: Mutex<Result<Store, CoreError>>,
-    media_report: Result<MediaReport, CoreError>,
+    /// 启动核查结果；覆盖恢复后会被新的核查结果替换。
+    media_report: Mutex<Result<MediaReport, CoreError>>,
 }
 
 #[derive(Deserialize)]
@@ -217,8 +220,9 @@ fn media_report(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, 
     slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     let report = state
         .media_report
-        .as_ref()
-        .map_err(|e| CommandError::from(e.clone()))?;
+        .lock()
+        .map_err(|e| command_error("STORE_LOCK_FAILED", e))?;
+    let report = report.as_ref().map_err(|e| CommandError::from(e.clone()))?;
     Ok(report_value(report))
 }
 
@@ -655,7 +659,10 @@ fn export_manifest(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            backup_cmd::clean_cache(app.handle());
             // 数据目录/锁/迁移错误由命令返回，仍然启动窗口以显示中文提示。
             let opened = app
                 .path()
@@ -671,7 +678,7 @@ pub fn run() {
             };
             app.manage(AppState {
                 store: Mutex::new(store),
-                media_report,
+                media_report: Mutex::new(media_report),
             });
             Ok(())
         })
@@ -698,7 +705,15 @@ pub fn run() {
             restore_conflict_copy,
             media_report,
             photo_status,
-            store_status
+            store_status,
+            backup_cmd::backup_capabilities,
+            backup_cmd::export_backup,
+            backup_cmd::pick_backup,
+            backup_cmd::restore_backup,
+            backup_cmd::discard_picked_backup,
+            backup_cmd::unlock_backup,
+            backup_cmd::plan_merge,
+            backup_cmd::merge_backup
         ])
         .run(tauri::generate_context!())
         .expect("启动拾光桌面壳失败");

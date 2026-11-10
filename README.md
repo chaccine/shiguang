@@ -1,30 +1,53 @@
-# 拾光 · Unit-0
+# 拾光 SHIGUANG
 
-Unit-0 纵切：草稿持久化、`存入时光` 正式提交、合成图 `assetId` / `photoUseId` / caption 分离、
-正式列表排除草稿、重启可读、evidence 导出。
+本地离线的个人回忆记录应用（Tauri v2：Android / macOS / Windows）。只用合成数据开发与测试；无云同步、无 AI、无网络权限。
 
-- 数据仅合成，固定 `SHIGUANG_SEED=20261109`、验收时钟 `SHIGUANG_CLOCK=2026-11-09T10:00:00Z`。
-- 当前环境：Linux（box），rustc 1.85.1，Node 24.22.1，npm 11.21.1。
-- **桌面壳状态：BLOCKED**。系统缺 `pkg-config`（且无 sudo/apt），Tauri 依赖在 `gobject-sys` 处构建失败；
-  核心、CLI 与前端逻辑层可完整运行与验证。详见 `evidence/UNIT0_REPORT.md`。
-- Android、第二桌面 OS：NOT_RUN。
+**当前版本：0.1.5**（Android versionCode 1005）· 分支开发、PR 合并由 Cine 决定。
+
+## 进度（截至 Unit-0.6）
+
+| 单元 | 内容 | 状态 |
+|---|---|---|
+| Unit-0 ~ 0.2 | 草稿/正式双态、原子落盘、照片 asset/photoUse 分离、自动保存与草稿恢复、暖纸本桌面 UI | 已合并 |
+| Unit-0.3 | Tauri Android APK（arm64 debug 侧载） | 已合并 |
+| Unit-0.4 / 0.1.3 | 多实例写锁（Android 无 flock 时回落进程内注册表 + `.owner`）、schemaVersion 迁移、回收站与删除标记、照片一致性核查、冲突副本 | 已合并 |
+| **Unit-0.5** | **G03 最小版：一致性快照导出 `.sgbak` → 完整校验 → 覆盖恢复（自动安全副本、原子切换、失败回滚、崩溃恢复日志）；桌面原生对话框、Android 系统文件选择器** | 本分支（PR #5） |
+| **Unit-0.6 / 0.1.5** | **G03 安全合并 + G02 跨备份防复活 + 可选口令加密**：合并按 (recordId, createdAt) 认身份，已永久删除/在回收站的记录不会被旧包带回；同记录取较大 contentRevision，分歧一律留冲突副本；照片按 sha 去重；撞号改号且重复导入幂等；合并前安全副本 + 日志回滚。加密：Argon2id + XChaCha20-Poly1305 分块 STREAM，错口令/篡改一律拒绝且数据不变 | 本分支（PR #5） |
+
+备份 ≠ 同步：多设备自动同步不做。新设备若只有一份“删除之前”的旧备份，无法知道后来删除过什么（防复活依赖本机或备份里的删除标记）。
+
+构建与验证：GitHub Actions 7 个 job（三平台 core+cli+ts、三平台 Tauri 打包、Android APK）。box 本机缺 webkit2gtk，不构建桌面壳；Android 目标可在 box 上 `cargo check --target aarch64-linux-android`。
+CI 通过 ≠ 真机通过：真机行为以各单元 `evidence/UNIT*_REPORT.md` 中的 PASS / NOT_RUN 为准。
+
+## 备份格式 `.sgbak`（format 1）
+
+明文包单文件、无压缩：
+`magic "SGBAK\0\0\x01"` + `u64 LE manifest 长度` + manifest JSON + 原始条目（`state.json` 与被引用的 `media/*` 原图）+ 48 字节尾部（`SGBAKEND` + 之前全部字节的 SHA-256 + 长度）。
+manifest 含 formatVersion、schemaVersion、appVersion、exportedAt、encryption（目前只有 `none`）、各类计数、缺失原图列表、每个条目的大小与 SHA-256。
+`previews/`（可重建缓存）、`backups/`、隔离区、锁文件不进包。详见 `evidence/unit-0.5/SPEC.md`。
+
+**加密包（SGBAKENC v1，Unit-0.6，可选）**：magic `SGBAKENC\0\x01` + 头部（KDF 参数、盐、nonce 前缀；头部整体作为 AAD）+ 1 MiB 分块的 XChaCha20-Poly1305 STREAM（nonce = 19 字节前缀 ‖ u32 计数 ‖ 末块标志），内层就是上面的明文包。口令经 Argon2id（默认 m=64 MiB、t=3、p=1，解密时参数有上限）派生密钥；口令不保存、不进日志，丢失无法找回。
+依赖（Cargo.lock 固定，纯 Rust、无 C/NDK 依赖）：`argon2 0.5.3`、`chacha20poly1305 0.10.1`、`getrandom 0.2.17`、`zeroize 1.9.1`（RustCrypto；其余为它们的传递依赖）。选型理由见 `evidence/unit-0.6/SPEC.md`。
 
 ## 目录
 
 ```
-core/                 Rust 领域核心（零第三方依赖）
+core/                 Rust 领域核心（仅 RustCrypto 加密依赖）
   src/store.rs        原子持久化、草稿/正式双态、asset/photoUse、manifest
   src/model.rs        提交底线与快照模型
   src/sha256.rs       自包含 SHA-256
   src/json.rs         极简 JSON 读写
   src/preview.rs      确定性派生预览 PNG
+  src/backup.rs       Unit-0.5 备份导出/校验/覆盖恢复（.sgbak）+ Unit-0.6 合并导入
+  src/backup/crypto.rs Unit-0.6 口令加密容器
+  src/merge.rs        Unit-0.6 纯函数合并（防复活、冲突副本、撞号改号）
   tests/acceptance.rs AC-U0 验收测试
 cli/                  CLI（shiguang），每次调用都是独立进程
 src/                  前端 TS 领域层与 UI
   domain/             提交规则、正式列表投影、展示格式
-  platform/           Tauri v2 invoke 契约
+  platform/           Tauri v2 invoke 契约 + 浏览器预览 MemoryAdapter
   ui/                 桌面 UI（原生 DOM）
-src-tauri/            Tauri v2 壳（当前无法构建，见报告）
+src-tauri/            Tauri v2 壳（命令层；CI 三端构建）
 scripts/              run_acceptance.sh、verify-evidence.mjs
 evidence/             ENV_VERSIONS / UNIT0_REPORT / manifest / acceptance 产物
 ```
@@ -44,8 +67,9 @@ Rust 核心无第三方依赖，`--offline` 即可构建与测试。
 核心测试与前端测试：
 
 ```bash
-cargo test --offline     # 10 单元 + 13 验收 = 23
-npm run test             # 12 项 TS 领域层测试
+cargo test --locked                                         # 全部 Rust 测试
+cargo test --locked -p shiguang_core --features fault-injection   # 含故障注入
+npm test                 # TS 领域层与 MemoryAdapter 测试
 npm run typecheck
 npm run build            # 输出 dist/index.html + dist/ui/main.js
 ```
@@ -61,6 +85,14 @@ $BIN --data-dir .shiguang-data commit rec-000001
 $BIN --data-dir .shiguang-data list
 ```
 
+备份 CLI（合成数据）：
+
+```bash
+$BIN --data-dir .shiguang-data export-backup /tmp/demo.sgbak
+$BIN verify-backup /tmp/demo.sgbak
+$BIN --data-dir .shiguang-data2 restore-backup /tmp/demo.sgbak --yes   # 无 --yes 拒绝
+```
+
 桌面壳（在具备 `pkg-config`、webkit2gtk-4.1、gtk+-3.0 且 rustc ≥ 1.90 的机器上）：
 
 ```bash
@@ -68,7 +100,7 @@ cd src-tauri
 cargo run
 ```
 
-本机尝试构建的真实失败日志：`evidence/tauri-cargo-check.log`。
+浏览器预览（MemoryAdapter，合成数据）与截图：`npm run preview`、`npm run screenshots:u05`。
 
 ## 验收
 
@@ -93,16 +125,15 @@ bash scripts/run_acceptance.sh
 
 ## 已知限制
 
-- 桌面窗口未启动（AC-U0-01 BLOCKED），因此 GUI 交互与打包未验证。
-- 预览是**确定性派生占位 PNG**（由原图 SHA 生成），不是对原图的真实解码/缩放；但“删除缓存不删原图、
-  重建结果一致”的语义已完整验证。正式产品需接入真实缩略图管线。
-- 强杀演练发生在保存返回后（`SIGKILL`），未做写入中途断电注入；原子写已实现但未做断电故障注入。
-- 单进程假设；未实现多实例并发写锁。
-- 不做云、AI、部署、真机故障注入、备份加密、HEIC/大图等非目标项。
+- 备份支持覆盖恢复、安全合并、可选口令加密；不做多设备同步。浏览器预览里的“加密”只是交互演示（真实加密在 Rust core）。
+- 预览缩略图仍是**确定性派生占位 PNG**，不是真实解码缩放；HEIC、100 张照片、100MB 备份压测（T02/T08）未做。
+- 时光轴分组/跳转、日历、展区、检索与标签（M02–M05）、珍藏独立修订（G01）、标签事务（G06）未做。
+- 安装包均未正式签名；Android 为 debug 签名侧载包（box 固定调试密钥重签以便覆盖安装）。Windows 只出 MSI（NSIS 上游 504）。
+- 真机上的写锁、回收站、备份导出/恢复、Android 系统文件选择器：除报告中标 PASS 的条目外均为 NOT_RUN。
 
 ## 证据
 
 - `evidence/ENV_VERSIONS.md`
-- `evidence/UNIT0_REPORT.md`（AC-U0-01…13 逐条）
+- `evidence/UNIT0_REPORT.md`（AC-U0-01…13 逐条）… `evidence/UNIT0.5_REPORT.md`（各单元报告）
 - `evidence/manifest.json`
 - `evidence/acceptance/`（每条验收的原始 JSON/日志/SHA 表）

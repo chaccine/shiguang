@@ -335,6 +335,7 @@ impl RecordStatus {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeletionMarker {
+    pub created_at: Option<String>,
     pub record_id: String,
     pub deleted_at: String,
     pub last_content_revision: u32,
@@ -385,10 +386,23 @@ pub struct PurgeOutcome {
 }
 
 impl DeletionMarker {
+    pub fn matches(&self, record_id: &str, created_at: Option<&str>) -> bool {
+        self.record_id == record_id
+            && (self.created_at.is_none()
+                || created_at.is_none()
+                || self.created_at.as_deref() == created_at)
+    }
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
             ("recordId", Json::str(&self.record_id)),
             ("deletedAt", Json::str(&self.deleted_at)),
+            (
+                "createdAt",
+                self.created_at
+                    .as_ref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
             (
                 "lastContentRevision",
                 Json::Num(self.last_content_revision as i64),
@@ -399,6 +413,11 @@ impl DeletionMarker {
         Ok(Self {
             record_id: req_str(value, "recordId")?,
             deleted_at: req_str(value, "deletedAt")?,
+            created_at: match value.get("createdAt") {
+                None | Some(Json::Null) => None,
+                Some(Json::Str(s)) => Some(s.clone()),
+                _ => return Err("字段 createdAt 必须是字符串或 null".into()),
+            },
             last_content_revision: req_u32(value, "lastContentRevision")?,
         })
     }

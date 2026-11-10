@@ -4,6 +4,16 @@ members = ["core", "cli"]
 exclude = ["src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.5"
 edition = "2021"
 license = "MIT"
+
+# Argon2id/XChaCha20 在 debug 下极慢：依赖本身始终优化（不影响我们代码的调试信息）。
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+[profile.dev.package.chacha20]
+opt-level = 3
+[profile.dev.package.poly1305]
+opt-level = 3

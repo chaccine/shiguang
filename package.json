@@ -1,7 +1,7 @@
 {
   "name": "shiguang-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.5",
   "type": "module",
   "description": "拾光 Unit-0：草稿/正式分离与媒体持久化纵切",
   "scripts": {
@@ -14,7 +14,9 @@
     "screenshots": "npm run build && node scripts/screenshots.mjs",
     "tauri": "tauri",
     "screenshots:mobile": "npm run build && node scripts/screenshots-mobile.mjs",
-    "screenshots:u04": "npm run build && node scripts/screenshots-u04.mjs"
+    "screenshots:u04": "npm run build && node scripts/screenshots-u04.mjs",
+    "screenshots:u05": "npm run build && node scripts/screenshots-u05.mjs",
+    "screenshots:u06": "npm run build && node scripts/screenshots-u06.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

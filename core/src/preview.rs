@@ -16,7 +16,7 @@ pub fn preview_bytes(asset_sha_hex: &str) -> Vec<u8> {
         raw.push(0); // filter: none
         for x in 0..WIDTH {
             // 由 asset SHA 决定的确定性斜纹，便于人工确认派生自原图。
-            let stripe = ((x + y) / 8 + seed[3] as u32) % 2 == 0;
+            let stripe = ((x + y) / 8 + seed[3] as u32).is_multiple_of(2);
             if stripe {
                 raw.extend_from_slice(&[r as u8, g as u8, b as u8]);
             } else {

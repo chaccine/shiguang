@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "code": "BACKUP_CORRUPT",
+  "message": "备份文件内容被修改或损坏：container"
+}
+

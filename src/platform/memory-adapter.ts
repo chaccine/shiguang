@@ -1,4 +1,4 @@
-import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus } from "../domain/types.ts";
+import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus, BackupCapabilities, BackupCounts, BackupSummary, ExportBackupOptions, ExportBackupResult, MergeCounts, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
 import { isValidDate, isValidTime, validateForCommit } from "../domain/rules.ts";
 import type { AttachPhotoBytesInput, CreateDraftInput, DiscardResult, SaveDraftInput, SaveResult, ShiguangApi } from "./api.ts";
@@ -15,8 +15,16 @@ interface MemoryState {
   deletionMarkers: DeletionMarker[];
   conflictCopies: ConflictCopy[];
   quarantine: Record<string, MemoryAsset>;
+  /** Unit-0.6：被永久删除记录的 createdAt（与删除标记分开存放，供跨备份防复活匹配；不含正文）。 */
+  deletedCreatedAt?: Record<string, string>;
+  /** Unit-0.6：合并时撞号改号的来源映射（"来源id\u0000createdAt" → 本机id），保证重复导入幂等。 */
+  mergeOrigins?: Record<string, string>;
 }
 type Operation = keyof ShiguangApi;
+/** 浏览器预览的备份包：manifest + 完整状态 + 整包哈希（模拟 .sgbak 的校验语义，不是真实文件）。 */
+export interface PreviewBackup { magic: "SGBAK-PREVIEW"; body: string; sha256: string; bytes: number; lock?: { salt: string; check: string } }
+export type PreviewPickKind = "lastExport" | "corrupt" | "truncated" | "schemaTooNew" | "encrypted" | "notBackup";
+const encoder = new TextEncoder();
 const copy = <T>(value: T): T => structuredClone(value);
 const fail = (code: string, message = code): never => { throw { code, message }; };
 const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, photos: [] });
@@ -33,6 +41,11 @@ export class MemoryAdapter implements ShiguangApi {
   private startupError?: { code: string; message: string };
   private lastMediaReport: MediaReport | null = null;
   private storage?: StorageLike;
+  private lastExport: PreviewBackup | null = null;
+  private picked = new Map<string, { pkg: PreviewBackup; state: MemoryState | null }>();
+  private injected: PreviewBackup | null = null;
+  private pickSeq = 0;
+  private nextPick: PreviewPickKind = "lastExport";
   private key: string;
   private now: () => string;
 
@@ -46,6 +59,8 @@ export class MemoryAdapter implements ShiguangApi {
     if (code) this.startupError = { code, message: describeError({ code }).detail };
     if (params.get("missing") === "1" || params.get("media") === "missing") this.simulateAllPhotos = "missing";
     if (params.get("media") === "corrupt") this.simulateAllPhotos = "corrupt";
+    const pick = params.get("backup");
+    if (pick && ["corrupt", "truncated", "schemaTooNew", "encrypted", "notBackup"].includes(pick)) this.nextPick = pick as PreviewPickKind;
     for (const id of options.missingAssets ?? []) this.simulatedPhotos.set(id, "missing");
     for (const id of options.corruptAssets ?? []) this.simulatedPhotos.set(id, "corrupt");
     if (!this.startupError) this.state = this.reload();
@@ -74,6 +89,7 @@ export class MemoryAdapter implements ShiguangApi {
       }
       state.schemaVersion = 2;
       state.quarantine ??= {};
+      if (state.deletedCreatedAt !== undefined && (typeof state.deletedCreatedAt !== "object" || state.deletedCreatedAt === null || Array.isArray(state.deletedCreatedAt))) throw new Error("删除记录信息无效");
       if (!Array.isArray(state.deletionMarkers) || !Array.isArray(state.conflictCopies)
         || !state.quarantine || typeof state.quarantine !== "object" || Array.isArray(state.quarantine)) throw new Error("安全状态结构无效");
       const ids = new Set<string>();
@@ -179,6 +195,8 @@ export class MemoryAdapter implements ShiguangApi {
     const deletionMarkers = rows.map((r) => ({ recordId: r.recordId, deletedAt, lastContentRevision: r.contentRevision }));
     next.records = next.records.filter((r) => !ids.has(r.recordId));
     next.deletionMarkers.push(...deletionMarkers);
+    next.deletedCreatedAt ??= {};
+    for (const r of rows) next.deletedCreatedAt[r.recordId] = r.createdAt;
     const quarantined = this.quarantineOrphans(next, assets);
     this.persist(next);
     for (const id of ids) this.pendingConflicts.delete(id);
@@ -398,6 +416,258 @@ export class MemoryAdapter implements ShiguangApi {
     // 预览环境没有文件系统，明确报告无法导出，避免假装写入成功。
     return fail("IO_ERROR", `浏览器预览无法写入文件：${outPath}`);
   }
+
+  // ---- Unit-0.5/0.6 备份/恢复/合并（预览：同语义的内存实现，供截图与 TS 测试）----
+  // 注意：预览里的“加密”只是用口令派生的校验值门禁 + 混淆，用来演示交互；真实加密在 Rust core（Argon2id + XChaCha20-Poly1305）。
+  /** 预览中模拟“用户选中的文件”。默认选最近一次导出的包。 */
+  setNextPickedBackup(kind: PreviewPickKind): void { this.nextPick = kind; }
+  /** 预览/测试用：直接把一个包设为“下一次选中的文件”。 */
+  setNextPickedPackage(pkg: PreviewBackup): void { this.injected = copy(pkg); }
+  lastExportedPackage(): PreviewBackup | null { return this.lastExport ? copy(this.lastExport) : null; }
+  private counts(state: MemoryState): BackupCounts {
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const present = [...referenced].filter((id) => state.assets[id]);
+    return {
+      formal: state.records.filter((r) => r.status === "active" && r.formal !== null).length,
+      drafts: state.records.filter((r) => r.draft !== null).length,
+      trashed: state.records.filter((r) => r.status === "trashed").length,
+      deletionMarkers: state.deletionMarkers.length,
+      conflictCopies: state.conflictCopies.length,
+      mediaFiles: present.length,
+      missingMedia: referenced.size - present.length,
+    };
+  }
+  private packBackup(state: MemoryState, overrides: Record<string, unknown> = {}, password?: string): PreviewBackup {
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const assets: Record<string, MemoryAsset> = {};
+    for (const id of referenced) if (state.assets[id]) assets[id] = state.assets[id]!;
+    const packed = { ...copy(state), assets, quarantine: {} };
+    const manifest = {
+      format: "shiguang-backup", formatVersion: 1, schemaVersion: 2, appVersion: "preview",
+      exportedAt: this.now(), encryption: { mode: "none" }, compression: "none", counts: this.counts(state), ...overrides,
+    };
+    let body = JSON.stringify({ manifest, state: packed });
+    let lock: PreviewBackup["lock"];
+    if (password) {
+      const salt = sha256(encoder.encode(`${this.now()}:${Math.random()}`)).slice(0, 32);
+      lock = { salt, check: sha256(encoder.encode(`${salt}\u0000${password}`)) };
+      body = xorText(body, sha256(encoder.encode(`${password}\u0001${salt}`)));
+    }
+    const bytes = encoder.encode(body);
+    return { magic: "SGBAK-PREVIEW", body, sha256: sha256(bytes), bytes: bytes.length, lock };
+  }
+  private verifyPreview(pkg: PreviewBackup, password?: string): { summary: BackupSummary; state: MemoryState } {
+    if (!pkg || pkg.magic !== "SGBAK-PREVIEW" || typeof pkg.body !== "string") fail("BACKUP_INVALID", "这不是拾光备份文件，或文件已损坏");
+    const bytes = encoder.encode(pkg.body);
+    if (bytes.length !== pkg.bytes) fail("BACKUP_TRUNCATED", "备份文件不完整（可能拷贝中断）");
+    let body = pkg.body;
+    if (pkg.lock) {
+      if (!password) fail("BACKUP_PASSWORD_REQUIRED", "这是加密备份，请输入口令");
+      if (sha256(encoder.encode(`${pkg.lock.salt}\u0000${password}`)) !== pkg.lock.check) fail("BACKUP_PASSWORD_WRONG", "口令不正确，或文件已损坏");
+      if (sha256(bytes) !== pkg.sha256) fail("BACKUP_CORRUPT", "备份文件内容被修改或损坏");
+      body = xorText(body, sha256(encoder.encode(`${password}\u0001${pkg.lock.salt}`)));
+    } else if (sha256(bytes) !== pkg.sha256) fail("BACKUP_CORRUPT", "备份文件内容被修改或损坏");
+    let parsed: { manifest: Record<string, unknown> & { counts: BackupCounts; encryption: { mode: string } }; state: MemoryState };
+    try { parsed = JSON.parse(body); } catch { return fail("BACKUP_CORRUPT", "备份清单无法解析"); }
+    const m = parsed.manifest;
+    if (m.format !== "shiguang-backup") fail("BACKUP_INVALID", "这不是拾光备份文件");
+    if (Number(m.formatVersion) > 1) fail("BACKUP_FORMAT_TOO_NEW", "备份格式来自更新版本的拾光");
+    if (m.encryption?.mode !== "none") fail("BACKUP_ENCRYPTED_UNSUPPORTED", "未知的加密方式");
+    if (Number(m.schemaVersion) > 2) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
+    const summary: BackupSummary = {
+      formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
+      exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: pkg.lock ? "argon2id-xchacha20poly1305" : "none", counts: m.counts,
+    };
+    return { summary, state: parsed.state };
+  }
+  async backupCapabilities(): Promise<BackupCapabilities> {
+    return { platform: "preview", overwriteRestore: true, merge: true, encryption: true, antiResurrection: true, fileAccess: "preview" };
+  }
+  async exportBackup(options: ExportBackupOptions = {}): Promise<ExportBackupResult> {
+    this.check("exportBackup");
+    if (options.password !== undefined && options.password.length === 0) fail("BACKUP_PASSWORD_EMPTY", "请设置口令，或不勾选加密");
+    const state = this.reload(), pkg = this.packBackup(state, {}, options.password);
+    // 导出只读：不改动当前状态与存储。
+    this.lastExport = pkg;
+    const { summary } = this.verifyPreview(pkg, options.password);
+    const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
+    const missingMedia = [...referenced].filter((id) => !state.assets[id] || this.assetStatus(state, id) === "missing").sort();
+    const stamp = this.now().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-").replace(/Z$/, "");
+    return { cancelled: false, fileName: `拾光备份-${stamp}${pkg.lock ? "-加密" : ""}.sgbak`, location: "浏览器预览（内存，未写入文件）", sha256: pkg.sha256, summary, missingMedia };
+  }
+  async pickBackup(): Promise<PickBackupResult> {
+    this.check("pickBackup");
+    let pkg: PreviewBackup | null = this.injected ?? (this.lastExport ? copy(this.lastExport) : null);
+    this.injected = null;
+    const base = () => pkg ?? this.packBackup(this.reload());
+    switch (this.nextPick) {
+      case "lastExport": break;
+      case "corrupt": { const b = base(); pkg = { ...b, body: b.body.replace("合成", "篡改") }; if (pkg.body === b.body) pkg.sha256 = "0".repeat(64); break; }
+      case "truncated": { const b = base(); pkg = { ...b, body: b.body.slice(0, Math.floor(b.body.length / 2)) }; break; }
+      case "schemaTooNew": pkg = this.packBackup(this.reload(), { schemaVersion: 99 }); break;
+      case "encrypted": pkg = this.packBackup(this.reload(), { encryption: { mode: "aead-preview" } }); break;
+      case "notBackup": pkg = { magic: "PNG" as "SGBAK-PREVIEW", body: "", sha256: "", bytes: 0 }; break;
+    }
+    if (!pkg) return { cancelled: true };
+    const token = `pick-${++this.pickSeq}`;
+    if (pkg.lock) {
+      if (encoder.encode(pkg.body).length !== pkg.bytes) fail("BACKUP_TRUNCATED", "备份文件不完整（可能拷贝中断）");
+      this.picked.set(token, { pkg, state: null });
+      return { cancelled: false, token, fileName: "拾光备份-预览-加密.sgbak", encrypted: true, summary: null };
+    }
+    const { summary, state } = this.verifyPreview(pkg);
+    this.picked.set(token, { pkg, state });
+    return { cancelled: false, token, fileName: "拾光备份-预览.sgbak", encrypted: false, summary };
+  }
+  async unlockBackup(token: string, password: string): Promise<{ summary: BackupSummary }> {
+    this.check("unlockBackup");
+    const entry = this.picked.get(token) ?? fail("BACKUP_TOKEN_INVALID", "请重新选择备份文件");
+    const { summary, state } = this.verifyPreview(entry.pkg, password);
+    entry.state = state;
+    return { summary };
+  }
+  private pickedState(token: string): MemoryState {
+    const entry = this.picked.get(token) ?? fail("BACKUP_TOKEN_INVALID", "请重新选择备份文件");
+    return entry.state ?? fail("BACKUP_PASSWORD_REQUIRED", "这是加密备份，请先输入口令");
+  }
+  async restoreBackup(token: string): Promise<RestoreBackupResult> {
+    this.check("restoreBackup");
+    const incoming = this.pickedState(token);
+    const current = this.reload();
+    const stamp = this.now().replace(/[-:.]/g, "");
+    const safetyKey = `${this.key}.pre-restore.${stamp}`;
+    // 先留安全副本；写入失败则整体中止，当前数据不变。
+    try { this.storage?.setItem(safetyKey, JSON.stringify(current)); }
+    catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
+    const next: MemoryState = { ...copy(incoming), quarantine: copy(current.quarantine) };
+    this.persist(next);
+    this.picked.delete(token);
+    const mediaReport = await this.mediaReport();
+    return { restored: this.counts(next), safetyBackup: `backups/pre-restore-${stamp}`, mediaReport, durability: this.durabilityMode };
+  }
+  async planMerge(token: string): Promise<MergePlan> {
+    this.check("planMerge");
+    return mergeStates(this.reload(), this.pickedState(token), this.now()).plan;
+  }
+  async mergeBackup(token: string): Promise<MergeResult> {
+    this.check("mergeBackup");
+    const current = this.reload();
+    const { state: next, plan } = mergeStates(current, this.pickedState(token), this.now());
+    const stamp = this.now().replace(/[-:.]/g, "");
+    try { this.storage?.setItem(`${this.key}.pre-merge.${stamp}`, JSON.stringify(current)); }
+    catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
+    this.persist(next);
+    this.picked.delete(token);
+    const mediaReport = await this.mediaReport();
+    return { plan, safetyBackup: `backups/pre-merge-${stamp}`, mediaReport, durability: this.durabilityMode };
+  }
+  async discardPickedBackup(token: string): Promise<void> { this.picked.delete(token); }
+}
+
+function xorText(text: string, keyHex: string): string {
+  // 仅预览混淆（不是加密）：按 UTF-16 码元与口令派生值异或，保证无口令时看不出原文。
+  let out = "";
+  for (let i = 0; i < text.length; i++) out += String.fromCharCode(text.charCodeAt(i) ^ (keyHex.charCodeAt(i % keyHex.length) & 0x1f));
+  return out;
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** 比较快照内容时忽略 photoUseId（合并撞号时会被改号）。 */
+const sameContent = (a: Snapshot | null, b: Snapshot | null) => sameJson(
+  a && { ...a, photos: a.photos.map(({ photoUseId: _u, ...rest }) => rest) },
+  b && { ...b, photos: b.photos.map(({ photoUseId: _u, ...rest }) => rest) });
+
+/** 与 Rust core merge_states 同语义的预览实现（身份 = recordId + createdAt；时间戳不参与胜负）。 */
+export function mergeStates(local: MemoryState, incoming: MemoryState, now: string): { state: MemoryState; plan: MergePlan } {
+  const next = copy(local);
+  next.deletedCreatedAt ??= {};
+  next.mergeOrigins ??= {};
+  const counts: MergeCounts = { added: 0, updated: 0, unchanged: 0, conflicts: 0, keptTrashed: 0, keptActive: 0, skippedDeleted: 0,
+    deletedInBackup: 0, markersAdded: 0, conflictCopiesAdded: 0, conflictCopiesDropped: 0, mediaAdded: 0, mediaMissing: 0, mediaConflicts: 0 };
+  const skippedDeleted: string[] = [], deletedInBackup: string[] = [];
+  const usedIds = new Set<string>([...next.records.map((r) => r.recordId), ...next.deletionMarkers.map((m) => m.recordId)]);
+  const usedConflict = new Set(next.conflictCopies.map((c) => c.conflictId));
+  const usedPhotoUse = new Set<string>();
+  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) usedPhotoUse.add(p.photoUseId);
+  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) usedPhotoUse.add(p.photoUseId);
+  const maxSeq = (ids: Iterable<string>) => Math.max(0, ...[...ids].map((id) => Number(/-(\d+)$/.exec(id)?.[1] ?? 0)));
+  next.seq = Math.max(next.seq, incoming.seq);
+  const alloc = (prefix: string) => `${prefix}-${String(++next.seq).padStart(6, "0")}`;
+  const idMap = new Map<string, string>();
+  const remapPhotos = (snap: Snapshot): Snapshot => ({ ...snap, photos: snap.photos.map((p) => {
+    if (!usedPhotoUse.has(p.photoUseId)) { usedPhotoUse.add(p.photoUseId); return p; }
+    const id = alloc("pu"); usedPhotoUse.add(id); return { ...p, photoUseId: id };
+  }) });
+  const addCopy = (recordId: string, snapshot: Snapshot, baseRevision: number, reason: string) => {
+    const exists = next.conflictCopies.some((c) => c.recordId === recordId && sameContent(c.snapshot, snapshot));
+    if (exists) return;
+    let conflictId = alloc("cc"); while (usedConflict.has(conflictId)) conflictId = alloc("cc");
+    usedConflict.add(conflictId);
+    next.conflictCopies.push({ conflictId, recordId, baseRevision, snapshot: remapPhotos(snapshot), createdAt: now, reason });
+    counts.conflictCopiesAdded++;
+  };
+  const markerMatches = (recordId: string, createdAt: string) => next.deletionMarkers.some((m) => m.recordId === recordId
+    && (next.deletedCreatedAt?.[recordId] === undefined || next.deletedCreatedAt[recordId] === createdAt));
+  for (const r of incoming.records) {
+    if (markerMatches(r.recordId, r.createdAt)) { counts.skippedDeleted++; skippedDeleted.push(r.recordId); continue; }
+    const originKey = r.recordId + "\u0000" + r.createdAt;
+    const mapped = next.mergeOrigins[originKey];
+    const local = next.records.find((l) => l.recordId === (mapped ?? r.recordId) && l.createdAt === r.createdAt)
+      ?? next.records.find((l) => l.recordId === r.recordId);
+    if (mapped !== undefined && !local) { counts.skippedDeleted++; skippedDeleted.push(mapped); continue; }
+    if (!local || local.createdAt !== r.createdAt) {
+      const row = copy(r);
+      if (usedIds.has(row.recordId)) { row.recordId = alloc("rec"); next.mergeOrigins[originKey] = row.recordId; }
+      idMap.set(r.recordId + "\u0000" + r.createdAt, row.recordId);
+      usedIds.add(row.recordId);
+      row.formal = row.formal && remapPhotos(row.formal); row.draft = row.draft && remapPhotos(row.draft);
+      next.records.push(row); counts.added++;
+      continue;
+    }
+    idMap.set(r.recordId + "\u0000" + r.createdAt, local.recordId);
+    if (local.status === "trashed" && r.status === "active") counts.keptTrashed++;
+    if (local.status === "active" && r.status === "trashed") counts.keptActive++;
+    if (r.formal && local.formal && !sameContent(r.formal, local.formal)) {
+      if (r.contentRevision > local.contentRevision && local.status === "active") {
+        addCopy(local.recordId, local.formal, local.contentRevision, "merge-replaced-local");
+        local.formal = remapPhotos(r.formal); local.contentRevision = r.contentRevision; local.committedAt = r.committedAt; counts.updated++;
+      } else { addCopy(local.recordId, r.formal, r.contentRevision, "merge-incoming"); counts.conflicts++; }
+    } else if (r.formal && !local.formal && local.status === "active") {
+      local.formal = remapPhotos(r.formal); local.contentRevision = Math.max(local.contentRevision, r.contentRevision); counts.updated++;
+    } else {
+      local.contentRevision = Math.max(local.contentRevision, r.contentRevision); counts.unchanged++;
+    }
+    if (r.draft) {
+      if (local.draft) { if (!sameContent(local.draft, r.draft)) addCopy(local.recordId, r.draft, r.baseRevision, "merge-incoming-draft"); }
+      else if (local.status === "active" && r.baseRevision >= local.contentRevision) { local.draft = remapPhotos(r.draft); local.baseRevision = local.contentRevision; }
+      else addCopy(local.recordId, r.draft, r.baseRevision, "merge-incoming-draft");
+    }
+  }
+  for (const m of incoming.deletionMarkers) {
+    const createdAt = incoming.deletedCreatedAt?.[m.recordId];
+    const local = next.records.find((l) => l.recordId === m.recordId && (createdAt === undefined || l.createdAt === createdAt));
+    if (local) { counts.deletedInBackup++; deletedInBackup.push(local.recordId); continue; }
+    if (next.deletionMarkers.some((x) => x.recordId === m.recordId)) continue;
+    if (next.records.some((l) => l.recordId === m.recordId)) continue; // 同号不同记录：不能写入会误伤本机的标记
+    next.deletionMarkers.push(copy(m));
+    if (createdAt !== undefined) next.deletedCreatedAt[m.recordId] = createdAt;
+    counts.markersAdded++;
+  }
+  for (const c of incoming.conflictCopies) {
+    const target = [...idMap.entries()].find(([k]) => k.startsWith(c.recordId + "\u0000"))?.[1];
+    if (!target) continue;
+    addCopy(target, c.snapshot, c.baseRevision, c.reason);
+  }
+  const needed = new Set<string>();
+  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) needed.add(p.assetId);
+  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) needed.add(p.assetId);
+  for (const id of needed) {
+    if (next.assets[id]) { if (incoming.assets[id] && incoming.assets[id]!.sha256 !== next.assets[id]!.sha256) counts.mediaConflicts++; continue; }
+    if (incoming.assets[id]) { next.assets[id] = copy(incoming.assets[id]!); counts.mediaAdded++; }
+    else if (!local.assets[id]) counts.mediaMissing++;
+  }
+  next.seq = Math.max(next.seq, maxSeq(usedIds), maxSeq(usedConflict), maxSeq(usedPhotoUse));
+  return { state: next, plan: { counts, skippedDeleted, deletedInBackup } };
 }
 
 export function createMemoryApi(options: ConstructorParameters<typeof MemoryAdapter>[0] = {}): MemoryAdapter {
