@@ -33,3 +33,8 @@ pub use model::{
 pub use schema::CURRENT_SCHEMA_VERSION;
 
 pub use backup::{BackupCounts, BackupInfo, ExportReport, MissingMedia, RestoreReport};
+
+pub mod merge;
+pub use backup::KdfParams;
+pub use merge::{merge_states, MergePlan, MergeReport, RecordIdentity};
+pub use store::State;

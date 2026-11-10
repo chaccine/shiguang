@@ -252,6 +252,17 @@ fn check_root(root: &Path) -> Result<(), CoreError> {
     }
     Ok(())
 }
+// Backups and authenticated plaintext temporaries may contain private data.
+fn private_file(path: &Path) -> io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
 fn sync_dir(path: &Path) -> Result<(), CoreError> {
     match persist::parent_sync(path) {
         Durability::Uncertain { error } => Err(CoreError::io(error)),
@@ -375,6 +386,11 @@ pub fn verify_backup(path: &Path) -> Result<BackupInfo, CoreError> {
     Ok(verify(&mut f)?.info)
 }
 fn verify(file: &mut File) -> Result<Verified, CoreError> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut encrypted_magic = [0; 10];
+    if file.read_exact(&mut encrypted_magic).is_ok() && &encrypted_magic == b"SGBAKENC\0\x01" {
+        return Err(CoreError::new("BACKUP_PASSWORD_REQUIRED", "此备份需要口令"));
+    }
     let bytes = file.metadata()?.len();
     if bytes < 64 {
         return Err(invalid());
@@ -558,6 +574,14 @@ impl Store {
     /// Exports a consistent snapshot while holding the store write lock.
     pub fn export_backup(&self, dest: &Path, app_version: &str) -> Result<ExportReport, CoreError> {
         let _lock = write_lock(self.root())?;
+        self.export_backup_locked(dest, app_version, false)
+    }
+    fn export_backup_locked(
+        &self,
+        dest: &Path,
+        app_version: &str,
+        internal: bool,
+    ) -> Result<ExportReport, CoreError> {
         check_root(self.root())?;
         if fs::symlink_metadata(dest).is_ok() {
             return Err(CoreError::new(
@@ -578,7 +602,10 @@ impl Store {
         let root = fs::canonicalize(self.root())?;
         let destination = canonical_parent.join(name);
         if (canonical_parent == root
-            && (name.starts_with(".tmp-") || name.starts_with(".restore-")))
+            && (name.starts_with(".tmp-")
+                || name.starts_with(".restore-")
+                || name.starts_with(".merge-")
+                || (!internal && (name.starts_with(".encrypt-") || name.starts_with(".decrypt-")))))
             || destination == root.join("state.json")
             || destination == root.join(JOURNAL)
             || destination == root.join(".write.lock")
@@ -660,10 +687,7 @@ impl Store {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        let file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&partial)?;
+        let file = private_file(&partial)?;
         let result = (|| {
             let mut out = HashWriter {
                 inner: file,
@@ -1146,3 +1170,262 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+const MERGE_JOURNAL: &str = ".merge-journal.json";
+fn merge_error(e: impl std::fmt::Display) -> CoreError {
+    CoreError::new("MERGE_FAILED", format!("合并失败：{e}"))
+}
+struct MergeMedia {
+    entry: Entry,
+    offset: u64,
+}
+fn inspect_merge_media(
+    root: &Path,
+    v: &Verified,
+    merged: &Json,
+    plan: &mut crate::MergePlan,
+) -> Result<Vec<MergeMedia>, CoreError> {
+    check_root(root)?;
+    let references = refs(merged)?;
+    let existing = media_paths(root)?;
+    let mut offset = v.offset;
+    let mut entries = BTreeMap::new();
+    for e in &v.entries {
+        if e.path != "state.json" {
+            let asset = Path::new(&e.path)
+                .file_stem()
+                .and_then(|n| n.to_str())
+                .ok_or_else(invalid)?;
+            entries.insert(asset.to_owned(), (e, offset));
+        }
+        offset += e.size;
+    }
+    let mut added = Vec::new();
+    for (asset, photos) in references {
+        let local = existing.iter().find(|p| {
+            p.file_stem()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.eq_ignore_ascii_case(&asset))
+        });
+        let entry = entries.get(&asset);
+        if let Some(path) = local {
+            let (size, hash) = hash_file(path)?;
+            if entry.is_some() && photos.iter().any(|p| p.sha256 != hash || p.bytes != size) {
+                plan.media_conflicts.push(asset);
+            }
+        } else if let Some((entry, offset)) = entry {
+            if photos
+                .iter()
+                .all(|p| p.sha256 == entry.hash && p.bytes == entry.size)
+            {
+                added.push(MergeMedia {
+                    entry: (*entry).clone(),
+                    offset: *offset,
+                });
+                plan.media_added += 1;
+            } else {
+                plan.media_conflicts.push(asset);
+            }
+        } else {
+            plan.media_missing += 1;
+        }
+    }
+    Ok(added)
+}
+impl Store {
+    pub fn plan_merge(&self, path: &Path) -> Result<crate::MergePlan, CoreError> {
+        if self.instance_lock.is_none() {
+            return Err(CoreError::new(
+                STORE_NOT_EXCLUSIVE,
+                "合并需要独占打开数据目录",
+            ));
+        }
+        let _lock = write_lock(self.root())?;
+        let verified = verify(&mut File::open(path)?)?;
+        let local = self.backup_snapshot()?;
+        let (merged, mut plan) = crate::merge_states(
+            &State::from_json(&local)?,
+            &State::from_json(&verified.state)?,
+        )?;
+        inspect_merge_media(
+            self.root(),
+            &verified,
+            &merged.to_json(self.seed()),
+            &mut plan,
+        )?;
+        Ok(plan)
+    }
+    pub fn merge_backup(&mut self, path: &Path) -> Result<crate::MergeReport, CoreError> {
+        if self.instance_lock.is_none() {
+            return Err(CoreError::new(
+                STORE_NOT_EXCLUSIVE,
+                "合并需要独占打开数据目录",
+            ));
+        }
+        let _lock = write_lock(self.root())?;
+        let mut source = File::open(path)?;
+        let verified = verify(&mut source)?;
+        check_root(self.root())?;
+        recover_merge(self.root())?;
+        let local = self.backup_snapshot()?;
+        let (merged, mut plan) = crate::merge_states(
+            &State::from_json(&local)?,
+            &State::from_json(&verified.state)?,
+        )?;
+        let seed = local
+            .get("seed")
+            .and_then(Json::as_str)
+            .ok_or_else(invalid)?;
+        let value = merged.to_json(seed);
+        let media = inspect_merge_media(self.root(), &verified, &value, &mut plan)?;
+        // Strictly parse the serialized representation before any write.
+        let mut encoded = value.pretty().into_bytes();
+        State::from_json(
+            &parse_document(std::str::from_utf8(&encoded).map_err(|_| invalid())?)
+                .map_err(|_| invalid())?,
+        )?;
+        fault::hit(FaultPoint::MergeStage).map_err(merge_error)?;
+        if value == local && media.is_empty() {
+            self.install_restored_state(&value)?;
+            return Ok(crate::MergeReport {
+                plan,
+                safety_backup_dir: None,
+                media_report: self.reconcile_media_locked()?,
+            });
+        }
+        if fs::read(self.root().join("state.json")).ok().as_ref() == Some(&encoded) {
+            encoded.push(b'\n');
+        }
+        let tag = id();
+        let safety = self.root().join(format!("backups/pre-merge-{tag}"));
+        no_link(&self.root().join("backups"))?;
+        fs::create_dir_all(self.root().join("backups"))?;
+        fs::create_dir(&safety)?;
+        let safety_result = (|| {
+            if self.root().join("state.json").exists() {
+                copy_checked(&self.root().join("state.json"), &safety.join("state.json"))?;
+            }
+            atomic(
+                &safety.join("SAFETY.json"),
+                Json::obj(vec![(
+                    "mediaAdded",
+                    Json::Arr(media.iter().map(|m| Json::str(&m.entry.path)).collect()),
+                )])
+                .dump()
+                .as_bytes(),
+            )?;
+            sync_dir(&safety)?;
+            sync_dir(&self.root().join("backups"))
+        })();
+        if let Err(e) = safety_result {
+            let _ = fs::remove_dir_all(&safety);
+            return Err(merge_error(e));
+        }
+        let mut names = Vec::new();
+        for (i, m) in media.iter().enumerate() {
+            names.push(m.entry.path.clone());
+            names.push(format!("media/.tmp-merge-{tag}-{i}"));
+        }
+        let journal = Json::obj(vec![
+            ("stateSha256", Json::str(sha256::hex_digest(&encoded))),
+            ("files", Json::Arr(names.iter().map(Json::str).collect())),
+        ]);
+        atomic(&self.root().join(MERGE_JOURNAL), journal.dump().as_bytes())?;
+        let result = (|| {
+            for (i, m) in media.iter().enumerate() {
+                let tmp = self.root().join(format!("media/.tmp-merge-{tag}-{i}"));
+                let dest = self.root().join(&m.entry.path);
+                if fs::symlink_metadata(&dest).is_ok() {
+                    return Err(merge_error("目标原图已存在"));
+                }
+                let mut f = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+                source.seek(SeekFrom::Start(m.offset))?;
+                let hash = transfer(&mut source, &mut f, m.entry.size)?;
+                f.sync_all()?;
+                drop(f);
+                if hash != m.entry.hash {
+                    return Err(corrupt(&m.entry.path));
+                }
+                fs::rename(&tmp, &dest)?;
+                sync_dir(&self.root().join("media"))?;
+                fault::hit(FaultPoint::MergeMediaWrite)?;
+            }
+            fault::hit(FaultPoint::CrashAfterMergeMedia)?;
+            fault::hit(FaultPoint::MergeStateWrite)?;
+            // The state replacement is the commit point. A subsequent sync error
+            // must be resolved by the journal, never by removing committed media.
+            atomic(&self.root().join("state.json"), &encoded)?;
+            Ok::<_, CoreError>(())
+        })();
+        drop(source);
+        if let Err(e) = result {
+            if fault::hit(FaultPoint::CrashAfterMergeMedia).is_err() {
+                return Err(merge_error(e));
+            }
+            recover_merge(self.root())?;
+            return Err(merge_error(e));
+        }
+        fault::hit(FaultPoint::MergeAfterCommit).map_err(merge_error)?;
+        recover_merge(self.root())?;
+        self.install_restored_state(&value)?;
+        Ok(crate::MergeReport {
+            plan,
+            safety_backup_dir: Some(safety),
+            media_report: self.reconcile_media_locked()?,
+        })
+    }
+}
+pub(crate) fn recover_merge(root: &Path) -> Result<(), CoreError> {
+    let path = root.join(MERGE_JOURNAL);
+    no_link(&path)?;
+    if !path.exists() {
+        return Ok(());
+    }
+    check_root(root)?;
+    if fs::metadata(&path)?.len() > 64 * 1024 * 1024 {
+        return Err(merge_error("合并日志过大"));
+    }
+    let j = parse_document(&fs::read_to_string(&path)?).map_err(|_| merge_error("合并日志无效"))?;
+    let hash = text(&j, "stateSha256")?;
+    if !digest_valid(hash) {
+        return Err(merge_error("合并日志摘要无效"));
+    }
+    let mut files = Vec::new();
+    let listed = array(&j, "files")?;
+    if listed.len() > 2 * MAX_ENTRIES {
+        return Err(merge_error("合并日志文件数过多"));
+    }
+    for v in listed {
+        let name = v.as_str().ok_or_else(invalid)?;
+        let file = name.strip_prefix("media/").ok_or_else(invalid)?;
+        let temporary = file.strip_prefix(".tmp-merge-").is_some_and(name_valid);
+        if !(name_valid(file) || temporary) {
+            return Err(merge_error("合并日志路径无效"));
+        }
+        let path = root.join(name);
+        no_link(&path)?;
+        files.push(path);
+    }
+    let committed = match hash_file(&root.join("state.json")) {
+        Ok((_, current)) => current == hash,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => false,
+        Err(e) => return Err(e.into()),
+    };
+    if !committed {
+        for file in files {
+            match fs::remove_file(file) {
+                Ok(()) => (),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        sync_dir(&root.join("media"))?;
+    }
+    fs::remove_file(path)?;
+    sync_dir(root)
+}
+
+mod crypto;
+pub use crypto::{
+    decrypt_backup, is_encrypted, verify_backup_with_password, BackupPassword, KdfParams,
+};

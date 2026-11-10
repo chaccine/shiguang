@@ -1,0 +1,416 @@
+Unit-0.6 core + CLI evidence (synthetic data only)
+Branch: feat/unit-0.5-backup (work performed in place; no commit).
+Toolchain: Rust 1.90.0. All cargo operations used --offline.
+This core/CLI task added no dependencies, changed no dependency versions or lock files, and used no network or sudo.
+No Tauri/TS/UI implementation or Tauri signature adaptation was needed.
+Pre-existing untracked src-tauri/gen/ left untouched.
+Concurrent changes later appeared in README.md, src-tauri/{Cargo.toml,Cargo.lock,
+src/backup_cmd.rs,src/lib.rs}, src/domain/types.ts, src/platform/memory-adapter.ts
+and src/ui/main.ts. These were not edited by this task. The concurrent Tauri work
+added a direct zeroize dependency; this task did not add it or revert it.
+
+STATUS: Implementation and all new tests pass. Required full test commands are
+NOT GREEN: existing core/tests/unit04_trash.rs:173 asserts exactly the old three
+DeletionMarker JSON fields. SPEC 1 requires the additional createdAt field.
+The existing assertion remains unchanged, as explicitly required by the user.
+A narrowly scoped exception was requested; no answer received at log generation.
+Skipping ONLY that assertion demonstrates all remaining suites pass; those runs
+are diagnostic checks and do not replace the required unfiltered commands.
+
+Tests first:
+- unit06_merge.rs, unit06_crypto.rs, unit06_faults.rs and CLI unit06_backup.rs
+  were created before the corresponding implementation.
+- Initial offline test compilation failed on missing merge APIs / State / marker
+  created_at; additional red regressions reproduced kth injection, re-exported
+  photo aliases, duplicate photo uses and synthetic asset-prefix collisions.
+- Existing tests/assertions/constructions are all unchanged.
+- Secret test constants never appear in assertion diagnostics, logs or Debug.
+  BackupPassword Debug is redacted; owned secret/key/buffer storage zeroizes.
+
+Public API signatures (crate reexports unless namespace shown):
+Store::plan_merge(&self, path: &Path) -> Result<MergePlan, CoreError>
+Store::merge_backup(&mut self, path: &Path) -> Result<MergeReport, CoreError>
+merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan), CoreError>
+State::from_json(value: &Json) -> Result<State, CoreError>
+State::to_json(&self, seed: &str) -> Json
+DeletionMarker::matches(&self, record_id: &str, created_at: Option<&str>) -> bool
+DeletionMarker.created_at: Option<String> (JSON createdAt; absent/null => None).
+Store::export_backup_encrypted(&self, dest: &Path, app_version: &str,
+    password: &str, params: KdfParams) -> Result<ExportReport, CoreError>
+backup::decrypt_backup(src: &Path, dest_plain: &Path, password: &str) -> Result<(), CoreError>
+backup::is_encrypted(path: &Path) -> bool
+backup::verify_backup_with_password(path: &Path, password: &str) -> Result<BackupInfo, CoreError>
+Store::plan_merge_with_password(&self, path: &Path, password: &str) -> Result<MergePlan, CoreError>
+Store::merge_backup_with_password(&mut self, path: &Path, password: &str) -> Result<MergeReport, CoreError>
+Store::restore_backup_overwrite_with_password(&mut self, path: &Path,
+    password: &str) -> Result<RestoreReport, CoreError>
+KdfParams::default() -> KdfParams  // m=65536 KiB, t=3, p=1
+KdfParams::fast() -> KdfParams     // m=8 KiB, t=1, p=1; explicit tests/CLI only
+KdfParams fields: m, t, p (u32).
+backup::BackupPassword::read(stdin: bool) -> Result<BackupPassword, CoreError>
+backup::BackupPassword::as_str(&self) -> &str
+fault::set_after(point: FaultPoint, kth: usize) (fault-injection feature only).
+MergePlan / MergeReport / RecordIdentity each provide to_json(&self) -> Json.
+
+JSON fields:
+MergePlan: added, updated, unchanged, conflicts, keptTrashed, keptActive,
+  skippedDeleted, deletedInBackup, markersAdded, conflictCopiesAdded,
+  conflictCopiesDropped, mediaAdded, mediaMissing, mediaConflicts.
+RecordIdentity (skippedDeleted / deletedInBackup elements): recordId, createdAt.
+mediaConflicts elements: assetId strings.
+MergeReport: plan, safetyBackupDir (nullable for no-op), mediaReport.
+
+Container:
+10-byte magic SGBAKENC\x00\x01; u32 LE JSON header length (max 64 KiB);
+UTF-8 JSON {format,formatVersion,kdf:{alg,version,m,t,p,salt},
+aead:{alg,noncePrefix,chunkSize},plaintextBytes}.
+format=shiguang-backup-encrypted; formatVersion=1; KDF=Argon2id v19;
+salt=16 random bytes in canonical base64; AEAD=XChaCha20-Poly1305;
+noncePrefix=19 random bytes in canonical base64; chunkSize=1048576.
+Ciphertext chunks have a 16-byte detached tag appended. Chunk sizes/count and
+last flag are inferred from authenticated plaintextBytes; exact outer length
+is checked before KDF, and counters are bounded to u32 (never wrap).
+Nonce = prefix(19) || u32 BE counter || last(0/1).
+AAD = all framing/header bytes, including magic and length, for every chunk.
+Inner plaintext is the complete Unit-0.5 container, encryption.mode=none.
+Full inner verification precedes plaintext publication. Existing destinations
+are preserved. Temporary plaintext stays under the data root (store wrappers)
+or a private plaintext file in the OS temp directory (store-free verify); output partial stays in the
+target directory. Unix backup/plaintext files are created mode 0600.
+Closed file handles precede publication, rename, unlink (Windows compatible).
+KDF accepts the SPEC bounds and rejects cryptographically inconsistent lane /
+memory combinations via Argon2 parameter validation. Keys and passwords are
+zeroized; passwords are never used in paths or diagnostic formatting.
+
+Merge safety:
+Exclusive Store + write lock; complete backup verify; same pure merge for plan
+and commit; serialized result re-parsed via State::from_json before writing.
+Strict ID validation also runs on open: record/conflict IDs globally unique;
+photo use IDs identify one logical owner/asset/hash, shared across snapshots;
+no duplicate photoUseId inside a snapshot; seq >= used numeric suffixes.
+Safe copy backups/pre-merge-<id> contains state.json (when present) and SAFETY.json
+listing new media. .merge-journal.json lists only planned new originals and
+owned media/.tmp-merge-* files plus the commit state hash. New media are streamed,
+rehashed, fsynced, then renamed; atomic state replacement is the commit point.
+Identical state bytes get one trailing newline when media repair requires a
+commit, so journal recovery cannot mistake the old state for committed state.
+Open/open_exclusive roll back pre-commit media or clear a committed journal.
+Recovery validates all paths before deleting any, caps journal size at 64 MiB
+and path count at twice the existing entry limit. Existing media are never
+replaced. Reconciliation follows a successful merge; repeated import preserves
+state bytes and creates no additional conflict copies.
+
+SPEC additions/deviations and reasons:
+1. merge_states returns Result rather than an unchecked tuple, to reject invalid
+   IDs / exhausted sequence numbers without panics. It remains pure and uses no IO.
+2. Optional schema-v2 mergeOrigins (default empty) records source-to-local record
+   and photo ID aliases. Without persistent aliases a reimport after collision
+   would duplicate records or conflict snapshots. Re-export retains canonical
+   identity, including markers for previously remapped and purged records.
+3. Additional MergeAfterCommit fault point and kth-visit injection cover both
+   sides of the commit point and later media/crypto chunks.
+4. Existing-test conflict above prevents claiming the requested all-green status.
+   No assertion was silently weakened and no legacy JSON projection was added.
+
+CLI:
+export-backup <dest> [--encrypt] [--kdf-fast] [--password-stdin]
+verify-backup <file> [--password-stdin] (store-free, including encrypted inputs)
+plan-merge <file> [--password-stdin]
+merge-backup <file> --yes [--password-stdin]
+restore-backup <file> --yes [--password-stdin]
+Only SHIGUANG_BACKUP_PASSWORD or --password-stdin supplies secret input.
+Password-valued command arguments are rejected without echo, before store open.
+
+New test inventory:
+core/tests/unit06_merge.rs: 15 tests
+  pure_table_revision_status_and_equal_content
+  collisions_remap_records_photos_conflicts_and_remain_idempotent
+  drafts_preserve_local_import_current_and_conflict_stale
+  purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative
+  incoming_markers_never_delete_local_and_union_is_idempotent
+  plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes
+  missing_media_and_hash_collision_preserve_local_original
+  strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses
+  merge_requires_exclusive_and_invalid_package_writes_nothing
+  dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts
+  merge_symlinks_and_malicious_journal_cannot_escape_root
+  reexported_collision_merges_back_without_duplicate_photos_or_conflicts
+  strict_validation_covers_conflict_ids_and_logical_photo_ownership
+  synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes
+  new_records_preserve_draft_and_trash_and_markers_preserve_local_trash
+core/tests/unit06_crypto.rs: 6 tests
+  encrypted_roundtrip_password_wrappers_and_required_error
+  wrong_password_never_leaks_in_message_debug_or_changes_destination
+  empty_password_and_invalid_kdf_rejected_without_artifacts
+  multichunk_tamper_truncation_header_aad_and_reorder_rejected
+  wrong_password_wrappers_preserve_entire_existing_root
+  untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext
+core/tests/unit06_faults.rs: 9 tests
+  merge_stage
+  merge_media
+  merge_state
+  crash_after_merge_media
+  encrypt_chunk_cleans_every_plaintext_and_partial
+  decrypt_chunk_cleans_partial
+  kth_media_and_later_crypto_chunks_rollback_owned_files_only
+  crash_after_commit_reopens_complete_new_state_and_clears_journal
+  encrypted_export_self_verification_failure_cleans_both_directories
+cli/tests/unit06_backup.rs: 2 tests
+  encrypted_export_verify_plan_merge_restore_env_and_stdin
+  password_argv_is_rejected_without_echo_or_data_creation
+Total new tests: 32
+
+Final verification output tails:
+
+$ cargo test --locked --offline
+Working directory: /workspace/shiguang-app
+Exit status: 101; passed tests across completed suites: 85
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-6101cb44ebbc83a4)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_attach_is_write_protected ... ok
+test trashed_commit_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... FAILED
+test trashed_create_edit_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_discard_is_write_protected ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+failures:
+
+---- manual_purge_creates_content_free_marker_and_quarantines_original stdout ----
+
+thread 'manual_purge_creates_content_free_marker_and_quarantines_original' panicked at core/tests/unit04_trash.rs:173:5:
+assertion `left == right` failed
+  left: ["createdAt", "deletedAt", "lastContentRevision", "recordId"]
+ right: ["deletedAt", "lastContentRevision", "recordId"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    manual_purge_creates_content_free_marker_and_quarantines_original
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p shiguang_core --test unit04_trash`
+
+$ cargo test --locked --offline -p shiguang_core --features fault-injection
+Working directory: /workspace/shiguang-app
+Exit status: 101; passed tests across completed suites: 95
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-f4ef6e9ba8b94ad1)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_commit_is_write_protected ... ok
+test trashed_attach_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... FAILED
+test trashed_create_edit_is_write_protected ... ok
+test trashed_discard_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+failures:
+
+---- manual_purge_creates_content_free_marker_and_quarantines_original stdout ----
+
+thread 'manual_purge_creates_content_free_marker_and_quarantines_original' panicked at core/tests/unit04_trash.rs:173:5:
+assertion `left == right` failed
+  left: ["createdAt", "deletedAt", "lastContentRevision", "recordId"]
+ right: ["deletedAt", "lastContentRevision", "recordId"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    manual_purge_creates_content_free_marker_and_quarantines_original
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p shiguang_core --test unit04_trash`
+
+$ cargo clippy --locked --offline --all-targets -- -D warnings
+Working directory: /workspace/shiguang-app
+Exit status: 0; passed tests across completed suites: 0
+    Checking shiguang_core v0.1.5 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.5 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.78s
+
+$ cargo check --offline --target aarch64-linux-android
+Working directory: /workspace/shiguang-app/src-tauri
+Exit status: 0; passed tests across completed suites: 0
+    Checking shiguang_core v0.1.5 (/workspace/shiguang-app/core)
+    Checking shiguang-desktop v0.1.5 (/workspace/shiguang-app/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.90s
+
+$ cargo test --locked --offline -- --skip manual_purge_creates_content_free_marker_and_quarantines_original
+Working directory: /workspace/shiguang-app
+Exit status: 0; passed tests across completed suites: 152
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test size ... ok
+test schema ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test traversal_media ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test traversal_state ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-464ad041aea6df6b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_crypto.rs (target/debug/deps/unit06_crypto-92a8a48aa9d9e177)
+
+running 6 tests
+test empty_password_and_invalid_kdf_rejected_without_artifacts ... ok
+test untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext ... ok
+test wrong_password_never_leaks_in_message_debug_or_changes_destination ... ok
+test wrong_password_wrappers_preserve_entire_existing_root ... ok
+test encrypted_roundtrip_password_wrappers_and_required_error ... ok
+test multichunk_tamper_truncation_header_aad_and_reorder_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.60s
+
+     Running tests/unit06_faults.rs (target/debug/deps/unit06_faults-9b5d4cdbfa2f4026)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_merge.rs (target/debug/deps/unit06_merge-7a9720b11de657b2)
+
+running 15 tests
+test merge_requires_exclusive_and_invalid_package_writes_nothing ... ok
+test drafts_preserve_local_import_current_and_conflict_stale ... ok
+test new_records_preserve_draft_and_trash_and_markers_preserve_local_trash ... ok
+test incoming_markers_never_delete_local_and_union_is_idempotent ... ok
+test merge_symlinks_and_malicious_journal_cannot_escape_root ... ok
+test pure_table_revision_status_and_equal_content ... ok
+test collisions_remap_records_photos_conflicts_and_remain_idempotent ... ok
+test strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses ... ok
+test missing_media_and_hash_collision_preserve_local_original ... ok
+test strict_validation_covers_conflict_ids_and_logical_photo_ownership ... ok
+test reexported_collision_merges_back_without_duplicate_photos_or_conflicts ... ok
+test dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts ... ok
+test plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes ... ok
+test purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative ... ok
+test synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo test --locked --offline -p shiguang_core --features fault-injection -- --skip manual_purge_creates_content_free_marker_and_quarantines_original
+Working directory: /workspace/shiguang-app
+Exit status: 0; passed tests across completed suites: 186
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-a0aca1fe4474e97f)
+
+running 15 tests
+test backup_write_cleans_partial_and_preserves_source ... ok
+test backup_finalize_cleans_partial_and_preserves_source ... ok
+test crash_between_media_renames_recovers_old_and_cleans_temps_afterwards ... ok
+test after_commit_reopen_exclusive_finishes_new_state ... ok
+test crash_after_media_swap_plain_open_restores_old ... ok
+test after_commit_plain_open_finishes_new_state ... ok
+test committed_cleanup_is_idempotent_after_old_archive_and_staging_removal ... ok
+test crash_after_media_swap_reopen_exclusive_restores_old ... ok
+test identical_state_crash_before_commit_restores_exact_old_media ... ok
+test identical_state_switch_failure_still_rolls_back_media ... ok
+test portable_locks_support_export_restore_without_nested_write_lock ... ok
+test safety_failure_cleans_incomplete_copy ... ok
+test media_switch_failure_rolls_back ... ok
+test stage_failure_preserves_target ... ok
+test state_switch_failure_rolls_back ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/unit06_crypto.rs (target/debug/deps/unit06_crypto-167bd63d54305c74)
+
+running 6 tests
+test empty_password_and_invalid_kdf_rejected_without_artifacts ... ok
+test untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext ... ok
+test wrong_password_never_leaks_in_message_debug_or_changes_destination ... ok
+test wrong_password_wrappers_preserve_entire_existing_root ... ok
+test encrypted_roundtrip_password_wrappers_and_required_error ... ok
+test multichunk_tamper_truncation_header_aad_and_reorder_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.57s
+
+     Running tests/unit06_faults.rs (target/debug/deps/unit06_faults-5ddfdbc14906862b)
+
+running 9 tests
+test merge_stage ... ok
+test crash_after_merge_media ... ok
+test merge_media ... ok
+test encrypt_chunk_cleans_every_plaintext_and_partial ... ok
+test encrypted_export_self_verification_failure_cleans_both_directories ... ok
+test crash_after_commit_reopens_complete_new_state_and_clears_journal ... ok
+test merge_state ... ok
+test decrypt_chunk_cleans_partial ... ok
+test kth_media_and_later_crypto_chunks_rollback_owned_files_only ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.41s
+
+     Running tests/unit06_merge.rs (target/debug/deps/unit06_merge-306061877ff14425)
+
+running 15 tests
+test merge_requires_exclusive_and_invalid_package_writes_nothing ... ok
+test drafts_preserve_local_import_current_and_conflict_stale ... ok
+test incoming_markers_never_delete_local_and_union_is_idempotent ... ok
+test new_records_preserve_draft_and_trash_and_markers_preserve_local_trash ... ok
+test pure_table_revision_status_and_equal_content ... ok
+test merge_symlinks_and_malicious_journal_cannot_escape_root ... ok
+test collisions_remap_records_photos_conflicts_and_remain_idempotent ... ok
+test strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses ... ok
+test strict_validation_covers_conflict_ids_and_logical_photo_ownership ... ok
+test plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes ... ok
+test missing_media_and_hash_collision_preserve_local_original ... ok
+test dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts ... ok
+test purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative ... ok
+test reexported_collision_merges_back_without_duplicate_photos_or_conflicts ... ok
+test synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo clippy --locked --offline -p shiguang_core --features fault-injection --all-targets -- -D warnings
+Working directory: /workspace/shiguang-app
+Exit status: 0; passed tests across completed suites: 0
+    Checking shiguang_core v0.1.5 (/workspace/shiguang-app/core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.86s
+
+$ cargo check --locked --offline --workspace --all-targets --target x86_64-pc-windows-msvc
+Working directory: /workspace/shiguang-app
+Exit status: 0; passed tests across completed suites: 0
+    Checking shiguang_core v0.1.5 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.5 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s

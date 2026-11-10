@@ -47,12 +47,13 @@ pub struct Store {
 }
 
 #[derive(Clone)]
-pub(crate) struct State {
-    version: i64,
-    seq: u64,
-    records: Vec<RecordRow>,
-    deletion_markers: Vec<DeletionMarker>,
-    conflict_copies: Vec<ConflictCopy>,
+pub struct State {
+    pub(crate) version: i64,
+    pub(crate) seq: u64,
+    pub(crate) records: Vec<RecordRow>,
+    pub(crate) deletion_markers: Vec<DeletionMarker>,
+    pub(crate) conflict_copies: Vec<ConflictCopy>,
+    pub(crate) merge_origins: Vec<crate::merge::MergeOrigin>,
 }
 
 #[derive(Clone, Debug)]
@@ -152,6 +153,7 @@ impl Store {
             .iter()
             .map(|r| DeletionMarker {
                 record_id: r.record_id.clone(),
+                created_at: Some(r.created_at.clone()),
                 deleted_at: deleted_at.clone(),
                 last_content_revision: r.content_revision,
             })
@@ -432,6 +434,7 @@ impl Store {
         fs::create_dir_all(&root)?;
         let _write_lock = write_lock(&root)?;
         crate::backup::recover(&root)?;
+        crate::backup::recover_merge(&root)?;
         let mut seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
         let state_path = root.join(STATE_FILE);
         let state = if state_path.exists() {
@@ -496,6 +499,7 @@ impl Store {
                 records: Vec::new(),
                 deletion_markers: Vec::new(),
                 conflict_copies: Vec::new(),
+                merge_origins: Vec::new(),
             }
         };
         fs::create_dir_all(root.join(MEDIA_DIR))?;
@@ -1330,9 +1334,18 @@ impl State {
         format!("{}-{:06}", prefix, self.seq)
     }
 
-    fn to_json(&self, seed: &str) -> Json {
+    pub fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
             ("version", Json::Num(self.version)),
+            (
+                "mergeOrigins",
+                Json::Arr(
+                    self.merge_origins
+                        .iter()
+                        .map(crate::merge::MergeOrigin::to_json)
+                        .collect(),
+                ),
+            ),
             ("schemaVersion", Json::Num(schema::CURRENT_SCHEMA_VERSION)),
             (
                 "deletionMarkers",
@@ -1361,7 +1374,7 @@ impl State {
         ])
     }
 
-    pub(crate) fn from_json(value: &Json) -> Result<Self, CoreError> {
+    pub fn from_json(value: &Json) -> Result<Self, CoreError> {
         let version = value
             .get("version")
             .and_then(Json::as_i64)
@@ -1433,13 +1446,24 @@ impl State {
                 ));
             }
         }
-        Ok(State {
+        let merge_origins = match value.get("mergeOrigins") {
+            None => Vec::new(),
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(crate::merge::MergeOrigin::from_json)
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => return Err(CoreError::new("STATE_CORRUPT", "mergeOrigins 必须是数组")),
+        };
+        let state = State {
             version,
             seq,
             records,
             deletion_markers,
             conflict_copies,
-        })
+            merge_origins,
+        };
+        crate::merge::validate_ids(&state)?;
+        Ok(state)
     }
 }
 
