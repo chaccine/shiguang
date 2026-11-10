@@ -1,4 +1,5 @@
-import type { RecordRow } from "../domain/types.ts";
+import type { RecordRow, TimelineFilter } from "../domain/types.ts";
+import { localToday } from "../domain/timeline.ts";
 import type { ShiguangApi } from "./api.ts";
 export type { ShiguangApi, SaveResult } from "./api.ts";
 
@@ -47,7 +48,25 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     pickBackup: () => invoke("pick_backup"),
     restoreBackup: (token) => invoke("restore_backup", { token }),
     discardPickedBackup: (token) => invoke("discard_picked_backup", { token }),
+    setFavorite: (recordId, favorite, expectedRevision) => invoke("set_favorite", { recordId, favorite, expectedRevision: expectedRevision ?? null }),
+    setRecordTags: (recordId, tagIds, expectedRevision) => invoke("set_record_tags", { recordId, tagIds, expectedRevision: expectedRevision ?? null }),
+    listTags: () => invoke("list_tags"),
+    createTag: (name) => invoke("create_tag", { name }),
+    renameTag: (tagId, name) => invoke("rename_tag", { tagId, name }),
+    mergeTags: (fromTagId, intoTagId) => invoke("merge_tags", { fromTagId, intoTagId }),
+    deleteTag: (tagId) => invoke("delete_tag", { tagId }),
+    tagImpact: (tagId) => invoke("tag_impact", { tagId }),
+    timelinePage: (filter, cursor, limit) => invoke("timeline_page", { filter: wireFilter(filter), cursor, limit, today: localToday() }),
+    timelineMonths: (filter) => invoke("timeline_months", { filter: wireFilter(filter) }),
+    calendarMonth: (year, month, filter) => invoke("calendar_month", { year, month, filter: wireFilter(filter ?? {}) }),
+    dayEntries: (date, order) => invoke("day_entries", { date, order: order ?? "desc", today: localToday() }),
+    onThisDay: (month, day, today) => invoke("on_this_day", { month, day, today: today ?? localToday() }),
   };
+}
+
+/** 统一成 Rust 端固定形状（缺省字段补齐）。 */
+function wireFilter(f: TimelineFilter): Required<Omit<TimelineFilter, "from" | "to" | "hasPhoto">> & Pick<TimelineFilter, "from" | "to" | "hasPhoto"> {
+  return { from: f.from ?? null, to: f.to ?? null, favoriteOnly: f.favoriteOnly ?? false, tagIds: f.tagIds ?? [], hasPhoto: f.hasPhoto ?? null, order: f.order ?? "desc" };
 }
 
 export function tauriInvokeFromWindow(): InvokeFn | null {

@@ -1,3 +1,4 @@
+import type { TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupOptions, ExportBackupResult, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult, BackupSummary } from "../domain/types.ts";
 
 export interface DraftFields {
@@ -62,4 +63,24 @@ export interface ShiguangApi {
   mergeBackup(token: string): Promise<MergeResult>;
   /** 放弃已选择但未恢复的备份（清理临时副本）。 */
   discardPickedBackup(token: string): Promise<void>;
+  // ---- Unit-0.7 珍藏 / 标签（独立元数据：不发布草稿、不改正文修订；expectedRevision 给定时做 CAS） ----
+  setFavorite(recordId: string, favorite: boolean, expectedRevision?: number | null): Promise<MetaResult>;
+  setRecordTags(recordId: string, tagIds: string[], expectedRevision?: number | null): Promise<MetaResult>;
+  listTags(): Promise<TagInfo[]>;
+  /** 同名（忽略大小写/首尾空白）→ TAG_NAME_CONFLICT（附 tagId）。 */
+  createTag(name: string): Promise<TagInfo>;
+  /** 与其他标签重名 → TAG_NAME_CONFLICT；UI 提示“合并或取消”，不默默覆盖。 */
+  renameTag(tagId: string, name: string): Promise<TagInfo>;
+  /** 原子：改写关联并去重、删除来源、留别名。 */
+  mergeTags(fromTagId: string, intoTagId: string): Promise<TagMergeResult>;
+  /** 只解除关联，不删除任何记录/照片/文字。 */
+  deleteTag(tagId: string): Promise<TagDeleteResult>;
+  tagImpact(tagId: string): Promise<TagImpact>;
+  // ---- Unit-0.7 时光轴 / 日历（只读，只含正式记录） ----
+  timelinePage(filter: TimelineFilter, cursor: string | null, limit: number): Promise<TimelinePage>;
+  timelineMonths(filter: TimelineFilter): Promise<MonthCount[]>;
+  calendarMonth(year: number, month: number, filter?: TimelineFilter): Promise<CalendarDay[]>;
+  dayEntries(date: string, order?: SortOrder): Promise<TimelineItem[]>;
+  /** 往年同月同日；today 缺省为设备本地日期。 */
+  onThisDay(month: number, day: number, today?: string): Promise<OnThisDayGroup[]>;
 }

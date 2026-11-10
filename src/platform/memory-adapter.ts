@@ -1,3 +1,6 @@
+import type { TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
+import * as tl from "../domain/timeline.ts";
+import * as tg from "../domain/tags.ts";
 import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus, BackupCapabilities, BackupCounts, BackupSummary, ExportBackupOptions, ExportBackupResult, MergeCounts, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
 import { isValidDate, isValidTime, validateForCommit } from "../domain/rules.ts";
@@ -8,7 +11,7 @@ export interface StorageLike { getItem(key: string): string | null; setItem(key:
 interface MemoryAsset { dataUrl: string; sha256: string; bytes: number }
 interface MemoryState {
   version: 1;
-  schemaVersion: 2;
+  schemaVersion: 3;
   seq: number;
   records: RecordRow[];
   assets: Record<string, MemoryAsset>;
@@ -19,6 +22,21 @@ interface MemoryState {
   deletedCreatedAt?: Record<string, string>;
   /** Unit-0.6：合并时撞号改号的来源映射（"来源id\u0000createdAt" → 本机id），保证重复导入幂等。 */
   mergeOrigins?: Record<string, string>;
+  /** Unit-0.7（schema v3）：标签字典、合并别名、删除墓碑。 */
+  tags: TagDef[];
+  tagDictRevision: number;
+  tagAliases: TagAlias[];
+  tagTombstones: TagTombstone[];
+}
+
+/** v2 → v3：每条记录补珍藏/标签字段，顶层补标签字典（与 Rust migrate_v2_to_v3 同语义）。 */
+export function migrateToV3(state: Omit<MemoryState, "schemaVersion" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<MemoryState> & { schemaVersion?: number }): MemoryState {
+  for (const row of state.records) {
+    row.favorite ??= false; row.favoriteRevision ??= 0; row.tagIds ??= []; row.tagRevision ??= 0;
+  }
+  state.tags ??= []; state.tagDictRevision ??= 0; state.tagAliases ??= []; state.tagTombstones ??= [];
+  state.schemaVersion = 3;
+  return state as MemoryState;
 }
 type Operation = keyof ShiguangApi;
 /** 浏览器预览的备份包：manifest + 完整状态 + 整包哈希（模拟 .sgbak 的校验语义，不是真实文件）。 */
@@ -33,7 +51,8 @@ const normalizeTime = (value: string | null | undefined) => value?.trim() || nul
 /** 仅供浏览器合成数据预览；storage 由调用方注入。 */
 export class MemoryAdapter implements ShiguangApi {
   durabilityMode: Durability = "durable";
-  private state: MemoryState = { version: 1, schemaVersion: 2, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {} };
+  private state: MemoryState = { version: 1, schemaVersion: 3, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
+    tags: [], tagDictRevision: 0, tagAliases: [], tagTombstones: [] };
   private failures = new Map<Operation, string>();
   private pendingConflicts = new Map<string, { snapshot: Snapshot; baseRevision: number }>();
   private simulatedPhotos = new Map<string, PhotoStatus>();
@@ -79,7 +98,7 @@ export class MemoryAdapter implements ShiguangApi {
     try {
       const state = JSON.parse(raw) as MemoryState;
       if (state.schemaVersion !== undefined && (!Number.isInteger(state.schemaVersion) || state.schemaVersion < 1)) throw new Error("结构版本无效");
-      if (state.schemaVersion > 2) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
+      if (state.schemaVersion > 3) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
       if (state.version !== 1 || !Number.isSafeInteger(state.seq) || state.seq < 0
         || !Array.isArray(state.records) || !state.assets || typeof state.assets !== "object" || Array.isArray(state.assets)) throw new Error("状态结构无效");
       const legacy = state.schemaVersion === undefined || Number(state.schemaVersion) === 1;
@@ -87,7 +106,7 @@ export class MemoryAdapter implements ShiguangApi {
         state.deletionMarkers = []; state.conflictCopies = [];
         for (const row of state.records) { row.status = "active"; row.trashedAt = null; }
       }
-      state.schemaVersion = 2;
+      migrateToV3(state);
       state.quarantine ??= {};
       if (state.deletedCreatedAt !== undefined && (typeof state.deletedCreatedAt !== "object" || state.deletedCreatedAt === null || Array.isArray(state.deletedCreatedAt))) throw new Error("删除记录信息无效");
       if (!Array.isArray(state.deletionMarkers) || !Array.isArray(state.conflictCopies)
@@ -130,6 +149,7 @@ export class MemoryAdapter implements ShiguangApi {
         if (!asset || typeof asset.dataUrl !== "string" || !/^[a-f0-9]{64}$/.test(asset.sha256)
           || !Number.isSafeInteger(asset.bytes) || asset.bytes < 0) throw new Error("原图结构无效");
       }
+      tg.validateTagState(state);
       return state;
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "SCHEMA_TOO_NEW") throw error;
@@ -327,7 +347,8 @@ export class MemoryAdapter implements ShiguangApi {
     } else {
       row = { status: "active", trashedAt: null, recordId: this.id(next, "rec"), contentRevision: 0, baseRevision: 0, createdAt: now, updatedAt: now,
         committedAt: null, formal: null, draft: { ...blank(), title: input.title ?? "", body: input.body ?? "",
-          eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime) } };
+          eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime) },
+        favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0 };
       next.records.push(row);
     }
     this.persist(next); return this.result(row);
@@ -427,6 +448,7 @@ export class MemoryAdapter implements ShiguangApi {
   private counts(state: MemoryState): BackupCounts {
     const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
     const present = [...referenced].filter((id) => state.assets[id]);
+    const favorites = state.records.filter((r) => r.favorite && r.formal !== null).length;
     return {
       formal: state.records.filter((r) => r.status === "active" && r.formal !== null).length,
       drafts: state.records.filter((r) => r.draft !== null).length,
@@ -435,6 +457,9 @@ export class MemoryAdapter implements ShiguangApi {
       conflictCopies: state.conflictCopies.length,
       mediaFiles: present.length,
       missingMedia: referenced.size - present.length,
+      // Unit-0.7：为 0 时省略（与旧包摘要形状一致；缺省即 0）。
+      ...(state.tags.length > 0 ? { tags: state.tags.length } : {}),
+      ...(favorites > 0 ? { favorites } : {}),
     };
   }
   private packBackup(state: MemoryState, overrides: Record<string, unknown> = {}, password?: string): PreviewBackup {
@@ -443,7 +468,7 @@ export class MemoryAdapter implements ShiguangApi {
     for (const id of referenced) if (state.assets[id]) assets[id] = state.assets[id]!;
     const packed = { ...copy(state), assets, quarantine: {} };
     const manifest = {
-      format: "shiguang-backup", formatVersion: 1, schemaVersion: 2, appVersion: "preview",
+      format: "shiguang-backup", formatVersion: 1, schemaVersion: 3, appVersion: "preview",
       exportedAt: this.now(), encryption: { mode: "none" }, compression: "none", counts: this.counts(state), ...overrides,
     };
     let body = JSON.stringify({ manifest, state: packed });
@@ -473,12 +498,14 @@ export class MemoryAdapter implements ShiguangApi {
     if (m.format !== "shiguang-backup") fail("BACKUP_INVALID", "这不是拾光备份文件");
     if (Number(m.formatVersion) > 1) fail("BACKUP_FORMAT_TOO_NEW", "备份格式来自更新版本的拾光");
     if (m.encryption?.mode !== "none") fail("BACKUP_ENCRYPTED_UNSUPPORTED", "未知的加密方式");
-    if (Number(m.schemaVersion) > 2) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
+    if (Number(m.schemaVersion) > 3) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
     const summary: BackupSummary = {
       formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
       exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: pkg.lock ? "argon2id-xchacha20poly1305" : "none", counts: m.counts,
     };
-    return { summary, state: parsed.state };
+    const state = migrateToV3(parsed.state);
+    try { tg.validateTagState(state); } catch (error) { fail("BACKUP_CORRUPT", `备份中的标签数据无效：${String(error)}`); }
+    return { summary, state };
   }
   async backupCapabilities(): Promise<BackupCapabilities> {
     return { platform: "preview", overwriteRestore: true, merge: true, encryption: true, antiResurrection: true, fileAccess: "preview" };
@@ -562,6 +589,90 @@ export class MemoryAdapter implements ShiguangApi {
     return { plan, safetyBackup: `backups/pre-merge-${stamp}`, mediaReport, durability: this.durabilityMode };
   }
   async discardPickedBackup(token: string): Promise<void> { this.picked.delete(token); }
+
+  // ---- Unit-0.7：珍藏 / 标签（独立元数据，不触碰草稿与正文修订；CAS） ----
+  /** “今天”（本地日期）；预览测试可注入。 */
+  today: () => string = () => tl.localToday();
+  private metaRow(next: MemoryState, recordId: string): RecordRow {
+    const row = this.row(next, recordId);
+    if (row.status === "trashed") fail("RECORD_TRASHED", "记录在回收站中，请先恢复");
+    if (row.formal === null) fail("RECORD_NOT_FORMAL", "草稿还没有存入时光，暂不能珍藏或加标签");
+    return row;
+  }
+  private meta(row: RecordRow): MetaResult {
+    return { recordId: row.recordId, favorite: row.favorite, favoriteRevision: row.favoriteRevision, tagIds: [...row.tagIds], tagRevision: row.tagRevision, durability: this.durabilityMode };
+  }
+  async setFavorite(recordId: string, favorite: boolean, expectedRevision?: number | null): Promise<MetaResult> {
+    this.check("setFavorite");
+    const next = this.reload(), row = this.metaRow(next, recordId);
+    if (expectedRevision !== undefined && expectedRevision !== null && expectedRevision !== row.favoriteRevision) {
+      fail("META_REVISION_CONFLICT", "珍藏状态已在别处改变，请刷新后重试");
+    }
+    if (row.favorite === favorite) return this.meta(row);
+    row.favorite = favorite; row.favoriteRevision += 1;
+    this.persist(next); return this.meta(row);
+  }
+  async setRecordTags(recordId: string, tagIds: string[], expectedRevision?: number | null): Promise<MetaResult> {
+    this.check("setRecordTags");
+    const next = this.reload(), row = this.metaRow(next, recordId);
+    if (expectedRevision !== undefined && expectedRevision !== null && expectedRevision !== row.tagRevision) {
+      fail("META_REVISION_CONFLICT", "标签已在别处改变，请刷新后重试");
+    }
+    const wanted: string[] = [];
+    for (const id of tagIds) { tg.findTag(next, id); if (!wanted.includes(id)) wanted.push(id); }
+    if (sameJson([...wanted].sort(), [...row.tagIds].sort())) return this.meta(row);
+    row.tagIds = wanted; row.tagRevision += 1;
+    this.persist(next); return this.meta(row);
+  }
+  private tagInfo(state: MemoryState, tagId: string): TagInfo {
+    return tg.listTags(state).find((t) => t.tagId === tagId) ?? fail("TAG_NOT_FOUND", "标签不存在");
+  }
+  async listTags(): Promise<TagInfo[]> { this.check("listTags"); return tg.listTags(this.reload()); }
+  async createTag(name: string): Promise<TagInfo> {
+    this.check("createTag");
+    const next = this.reload(), tag = tg.createTag(next, name, this.now());
+    this.persist(next); return this.tagInfo(next, tag.tagId);
+  }
+  async renameTag(tagId: string, name: string): Promise<TagInfo> {
+    this.check("renameTag");
+    const next = this.reload(), before = next.tagDictRevision;
+    tg.renameTag(next, tagId, name);
+    if (next.tagDictRevision !== before) this.persist(next);
+    return this.tagInfo(next, tagId);
+  }
+  async mergeTags(fromTagId: string, intoTagId: string): Promise<TagMergeResult> {
+    this.check("mergeTags");
+    const next = this.reload(), affectedRecords = tg.mergeTags(next, fromTagId, intoTagId, this.now());
+    tg.validateTagState(next);
+    this.persist(next);
+    return { into: this.tagInfo(next, intoTagId), affectedRecords, durability: this.durabilityMode };
+  }
+  async deleteTag(tagId: string): Promise<TagDeleteResult> {
+    this.check("deleteTag");
+    const next = this.reload(), affectedRecords = tg.deleteTag(next, tagId, this.now());
+    tg.validateTagState(next);
+    this.persist(next);
+    return { affectedRecords, durability: this.durabilityMode };
+  }
+  async tagImpact(tagId: string): Promise<TagImpact> { this.check("tagImpact"); return tg.tagImpact(this.reload(), tagId); }
+  // ---- Unit-0.7：时光轴 / 日历 / 那年今日（只读衍生视图） ----
+  async timelinePage(filter: TimelineFilter, cursor: string | null, limit: number): Promise<TimelinePage> {
+    this.check("timelinePage"); return tl.timelinePage(this.reload().records, filter, cursor, limit, this.today());
+  }
+  async timelineMonths(filter: TimelineFilter): Promise<MonthCount[]> {
+    this.check("timelineMonths"); return tl.timelineMonths(this.reload().records, filter);
+  }
+  async calendarMonth(year: number, month: number, filter: TimelineFilter = {}): Promise<CalendarDay[]> {
+    this.check("calendarMonth"); return tl.calendarMonth(this.reload().records, year, month, filter);
+  }
+  async dayEntries(date: string, order: SortOrder = "desc"): Promise<TimelineItem[]> {
+    this.check("dayEntries");
+    if (!isValidDate(date)) fail("INVALID_EVENT_DATE", "日期无效");
+    return tl.dayEntries(this.reload().records, date, order, this.today());
+  }
+  async onThisDay(month: number, day: number, today?: string): Promise<OnThisDayGroup[]> {
+    this.check("onThisDay"); return tl.onThisDay(this.reload().records, month, day, today ?? this.today());
+  }
 }
 
 function xorText(text: string, keyHex: string): string {
@@ -608,6 +719,21 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   };
   const markerMatches = (recordId: string, createdAt: string) => next.deletionMarkers.some((m) => m.recordId === recordId
     && (next.deletedCreatedAt?.[recordId] === undefined || next.deletedCreatedAt[recordId] === createdAt));
+  migrateToV3(next); migrateToV3(incoming);
+  const tagCounts = { tagsAdded: 0, tagsRemapped: 0, tagsSkippedDeleted: 0, tagsDeletedInBackup: 0 };
+  const tagMap = tg.mergeTagDictionaries(next, incoming, tagCounts);
+  let favoritesUpdated = 0, tagLinksUpdated = 0;
+  const mergeMeta = (local: RecordRow, r: RecordRow) => {
+    if (r.favoriteRevision > local.favoriteRevision) {
+      if (r.favorite !== local.favorite) favoritesUpdated++;
+      local.favorite = r.favorite; local.favoriteRevision = r.favoriteRevision;
+    }
+    const mapped = tg.mapTagIds(r.tagIds, tagMap);
+    if (r.tagRevision > local.tagRevision) {
+      if (!sameJson([...mapped].sort(), [...local.tagIds].sort())) tagLinksUpdated++;
+      local.tagIds = mapped; local.tagRevision = r.tagRevision;
+    }
+  };
   for (const r of incoming.records) {
     if (markerMatches(r.recordId, r.createdAt)) { counts.skippedDeleted++; skippedDeleted.push(r.recordId); continue; }
     const originKey = r.recordId + "\u0000" + r.createdAt;
@@ -621,10 +747,12 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
       idMap.set(r.recordId + "\u0000" + r.createdAt, row.recordId);
       usedIds.add(row.recordId);
       row.formal = row.formal && remapPhotos(row.formal); row.draft = row.draft && remapPhotos(row.draft);
+      row.tagIds = tg.mapTagIds(row.tagIds, tagMap);
       next.records.push(row); counts.added++;
       continue;
     }
     idMap.set(r.recordId + "\u0000" + r.createdAt, local.recordId);
+    mergeMeta(local, r);
     if (local.status === "trashed" && r.status === "active") counts.keptTrashed++;
     if (local.status === "active" && r.status === "trashed") counts.keptActive++;
     if (r.formal && local.formal && !sameContent(r.formal, local.formal)) {
@@ -667,6 +795,8 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
     else if (!local.assets[id]) counts.mediaMissing++;
   }
   next.seq = Math.max(next.seq, maxSeq(usedIds), maxSeq(usedConflict), maxSeq(usedPhotoUse));
+  Object.assign(counts, tagCounts, { favoritesUpdated, tagLinksUpdated });
+  tg.validateTagState(next);
   return { state: next, plan: { counts, skippedDeleted, deletedInBackup } };
 }
 
