@@ -1,6 +1,6 @@
 [package]
 name = "shiguang-desktop"
-version = "0.1.5"
+version = "0.1.7"
 edition = "2021"
 rust-version = "1.90"
 description = "拾光 Unit-0 Tauri v2 桌面壳"
