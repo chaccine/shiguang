@@ -4,37 +4,43 @@
 
 **当前版本：0.1.5**（Android versionCode 1005）· 分支开发、PR 合并由 Cine 决定。
 
-## 进度（截至 Unit-0.5）
+## 进度（截至 Unit-0.6）
 
 | 单元 | 内容 | 状态 |
 |---|---|---|
 | Unit-0 ~ 0.2 | 草稿/正式双态、原子落盘、照片 asset/photoUse 分离、自动保存与草稿恢复、暖纸本桌面 UI | 已合并 |
 | Unit-0.3 | Tauri Android APK（arm64 debug 侧载） | 已合并 |
 | Unit-0.4 / 0.1.3 | 多实例写锁（Android 无 flock 时回落进程内注册表 + `.owner`）、schemaVersion 迁移、回收站与删除标记、照片一致性核查、冲突副本 | 已合并 |
-| **Unit-0.5** | **G03 最小版：一致性快照导出 `.sgbak` → 完整校验 → 覆盖恢复（自动安全副本、原子切换、失败回滚、崩溃恢复日志）；桌面原生对话框、Android 系统文件选择器** | 本分支 |
+| **Unit-0.5** | **G03 最小版：一致性快照导出 `.sgbak` → 完整校验 → 覆盖恢复（自动安全副本、原子切换、失败回滚、崩溃恢复日志）；桌面原生对话框、Android 系统文件选择器** | 本分支（PR #5） |
+| **Unit-0.6 / 0.1.5** | **G03 安全合并 + G02 跨备份防复活 + 可选口令加密**：合并按 (recordId, createdAt) 认身份，已永久删除/在回收站的记录不会被旧包带回；同记录取较大 contentRevision，分歧一律留冲突副本；照片按 sha 去重；撞号改号且重复导入幂等；合并前安全副本 + 日志回滚。加密：Argon2id + XChaCha20-Poly1305 分块 STREAM，错口令/篡改一律拒绝且数据不变 | 本分支（PR #5） |
 
-G03 尚未做（UI 中也标「未实现」）：**安全合并、口令加密备份、跨备份防复活**。备份包已带上删除标记（墓碑），manifest 预留 `encryption` 字段。备份 ≠ 同步。
+备份 ≠ 同步：多设备自动同步不做。新设备若只有一份“删除之前”的旧备份，无法知道后来删除过什么（防复活依赖本机或备份里的删除标记）。
 
 构建与验证：GitHub Actions 7 个 job（三平台 core+cli+ts、三平台 Tauri 打包、Android APK）。box 本机缺 webkit2gtk，不构建桌面壳；Android 目标可在 box 上 `cargo check --target aarch64-linux-android`。
 CI 通过 ≠ 真机通过：真机行为以各单元 `evidence/UNIT*_REPORT.md` 中的 PASS / NOT_RUN 为准。
 
 ## 备份格式 `.sgbak`（format 1）
 
-单文件、无压缩、无加密（core 零第三方依赖）：
+明文包单文件、无压缩：
 `magic "SGBAK\0\0\x01"` + `u64 LE manifest 长度` + manifest JSON + 原始条目（`state.json` 与被引用的 `media/*` 原图）+ 48 字节尾部（`SGBAKEND` + 之前全部字节的 SHA-256 + 长度）。
 manifest 含 formatVersion、schemaVersion、appVersion、exportedAt、encryption（目前只有 `none`）、各类计数、缺失原图列表、每个条目的大小与 SHA-256。
 `previews/`（可重建缓存）、`backups/`、隔离区、锁文件不进包。详见 `evidence/unit-0.5/SPEC.md`。
 
+**加密包（SGBAKENC v1，Unit-0.6，可选）**：magic `SGBAKENC\0\x01` + 头部（KDF 参数、盐、nonce 前缀；头部整体作为 AAD）+ 1 MiB 分块的 XChaCha20-Poly1305 STREAM（nonce = 19 字节前缀 ‖ u32 计数 ‖ 末块标志），内层就是上面的明文包。口令经 Argon2id（默认 m=64 MiB、t=3、p=1，解密时参数有上限）派生密钥；口令不保存、不进日志，丢失无法找回。
+依赖（Cargo.lock 固定，纯 Rust、无 C/NDK 依赖）：`argon2 0.5.3`、`chacha20poly1305 0.10.1`、`getrandom 0.2.17`、`zeroize 1.9.1`（RustCrypto；其余为它们的传递依赖）。选型理由见 `evidence/unit-0.6/SPEC.md`。
+
 ## 目录
 
 ```
-core/                 Rust 领域核心（零第三方依赖）
+core/                 Rust 领域核心（仅 RustCrypto 加密依赖）
   src/store.rs        原子持久化、草稿/正式双态、asset/photoUse、manifest
   src/model.rs        提交底线与快照模型
   src/sha256.rs       自包含 SHA-256
   src/json.rs         极简 JSON 读写
   src/preview.rs      确定性派生预览 PNG
-  src/backup.rs       Unit-0.5 备份导出/校验/覆盖恢复（.sgbak）
+  src/backup.rs       Unit-0.5 备份导出/校验/覆盖恢复（.sgbak）+ Unit-0.6 合并导入
+  src/backup/crypto.rs Unit-0.6 口令加密容器
+  src/merge.rs        Unit-0.6 纯函数合并（防复活、冲突副本、撞号改号）
   tests/acceptance.rs AC-U0 验收测试
 cli/                  CLI（shiguang），每次调用都是独立进程
 src/                  前端 TS 领域层与 UI
@@ -119,7 +125,7 @@ bash scripts/run_acceptance.sh
 
 ## 已知限制
 
-- 备份只有**覆盖恢复**；安全合并、口令加密、跨备份防复活未实现（G03/G02 后续单元）。明文备份会在界面提示。
+- 备份支持覆盖恢复、安全合并、可选口令加密；不做多设备同步。浏览器预览里的“加密”只是交互演示（真实加密在 Rust core）。
 - 预览缩略图仍是**确定性派生占位 PNG**，不是真实解码缩放；HEIC、100 张照片、100MB 备份压测（T02/T08）未做。
 - 时光轴分组/跳转、日历、展区、检索与标签（M02–M05）、珍藏独立修订（G01）、标签事务（G06）未做。
 - 安装包均未正式签名；Android 为 debug 签名侧载包（box 固定调试密钥重签以便覆盖安装）。Windows 只出 MSI（NSIS 上游 504）。
