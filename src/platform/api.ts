@@ -1,4 +1,4 @@
-import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
+import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupOptions, ExportBackupResult, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult, BackupSummary } from "../domain/types.ts";
 
 export interface DraftFields {
   title?: string;
@@ -49,11 +49,17 @@ export interface ShiguangApi {
   // ---- Unit-0.5 备份/恢复（G03 最小版：导出、完整校验、覆盖恢复）----
   backupCapabilities(): Promise<BackupCapabilities>;
   /** 一致性快照导出单文件 .sgbak；桌面弹原生保存框，Android 走系统文件选择器；用户取消返回 cancelled。 */
-  exportBackup(): Promise<ExportBackupResult>;
+  exportBackup(options?: ExportBackupOptions): Promise<ExportBackupResult>;
   /** 选择备份文件并完整校验（哈希/版本/截断/篡改）；无效包以 BACKUP_* 拒绝，且不改动现有数据。 */
   pickBackup(): Promise<PickBackupResult>;
   /** 覆盖恢复：先自动在本机留安全副本，原子切换，失败整体回滚。token 来自 pickBackup。 */
   restoreBackup(token: string): Promise<RestoreBackupResult>;
+  /** 加密备份：输入口令解密并完整校验；错误口令 BACKUP_PASSWORD_WRONG，不改动现有数据。 */
+  unlockBackup(token: string, password: string): Promise<{ summary: BackupSummary }>;
+  /** 安全合并预演（只读）：将新增/更新/保留/跳过（已删除不复活）的数量。 */
+  planMerge(token: string): Promise<MergePlan>;
+  /** 安全合并：保留现有数据，只添加/更新；冲突留副本；先留安全副本，失败整体回滚。 */
+  mergeBackup(token: string): Promise<MergeResult>;
   /** 放弃已选择但未恢复的备份（清理临时副本）。 */
   discardPickedBackup(token: string): Promise<void>;
 }

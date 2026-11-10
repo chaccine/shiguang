@@ -32,7 +32,8 @@ test("U05 导出只读：存储字节不变，摘要计数正确，能力如实�
   assert.match(result.fileName, /\.sgbak$/);
   const caps = await api.backupCapabilities();
   assert.equal(caps.overwriteRestore, true);
-  assert.equal(caps.merge, false); assert.equal(caps.encryption, false); assert.equal(caps.antiResurrection, false);
+  // Unit-0.6 起合并、加密、防复活已实现。
+  assert.equal(caps.merge, true); assert.equal(caps.encryption, true); assert.equal(caps.antiResurrection, true);
 });
 
 test("U05 往返：导出→改动→覆盖恢复后状态与导出时一致；留安全副本；墓碑随包恢复", async () => {
