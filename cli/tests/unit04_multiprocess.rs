@@ -46,7 +46,7 @@ fn command(root: &Path) -> Command {
 fn holder(root: &Path, kind: &str) -> ChildGuard {
     let mut c = ChildGuard(
         command(root)
-            .args(["hold-lock", "15000", "--kind", kind])
+            .args(["hold-lock", "60000", "--kind", kind])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -121,8 +121,8 @@ fn child_write_lock_blocks_open_cleanup_and_preserves_state_bytes() {
         e.message,
         "另一个拾光窗口正在写入，请稍后重试；你的输入未丢失"
     );
-    assert!(start.elapsed() >= Duration::from_millis(2500));
-    assert!(start.elapsed() < Duration::from_secs(6));
+    assert!(start.elapsed() >= Duration::from_millis(14500));
+    assert!(start.elapsed() < Duration::from_secs(30));
     assert_eq!(t.bytes(), before);
     assert!(t.path().join(".tmp-preserve").exists());
     drop(child);
@@ -144,8 +144,8 @@ fn busy_write(operation: &str) {
             .unwrap_err()
     };
     assert_eq!(e.code, "STORE_BUSY");
-    assert!(start.elapsed() >= Duration::from_millis(2500));
-    assert!(start.elapsed() < Duration::from_secs(6));
+    assert!(start.elapsed() >= Duration::from_millis(14500));
+    assert!(start.elapsed() < Duration::from_secs(30));
     assert_eq!(t.bytes(), before);
     assert_eq!(s.state_json(), memory);
     drop(child);
