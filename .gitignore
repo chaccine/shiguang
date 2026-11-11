@@ -4,3 +4,4 @@ node_modules
 dist
 .shiguang-data
 *.log
+evidence/**/.stage*/
