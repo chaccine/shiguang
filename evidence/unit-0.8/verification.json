@@ -1,0 +1,27 @@
+{
+  "cargo-test": {
+    "pass": 184,
+    "fail": 0
+  },
+  "fault-injection": {
+    "pass": 226,
+    "fail": 0
+  },
+  "thumbnails-test": {
+    "pass": 1,
+    "fail": 0
+  },
+  "npm-test": {
+    "pass": 127,
+    "fail": 0,
+    "modules": 14
+  },
+  "typecheck": "PASS",
+  "build": "PASS",
+  "screenshots-u04": "PASS",
+  "screenshots-u05": "PASS",
+  "screenshots-u06": "PASS",
+  "screenshots-u09": "PASS",
+  "native-heic": "NOT_RUN",
+  "windows-ci-lock": "NOT_RUN"
+}

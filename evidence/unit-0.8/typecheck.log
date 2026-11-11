@@ -1,0 +1,4 @@
+
+> shiguang-app@0.1.9 typecheck
+> tsc -p tsconfig.json
+

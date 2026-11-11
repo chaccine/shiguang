@@ -1,0 +1,13 @@
+Repository: /workspace/shiguang-app
+Branch: feat/unit-0.8-polish
+System PATH rustc: 1.85.1 (initial test failed; no application code was downgraded).
+Available required toolchain: /home/box/.cargo/bin, Rust 1.90.0.
+Final Rust commands used PATH=/home/box/.cargo/bin:$PATH.
+Git add/commit blocked: fatal: Unable to create '/workspace/shiguang-app/.git/index.lock': Read-only file system
+No commits, merges, pushes or src-tauri/gen additions performed.
+Cargo online dependency resolution failed: index.crates.io DNS could not resolve; stopped after Cargo's retries.
+Offline confirmation: image is not cached; native lockfile regeneration and decoder tests blocked.
+Screenshot server: listen EPERM on 127.0.0.1.
+Chrome launch separately failed: socket setsockopt Operation not permitted / SIGTRAP.
+Browser connector fallback: MCP tool call requires approval, but approval policy is never.
+No sandbox bypass or privilege escalation attempted.

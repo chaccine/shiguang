@@ -1,0 +1,5 @@
+
+> shiguang-app@0.1.9 build
+> tsc -p tsconfig.build.json && node scripts/copy-ui.mjs
+
+copied /workspace/shiguang-app/src/ui/index.html -> /workspace/shiguang-app/dist/index.html
