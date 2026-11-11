@@ -10,6 +10,7 @@
 |---|---|---|
 | Unit-0.10 Task A + B | schema v4 迁移及备份兼容；M01 说明/封面/顺序/地点/心情的数据与命令；主题与应用锁 UI；规范五入口导航、正式阅读页、编辑器新字段及只读存储统计 | 本地实现；设备/视觉验证边界，验证见 [SPEC](evidence/unit-0.10/SPEC.md) 和 [记录](evidence/unit-0.10/REPORT.md) |
 | Unit-0.10 Task C | A 暖纸本与独立“灯下展馆”夜间样式、语义 token、首屏主题/字号缓存、实时跟随系统、外观预览、焦点/名称/触控约束及对比度自动检查 | 本地实现；浏览器截图 BLOCKED，200% 实际布局/读屏/真机 NOT_RUN；见 [设计系统](evidence/unit-0.10/DESIGN_SYSTEM.md) |
+| Unit-0.10 Task D | 手机/桌面合成截图脚本及整体验证报告 | 截图脚本仅语法检查，须由编排侧在沙箱外运行 `npm run screenshots:u10`；实际状态见 [报告](evidence/UNIT0.10_REPORT.md) |
 | Unit-0 ~ 0.2 | 草稿/正式双态、原子落盘、照片 asset/photoUse 分离、自动保存与草稿恢复、暖纸本桌面 UI | 已合并 |
 | Unit-0.3 | Tauri Android APK（arm64 debug 侧载） | 已合并 |
 | Unit-0.4 / 0.1.3 | 多实例写锁（Android 无 flock 时回落进程内注册表 + `.owner`）、schemaVersion 迁移、回收站与删除标记、照片一致性核查、冲突副本 | 已合并 |
