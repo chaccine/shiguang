@@ -215,6 +215,11 @@ export class MemoryAdapter implements ShiguangApi {
     try {this.persist(next);}catch{return fail("PERSIST_REPLACE_FAILED","应用锁或设置写入失败，请重试");}
     return {settings:this.settingsView(next.settings),durability:this.durabilityMode};
   }
+  async storageStats(): Promise<import("../domain/types.ts").StorageStats> {
+    this.check("storageStats");
+    return {media: 2048000, previews: 128000, backups: 4096000, data: 16000, other: 0,
+      total: 6288000, available: null, skippedSymlinks: 0};
+  }
   async getSettings():Promise<AppSettings> {this.check("getSettings");return this.settingsView(this.reload().settings);}
   async setTheme(theme:ThemePreference):Promise<SettingsResult> {
     this.check("setTheme");

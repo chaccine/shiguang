@@ -5,3 +5,6 @@ dist
 .shiguang-data
 *.log
 evidence/**/.stage*/
+
+# Synthetic Unit-0.10 Task B validation evidence.
+!evidence/unit-0.10/task-b-*.log

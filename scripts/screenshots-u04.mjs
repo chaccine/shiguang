@@ -39,6 +39,7 @@ try {
     await page.getByTestId("confirm-ok").waitFor();
     await shot("02-confirm-move-to-trash.png");
     await page.getByTestId("confirm-ok").click();
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("open-trash").click();
     await page.getByTestId("trash-item").first().waitFor();
@@ -55,7 +56,8 @@ try {
     await page.goto(`${base}?demo=1&fail=conflict`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("timeline-tab").click();
-    await page.getByRole("button", { name: "修改" }).first().click();
+    await page.getByTestId("edit-button").first().click();
+    await page.getByTestId("reading-edit").click();
     await page.getByTestId("editor-body").waitFor();
     await page.getByTestId("editor-body").fill("这条合成草稿用来演示版本冲突：存入被拒绝后，由你选择保留哪一份。");
     await page.getByTestId("commit-button").click();
@@ -90,6 +92,7 @@ try {
     await page.getByTestId("timeline-tab").click();
     await page.getByTestId("trash-button").first().click();
     await page.getByTestId("confirm-ok").click();
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("open-trash").click();
     await page.getByTestId("trash-item").first().waitFor();

@@ -24,6 +24,7 @@ export interface DiscardResult { row: RecordRow | null; durability: Durability }
 
 /** Rust 命令与浏览器预览共享的契约。所有错误均以 rejection 传给调用方。 */
 export interface ShiguangApi {
+  storageStats(): Promise<import("../domain/types.ts").StorageStats>;
   getSettings(): Promise<AppSettings>;
   setTheme(theme: ThemePreference): Promise<SettingsResult>;
   /** Optional UI gate; the real app uses Rust Argon2id, never file encryption. */

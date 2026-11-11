@@ -78,3 +78,10 @@ pub async fn disable_app_lock(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn storage_stats(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    work(state.inner().clone(), |s| Ok(s.storage_stats()?.to_json())).await
+}

@@ -146,10 +146,15 @@ export interface TimelineFilter {
 }
 export interface TimelineItem {
   recordId: string; eventDate: string; eventTime: string | null; title: string; excerpt: string;
-  cover: PhotoUse | null; photoCount: number; favorite: boolean; favoriteRevision: number;
+  location: string; mood: Mood | null; cover: PhotoUse | null; photoCount: number; favorite: boolean; favoriteRevision: number;
   tagIds: string[]; tagRevision: number; createdAt: string; isFuture: boolean;
 }
 export interface TimelinePage { items: TimelineItem[]; nextCursor: string | null; total: number }
 export interface MonthCount { year: number; month: number; count: number }
 export interface CalendarDay { date: string; count: number; photoCount: number; hasFavorite: boolean }
 export interface OnThisDayGroup { year: number; items: TimelineItem[] }
+
+export interface StorageStats {
+  media: number; previews: number; backups: number; data: number; other: number; total: number;
+  available: number | null; skippedSymlinks: number;
+}

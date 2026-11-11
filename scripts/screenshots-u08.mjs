@@ -88,6 +88,8 @@ try {
     await assertTabBar(page, "01-mobile-empty-timeline");
     await shot(page, "01-mobile-empty-timeline.png");
 
+    await page.getByTestId("mine-tab").click();
+
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("drafts-empty").waitFor();
     await page.getByTestId("empty-new-draft").waitFor();
@@ -99,11 +101,15 @@ try {
     await assertTabBar(page, "03-mobile-empty-calendar");
     await shot(page, "03-mobile-empty-calendar.png");
 
+    await page.getByTestId("mine-tab").click();
+
     await page.getByTestId("collect-tab").click();
     await page.getByTestId("collect-favorites-empty").waitFor();
     await page.getByTestId("collect-tags-empty").waitFor();
     await assertTabBar(page, "04-mobile-empty-collect");
     await shot(page, "04-mobile-empty-collect.png");
+
+    await page.getByTestId("mine-tab").click();
 
     await page.getByTestId("data-tab").click();
     await page.locator("#view-data").waitFor({ state: "visible" });
@@ -122,6 +128,8 @@ try {
     await page.locator("#view-timeline").waitFor({ state: "visible" });
     await assertTabBar(page, "06-mobile-demo-timeline");
     await shot(page, "06-mobile-demo-timeline.png");
+
+    await page.getByTestId("mine-tab").click();
 
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("draft-item").first().waitFor();
@@ -147,6 +155,7 @@ try {
     const { context, page } = await openPage({ width: 1024, height: 688 });
     await page.goto(`${base}?demo=1`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("collect-tab").click();
     await page.locator("#view-collect").waitFor({ state: "visible" });
     await page.getByTestId("collect-favorites").getByTestId("timeline-item").first().waitFor();

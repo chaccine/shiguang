@@ -1,3 +1,6 @@
+import { renderReading } from "./reading.ts";
+import { PersonalUi } from "./personal.ts";
+import type { Mood } from "../domain/types.ts";
 import { DraftSession, recoverLastDraft } from "../domain/draft-session.ts";
 import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
@@ -44,6 +47,11 @@ for (const tab of NAV_TABS) {
   const label = document.createElement("span");
   label.className = "tab-label";
   label.textContent = tab.label;
+  if (tab.id === "museum" || tab.id === "mine") {
+    const desktop = document.createElement("span"); desktop.className = "desktop-nav-label";
+    desktop.textContent = tab.id === "museum" ? "回忆博物馆" : "个人空间";
+    label.classList.add("mobile-nav-label"); button.append(desktop);
+  }
   button.append(dot, label);
   button.addEventListener("click", () => { void activateMainTab(tab.id); });
   navTabs.append(button);
@@ -174,7 +182,7 @@ function createSession(): DraftSession<number> {
   });
   created.onChange((state) => {
     renderStatus(state);
-    renderPhotos(state.snapshot.photos);
+    renderPhotos(state.snapshot.photos, state.snapshot.coverPhotoUseId);
     const recordId = state.recordId;
     if (recordId !== null && currentView === "editor"
       && (state.status === "saved" || state.status === "savedUncertain")) {
@@ -217,6 +225,9 @@ function previewText(body: string, limit: number): string {
 
 function setView(view: View): void {
   currentView = view;
+  for (const id of ["mine", "museum", "reading", "storage", "appearance", "privacy"]) byId(`view-${id}`).hidden = view !== id;
+  if (view === "storage") void personal.renderStorage().catch(showError);
+  if (view === "privacy" || view === "appearance") void personal.refresh().catch(showError);
   const scroller = document.querySelector<HTMLElement>(".main");
   if (scroller !== null) scroller.scrollTop = 0;
   window.scrollTo(0, 0);
@@ -227,7 +238,7 @@ function setView(view: View): void {
   viewCollect.hidden = view !== "collect";
   viewTrash.hidden = view !== "trash";
   viewData.hidden = view !== "settings";
-  const active = tabOf(view);
+  const active = view === "reading" ? tabOf(readingOrigin) : tabOf(view);
   for (const [id, button] of tabButtons) {
     const on = id === active;
     button.classList.toggle("is-active", on);
@@ -534,14 +545,39 @@ function editorPhotoCell(photo: PhotoUse): HTMLElement {
   remove.title = "移除这张照片";
   remove.setAttribute("aria-label", "移除这张照片");
   remove.addEventListener("click", () => {
-    void session.removePhoto(photo.photoUseId).catch((error: unknown) => { showError(error); });
+    for (const control of cell.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement>("button, textarea")) control.disabled = true;
+    void session.removePhoto(photo.photoUseId).catch((error: unknown) => {
+      photoKey = null; renderPhotos(session.state.snapshot.photos); showError(error);
+    });
   });
-  cell.append(remove);
+  const caption = document.createElement("textarea");
+  caption.dataset.testid = "photo-caption"; caption.setAttribute("aria-label", "照片说明"); caption.placeholder = "为这张照片写点说明"; caption.value = photo.caption;
+  caption.addEventListener("input", () => { void session.updatePhoto("caption", photo.photoUseId, caption.value).catch(showError); });
+  const controls = document.createElement("div"); controls.className = "photo-controls";
+  const cover = document.createElement("button"); cover.type = "button"; cover.dataset.testid = "photo-cover";
+  cover.textContent = session.state.snapshot.coverPhotoUseId === photo.photoUseId ? "封面 ✓" : "设为封面";
+  cover.setAttribute("aria-pressed", String(session.state.snapshot.coverPhotoUseId === photo.photoUseId));
+  cover.addEventListener("click", () => { void session.updatePhoto("cover", photo.photoUseId).catch(showError); }); controls.append(cover);
+  for (const [delta, label] of [[-1, "上移"], [1, "下移"]] as const) {
+    const move = document.createElement("button"); move.type = "button"; move.textContent = label; move.dataset.testid = delta < 0 ? "photo-up" : "photo-down";
+    const photos = session.state.snapshot.photos; const index = photos.findIndex(p => p.photoUseId === photo.photoUseId);
+    move.disabled = index + delta < 0 || index + delta >= photos.length;
+    move.setAttribute("aria-label", `第 ${index + 1} 张照片${label}`);
+    move.addEventListener("click", () => {
+      const ids = session.state.snapshot.photos.map(p => p.photoUseId); const i = ids.indexOf(photo.photoUseId);
+      [ids[i], ids[i + delta]] = [ids[i + delta], ids[i]];
+      void session.updatePhoto("order", photo.photoUseId, ids).then(() => {
+        photoGrid.querySelector<HTMLButtonElement>(`[data-photo-id="${photo.photoUseId}"] [data-testid="${move.dataset.testid}"]`)?.focus();
+      }).catch(showError);
+    }); controls.append(move);
+  }
+  cell.dataset.photoId = photo.photoUseId;
+  cell.append(remove, caption, controls);
   return cell;
 }
 
-function renderPhotos(photos: readonly PhotoUse[]): void {
-  const key = photos.map((photo) => photo.photoUseId).join("|");
+function renderPhotos(photos: readonly PhotoUse[], coverId = session.state.snapshot.coverPhotoUseId): void {
+  const key = photos.map((photo) => photo.photoUseId).join("|") + coverId;
   if (key === photoKey) return;
   photoKey = key;
   if (photos.length === 0) {
@@ -560,6 +596,8 @@ function fillEditor(): void {
   editorBody.value = snapshot.body;
   editorDate.value = snapshot.eventDate;
   editorTime.value = snapshot.eventTime ?? "";
+  byTestId<HTMLInputElement>("editor-location").value = snapshot.location;
+  byTestId<HTMLSelectElement>("editor-mood").value = snapshot.mood ?? "";
 }
 
 function openInEditor(row: RecordRow | null): void {
@@ -617,6 +655,7 @@ async function openDraft(row: RecordRow): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
+    readingId = null;
     openInEditor(row);
     clearAppNotice();
     clearErrorBox();
@@ -630,6 +669,7 @@ async function startNewDraft(): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
+    readingId = null;
     openInEditor(null);
     window.localStorage.removeItem(LAST_DRAFT_KEY);
     clearAppNotice();
@@ -1189,20 +1229,17 @@ function timelineCard(item: TimelineItem, readOnly = false): HTMLElement {
     }
     meta.append(tags);
   }
+  if (item.location || item.mood) { const context = document.createElement("span"); context.textContent = [item.mood, item.location].filter(Boolean).join(" · "); meta.append(context); }
   article.append(meta);
 
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  const read = document.createElement("button"); read.type = "button"; read.className = "button ghost";
+  read.dataset.testid = "edit-button"; read.textContent = "阅读";
+  read.addEventListener("click", () => { void openReading(item.recordId).catch(showError); });
+  actions.append(read);
+  article.append(actions);
   if (!readOnly) {
-    const actions = document.createElement("div");
-    actions.className = "card-actions";
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "button ghost";
-    edit.dataset.testid = "edit-button";
-    edit.textContent = "修改";
-    edit.addEventListener("click", () => { void openModification(item.recordId); });
-    actions.append(edit);
-
     const tagsButton = document.createElement("button");
     tagsButton.type = "button";
     tagsButton.className = "button ghost";
@@ -1219,7 +1256,6 @@ function timelineCard(item: TimelineItem, readOnly = false): HTMLElement {
     trash.addEventListener("click", () => { void trashTimelineItem(item.recordId, itemHeadline(item)); });
     actions.append(trash);
 
-    article.append(actions);
   }
   return article;
 }
@@ -1421,6 +1457,7 @@ async function startNewDraftAt(date: string): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
+    readingId = null;
     openInEditor(null);
     session.edit({ eventDate: date });
     editorDate.value = date;
@@ -1968,9 +2005,8 @@ function activateMainTab(tab: MainTab): void {
   switch (tab) {
     case "timeline": void showTimeline(); break;
     case "calendar": void showCalendar(); break;
-    case "drafts": void showDrafts(); break;
-    case "collect": void showCollect(); break;
-    case "settings": void showData(); break;
+    case "create": void startNewDraft(); break;
+    case "museum": case "mine": void flushBeforeLeave().then(ok => { if (ok) setView(tab); }); break;
   }
 }
 
@@ -2272,6 +2308,53 @@ async function attachSelectedPhotos(): Promise<void> {
   }
 }
 
+
+const personal = new PersonalUi(api, memory !== null, flushBeforeLeave);
+let readingId: string | null = null;
+let readingOrigin: View = "timeline";
+let readingScroll = 0;
+async function openReading(id: string, returning = false): Promise<void> {
+  if (!(await flushBeforeLeave())) return;
+  const row = await api.getRecord(id); if (!row.formal) return;
+  if (!returning) { readingOrigin = currentView; readingScroll = document.querySelector<HTMLElement>(".main")?.scrollTop || window.scrollY; }
+  readingId = id;
+  renderReading(byTestId("reading-content"), row, tagName, (img, photo, holder) => {
+    const fallback = (message: string) => {
+      img.hidden = true;
+      const retry = document.createElement("button"); retry.className = "button";
+      retry.textContent = `${message} · 重试（保留原记录）`;
+      retry.addEventListener("click", () => { retry.remove(); img.hidden = false; void load(); });
+      holder.append(retry);
+    };
+    const load = async () => {
+      try {
+        const status = await api.photoStatus(photo.assetId);
+        if (status !== "available") { fallback(status === "missing" ? "原图缺失" : "原图校验失败"); return; }
+        img.onerror = () => fallback(photo.mediaType.includes("heic") || photo.mediaType.includes("heif") ? "无法预览 HEIC 图片" : "图片无法预览，原图仍保留");
+        img.src = await api.photoDataUrl(photo.assetId);
+      } catch { fallback("暂时无法读取图片"); }
+    }; void load();
+  });
+  setView("reading");
+}
+async function leaveEditor(): Promise<void> {
+  if (readingId) { await openReading(readingId, true); return; }
+  await showDrafts();
+}
+byTestId("reading-edit").addEventListener("click", () => { if (readingId) void openModification(readingId); });
+byTestId("reading-back").addEventListener("click", () => {
+  setView(readingOrigin);
+  const scroller = document.querySelector<HTMLElement>(".main"); if (scroller) scroller.scrollTop = readingScroll;
+  window.scrollTo(0, readingScroll);
+});
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
+  const view = button.dataset.go as View;
+  if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
+  else void flushBeforeLeave().then(ok => { if (ok) setView(view); });
+});
+byTestId<HTMLInputElement>("editor-location").addEventListener("input", e => session.edit({location: (e.target as HTMLInputElement).value}));
+byTestId<HTMLSelectElement>("editor-mood").addEventListener("change", e => session.edit({mood: ((e.target as HTMLSelectElement).value || null) as Mood | null}));
+
 let unfinishedDraft: RecordRow | null = null;
 
 function refreshResumeNotice(): void {
@@ -2302,7 +2385,7 @@ async function resumeUnfinishedDraft(): Promise<void> {
 
 resumeDraftButton.addEventListener("click", () => { void resumeUnfinishedDraft(); });
 newDraftButton.addEventListener("click", () => { void startNewDraft(); });
-backButton.addEventListener("click", () => { void showDrafts(); });
+backButton.addEventListener("click", () => { void leaveEditor(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
 
@@ -2454,18 +2537,21 @@ async function boot(): Promise<void> {
       if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
       if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
     }
-    // 启动默认落在时光轴（显式 ?view= 或上次页签优先），不再自动跳进草稿编辑器。
+    // 启动默认落在时光轴（显式 ?view= 仅用于预览），不再自动跳进草稿编辑器。
     const start = initialTab({
       param: params.get("view"),
       lastTab: window.localStorage.getItem(LAST_TAB_KEY),
     });
     // 启动先确认数据目录可用（第二个实例 STORE_LOCKED / 数据版本过新 SCHEMA_TOO_NEW），不可用时不做任何写操作。
     if (!(await gateStore())) {
+      byTestId("unlock-hint").textContent = "数据暂时无法打开，请关闭其他实例后重启；数据保持原样。";
+      byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
       // 数据打不开也不能没有入口：导航照常，每个页签显示同一条错误提示。
       setView(start);
       renderBlockedState();
       return;
     }
+    await personal.start();
     await reportMedia();
     await refreshDrafts();
     await reloadTimeline();
@@ -2480,6 +2566,8 @@ async function boot(): Promise<void> {
 }
 
 void boot().catch((error: unknown) => {
+  byTestId("unlock-hint").textContent = "无法检查本机数据或应用锁，请重启后重试。为保护隐私，界面保持关闭。";
+  byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
   showError(error);
   setView("timeline");
 });

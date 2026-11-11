@@ -839,6 +839,7 @@ pub fn run() {
             photo_status,
             store_status,
             u010_cmd::get_settings,
+            u010_cmd::storage_stats,
             u010_cmd::set_theme,
             u010_cmd::set_app_lock,
             u010_cmd::verify_app_lock,

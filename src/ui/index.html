@@ -996,6 +996,31 @@
         .collect-tag { flex: 1 1 auto; justify-content: space-between; }
         .empty-card { padding: 28px 18px; }
       }
+      .hub-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+      label { display:block; margin:10px 0; }
+      input, select, textarea { max-width:100%; }
+      select, label input { padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
+      button { min-height:44px; }
+      .photo-grid { grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
+      .photo-cell { aspect-ratio:auto; padding:10px; overflow:visible; }
+      .photo-cell .photo-thumb { height:180px; }
+      .photo-cell textarea { width:100%; min-height:70px; margin-top:8px; }
+      .photo-controls { display:flex; flex-wrap:wrap; gap:6px; }
+      [data-testid="reading-content"] { max-width:760px; margin:24px auto; line-height:1.8; overflow-wrap:anywhere; }
+      .reading-body, .reading-caption { white-space:pre-wrap; }
+      .reading-photo { width:100%; max-height:80vh; object-fit:contain; }
+      .lock-screen { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:var(--paper); padding:20px; overflow:auto; }
+      .lock-screen form { width:min(100%,420px); }
+      :root[data-theme="dark"] { color-scheme:dark; --paper:#211e1a; --card:#302a24; --ink:#f2e6d7; --muted:#c0ad97; --line:#605040; --wood:#d7a77c; --wood-dark:#e4bc98; }
+      :root[data-theme="dark"] body, :root[data-theme="dark"] .sidebar, :root[data-theme="dark"] .tabs,
+      :root[data-theme="dark"] .editor-card, :root[data-theme="dark"] .data-card, :root[data-theme="dark"] .timeline-card,
+      :root[data-theme="dark"] .draft-card, :root[data-theme="dark"] dialog, :root[data-theme="dark"] .calendar-card,
+      :root[data-theme="dark"] .day-panel, :root[data-theme="dark"] .on-this-day { background:var(--paper); color:var(--ink); }
+      :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] button,
+      :root[data-theme="dark"] .tag-chip, :root[data-theme="dark"] .cal-cell { background:var(--card); color:var(--ink); }
+      @media (min-width:761px) { [data-nav-tab="create"] { background:var(--wood); color:var(--paper); order:5; } }
+      .desktop-nav-label { display:inline; } .mobile-nav-label { display:none; }
+      @media (max-width:760px) { .desktop-nav-label { display:none; } .mobile-nav-label { display:inline; } }
     </style>
   </head>
   <body>
@@ -1017,6 +1042,48 @@
           </div>
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
 
+          <section id="view-museum" class="view" data-testid="museum-placeholder" hidden>
+            <h1>回忆博物馆</h1><div class="data-card"><h2>建设中</h2><p>这里将慢慢成为回忆的展馆。现在可以先去时光轴，翻看已经收好的小事。</p></div>
+          </section>
+          <section id="view-mine" class="view" hidden><h1>个人空间</h1><p>照顾好你的时光，也照顾好本机的数据。</p>
+            <div class="hub-grid">
+              <button class="data-card" data-testid="drafts-tab" data-go="drafts">草稿箱</button>
+              <button class="data-card" data-testid="collect-tab" data-go="collect">标签管理 · 收藏</button>
+              <button class="data-card" data-testid="data-tab" data-go="settings">备份与恢复</button>
+              <button class="data-card" data-testid="mine-trash" data-go="trash">回收站</button>
+              <button class="data-card" data-testid="storage-link" data-go="storage">存储空间</button>
+              <button class="data-card" data-testid="appearance-link" data-go="appearance">主题与外观</button>
+              <button class="data-card" data-testid="privacy-link" data-go="privacy">隐私（应用锁）</button>
+            </div>
+          </section>
+          <section id="view-storage" class="view" hidden><h1>存储空间</h1><p>仅统计本机应用目录；外部导出的备份不在统计内。符号链接不计入。</p>
+            <p data-testid="storage-preview" hidden>浏览器预览：以下是合成示例数字。</p>
+            <dl data-testid="storage-stats" class="data-card"></dl><p data-testid="storage-space" role="status"></p>
+            <button class="button" data-testid="storage-refresh">刷新统计</button><p>不会自动删除记录或原图。缓存清理操作尚未提供。</p>
+          </section>
+          <section id="view-appearance" class="view" hidden><h1>主题与外观</h1>
+            <label>主题 <select data-testid="theme-select"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+            <label>字体大小 <select data-testid="font-scale"><option value="1">标准</option><option value="1.15">较大</option><option value="1.3">大</option></select></label>
+            <p>字体大小仅保存在本机界面偏好中。</p><p data-testid="appearance-feedback" role="status"></p>
+          </section>
+          <section id="view-privacy" class="view" hidden><h1>隐私 · 应用锁</h1>
+            <p>应用锁只挡住打开界面，不加密手机或电脑上的数据文件。忘记口令后没有应用内找回或无损重置入口，请保留文件和外部备份，不要卸载或清空数据。具有文件访问权限的人可在完全退出应用后自行审阅重置 settings.appLock；普通 Android 用户可能无法访问该文件。备份加密口令独立，丢失无法找回。</p>
+            <p>启动时解锁；切到后台或窗口失焦立即遮挡，离开满 60 秒后再次解锁。最近任务的系统截图保护尚未实现。</p>
+            <p data-testid="lock-status"></p>
+            <form data-testid="lock-settings-form" class="data-card">
+              <label data-testid="lock-current-label">当前口令 <input data-testid="lock-current" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+              <label>新口令（4–8 位数字） <input data-testid="lock-new" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+              <label>确认新口令 <input data-testid="lock-confirm" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+              <button class="button" type="submit" data-testid="lock-enable">启用应用锁</button>
+              <button class="button" type="button" data-testid="lock-disable">关闭应用锁</button>
+              <button class="button" type="button" data-testid="lock-now">立即锁定</button>
+              <p role="status" data-testid="lock-feedback"></p>
+            </form>
+          </section>
+          <section id="view-reading" class="view" data-testid="reading-view" hidden>
+            <button class="button ghost" data-testid="reading-back">返回</button>
+            <button class="button" data-testid="reading-edit">编辑</button><article data-testid="reading-content"></article>
+          </section>
           <section id="view-drafts" class="view" hidden>
             <header class="view-head">
               <div>
@@ -1053,6 +1120,8 @@
                   <input id="editor-time" data-testid="editor-time" type="time" />
                 </label>
               </div>
+              <div class="when-row"><label>地点（手写）<input data-testid="editor-location" type="text" /></label>
+              <label>心情<select data-testid="editor-mood"><option value="">未选择</option><option>开心</option><option>平静</option><option>感动</option><option>想念</option><option>疲惫</option><option>难过</option></select></label></div>
               <div data-testid="editor-tag-row" class="editor-tag-row"><span>标签</span><div data-testid="editor-tag-chips" class="editor-tag-chips"></div><button type="button" class="button ghost" data-testid="editor-tag-add">＋ 添加 / 新建标签</button></div>
               <textarea id="editor-body" data-testid="editor-body" class="editor-body" placeholder="写下此刻的小事……"></textarea>
               <div class="photo-section">
@@ -1295,6 +1364,11 @@
       </div>
     </dialog>
 
+    <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="应用锁">
+      <form data-testid="unlock-form" class="data-card"><h1>拾光 · 私人时光</h1><p data-testid="unlock-hint">正在检查应用锁…</p>
+      <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+      <button class="button" data-testid="app-unlock">解锁</button><p data-testid="unlock-feedback" role="status"></p></form>
+    </div>
     <script type="module" src="./ui/main.js"></script>
   </body>
 </html>

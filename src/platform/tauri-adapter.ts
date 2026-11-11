@@ -14,6 +14,7 @@ export interface TauriApi extends ShiguangApi {
 
 export function createTauriApi(invoke: InvokeFn): TauriApi {
   return {
+    storageStats: () => invoke("storage_stats"),
     getSettings: () => invoke("get_settings"),
     setTheme: (theme) => invoke("set_theme", { theme }),
     setAppLock: (passcode) => invoke("set_app_lock", { passcode }),
