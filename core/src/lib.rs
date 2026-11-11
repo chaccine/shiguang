@@ -52,3 +52,5 @@ pub mod query;
 pub use query::{
     CalendarDay, OnThisDayYear, Order, TimelineFilter, TimelineItem, TimelineMonth, TimelinePage,
 };
+
+pub mod storage;
