@@ -71,13 +71,17 @@ jobs:
         with:
           path: ~/AppData/Local/tauri
           key: tauri-bundler-tools-windows-v1
-      - name: Tauri 打包（未签名安装包；Windows msi / macOS app+dmg / Linux deb）
+      - name: Tauri 打包（未签名安装包；Windows msi+nsis / macOS app+dmg / Linux deb）
         shell: bash
         run: |
           set -o pipefail
           mkdir -p ci-logs
           case "${{ runner.os }}" in
-            Windows) BUNDLES="msi" ;;  # NSIS：nsis_tauri_utils.dll（GitHub Releases）持续 504，暂只出 MSI
+            Windows)
+              # 预置仓库内固定的 NSIS 3.13 + nsis_tauri_utils.dll，避免 GitHub Releases 504。
+              bash scripts/ci-seed-nsis.sh
+              BUNDLES="msi,nsis"
+              ;;
             macOS)   BUNDLES="app,dmg" ;;
             *)       BUNDLES="deb" ;;
           esac
@@ -178,6 +182,15 @@ jobs:
           done
           [ "$ok" = 1 ]
           find src-tauri/gen/android/app/build/outputs -name '*.apk' -exec ls -l {} \; | tee -a ci-logs/android-build.log
+      - name: 用固定 debug 证书重签 APK（可覆盖安装）
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+          ANDROID_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEYSTORE_PASSWORD }}
+          ANDROID_DEBUG_KEY_ALIAS: ${{ secrets.ANDROID_DEBUG_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/ci-resign-android-apk.sh 2>&1 | tee -a ci-logs/android-resign.log
       - name: 上传日志与生成的 gen/android 工程
         if: always()
         uses: actions/upload-artifact@v4
@@ -190,7 +203,7 @@ jobs:
             !src-tauri/gen/android/.gradle/
           if-no-files-found: warn
           retention-days: 14
-      - name: 上传 APK（debug 签名，仅侧载测试）
+      - name: 上传 APK（固定 debug 证书重签，仅侧载测试）
         uses: actions/upload-artifact@v4
         with:
           name: shiguang-Android-arm64-debug-apk
