@@ -86,7 +86,8 @@ NSIS `.exe` 本次未出：CI 因 `nsis_tauri_utils.dll` 从 GitHub Releases 下
 - 本机 Tauri 桌面编译：预计仍 BLOCKED（box 无 webkit2gtk，与既往相同）
 - Windows 多进程锁测试：需看本 PR 的 CI
 - **正式/发布签名**：Cine 已取消，未创建 release keystore，未向 CI/Secrets 添加正式签名。
-- Cine 已允许、尚未做完（不挡 0.1.9 安装）：把盒上同一把 debug keystore 放入 GitHub Secrets，让 CI APK 可直接覆盖安装；修复 NSIS 打包（当前被 GitHub Releases 504 挡住）；更新 Drive 里过时文档。
+- 固定 debug keystore 已写入 GitHub Secrets（`ANDROID_DEBUG_KEYSTORE_*`，2026-11-11 09:31 Asia/Shanghai），CI 已改为重签并断言证书 SHA-256 `59dbe106…`。NSIS 工具包已预置在 `ci/windows-nsis/`，Windows job 启用 `msi,nsis`（第一种方案，尚未因失败改走第二/第三种）。Drive README 与 P0 决策已追加 2026-11-11 状态。工作仍在本分支 `feat/unit-0.8-polish` / PR #7（tip `2e7e33e`），未开新分支、未动 `main`。
+- CI 核验 **BLOCKED**：push run 42940005230 与 PR run 42940011610 全部 job 未分配 runner。GitHub 标注账户付款失败或消费额度不足。最近一次实际跑完的绿色 CI 仍是 42937318633（`c357f1f`，7/7，当时尚未重签、只出 MSI）。未反复重跑。Cine 处理 GitHub Billing & plans 后可重跑 PR #7。
 
 ## 日志
 
