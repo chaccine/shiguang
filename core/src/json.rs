@@ -12,7 +12,12 @@ pub enum Json {
 
 impl Json {
     pub fn obj(entries: Vec<(&str, Json)>) -> Json {
-        Json::Obj(entries.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Json::Obj(
+            entries
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        )
     }
     pub fn str<S: Into<String>>(s: S) -> Json {
         Json::Str(s.into())
@@ -181,9 +186,7 @@ impl<'a> Parser<'a> {
     }
 
     fn bump(&mut self) -> Result<u8, String> {
-        let b = self
-            .peek()
-            .ok_or_else(|| "JSON 意外结束".to_string())?;
+        let b = self.peek().ok_or_else(|| "JSON 意外结束".to_string())?;
         self.pos += 1;
         Ok(b)
     }
@@ -193,7 +196,9 @@ impl<'a> Parser<'a> {
         if b != expected {
             return Err(format!(
                 "JSON 期望 '{}'，实际 '{}'（byte {}）",
-                expected as char, b as char, self.pos - 1
+                expected as char,
+                b as char,
+                self.pos - 1
             ));
         }
         Ok(())
@@ -337,9 +342,21 @@ impl<'a> Parser<'a> {
                     }
                 }
                 0x00..=0x1f => return Err("JSON 字符串含未转义控制字符".to_string()),
+                0x20..=0x7f => out.push(b as char),
                 _ => {
                     let start = self.pos - 1;
-                    let rest = std::str::from_utf8(&self.bytes[start..])
+                    // Validate only this scalar, not the entire remaining document per character.
+                    let width = match b {
+                        0xc2..=0xdf => 2,
+                        0xe0..=0xef => 3,
+                        0xf0..=0xf4 => 4,
+                        _ => return Err("JSON 字符串不是有效 UTF-8".to_string()),
+                    };
+                    let scalar = self
+                        .bytes
+                        .get(start..start + width)
+                        .ok_or_else(|| "JSON 字符串截断".to_string())?;
+                    let rest = std::str::from_utf8(scalar)
                         .map_err(|_| "JSON 字符串不是有效 UTF-8".to_string())?;
                     let ch = rest
                         .chars()
@@ -408,5 +425,28 @@ mod tests {
         assert!(parse("{\"a\":{\"b\":1,\"b\":2}}").is_err());
         // 不同键不受影响
         assert!(parse("{\"a\":1,\"b\":2}").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod unit08_regression {
+    use super::*;
+    #[test]
+    fn large_multilingual_document_roundtrips_strictly() {
+        let value = Json::Arr(
+            (0..5000)
+                .map(|i| {
+                    Json::obj(vec![
+                        ("title", Json::str(format!("合成🌱 café {i}"))),
+                        ("body", Json::str("换行\n制表\t斜杠\\引号\"".repeat(10))),
+                    ])
+                })
+                .collect(),
+        );
+        assert_eq!(parse(&value.dump()).unwrap(), value);
+        assert!(parse("{\"标签\":1,\"标签\":2}").is_err());
+        assert!(parse("\"未转义\n\"").is_err());
+        assert!(parse("\"\\uD800\"").is_err());
+        assert!(parse("\"文本\" trailing").is_err());
     }
 }
