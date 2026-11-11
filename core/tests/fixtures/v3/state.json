@@ -1,0 +1,219 @@
+{
+  "tags": [
+    {
+      "tagId": "tag-000001",
+      "name": "合成·旅行",
+      "normName": "合成·旅行",
+      "createdAt": "2026-11-09T12:00:00Z"
+    },
+    {
+      "tagId": "tag-000002",
+      "name": "合成·家人",
+      "normName": "合成·家人",
+      "createdAt": "2026-11-09T12:00:00Z"
+    }
+  ],
+  "tagDictRevision": 2,
+  "tagAliases": [],
+  "tagTombstones": [],
+  "version": 1,
+  "mergeOrigins": [],
+  "schemaVersion": 3,
+  "deletionMarkers": [
+    {
+      "recordId": "rec-000015",
+      "deletedAt": "2026-11-09T12:00:00Z",
+      "createdAt": "2026-11-09T12:00:00Z",
+      "lastContentRevision": 1
+    }
+  ],
+  "conflictCopies": [],
+  "seed": "synthetic-v3-golden",
+  "seq": 15,
+  "records": [
+    {
+      "favorite": true,
+      "favoriteRevision": 1,
+      "tagIds": [
+        "tag-000001",
+        "tag-000002"
+      ],
+      "tagRevision": 1,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000003",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T12:00:00Z",
+      "updatedAt": "2026-11-09T12:00:00Z",
+      "committedAt": "2026-11-09T12:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成标题",
+        "body": "合成正式正文：三张照片。\n没有真实私人数据。",
+        "eventDate": "2026-11-09",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000004",
+            "assetId": "ast-86ca1edaf7944720",
+            "caption": "合成说明",
+            "sha256": "86ca1edaf7944720c73edb33b0f1d3320324c55afdda49cce1e2308123b1eb2a",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000005",
+            "assetId": "ast-800b8c3f88a08913",
+            "caption": "合成说明",
+            "sha256": "800b8c3f88a08913eaf158c0ffb52a2058be6c27276e3b5741a4568dd01c7b2a",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000006",
+            "assetId": "ast-22bc14a2983efb7a",
+            "caption": "合成说明",
+            "sha256": "22bc14a2983efb7a47d62f8c5d61675fe3faf6412ec566a15d9a9da08cf981bc",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": null
+    },
+    {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000007",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T12:00:00Z",
+      "updatedAt": "2026-11-09T12:00:00Z",
+      "committedAt": "2026-11-09T12:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成标题",
+        "body": "合成旧正式内容，编辑草稿不能发布它。",
+        "eventDate": "2026-11-09",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000008",
+            "assetId": "ast-7855dea458cee20f",
+            "caption": "合成说明",
+            "sha256": "7855dea458cee20f92c4fc65fde447bab8688497f29e7741e7abda188c6b08a1",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000009",
+            "assetId": "ast-712228abd53de6eb",
+            "caption": "合成说明",
+            "sha256": "712228abd53de6ebd84c5dd22779591f0cc0e04646c48e9c0b9678254ed1f238",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": {
+        "title": "合成编辑草稿",
+        "body": "尚未发布的合成修改",
+        "eventDate": "2026-11-09",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000008",
+            "assetId": "ast-7855dea458cee20f",
+            "caption": "合成说明",
+            "sha256": "7855dea458cee20f92c4fc65fde447bab8688497f29e7741e7abda188c6b08a1",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000009",
+            "assetId": "ast-712228abd53de6eb",
+            "caption": "合成说明",
+            "sha256": "712228abd53de6ebd84c5dd22779591f0cc0e04646c48e9c0b9678254ed1f238",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000010",
+            "assetId": "ast-00c2072079ed2cd0",
+            "caption": "合成说明",
+            "sha256": "00c2072079ed2cd020b5fe3eb687feb0c556c8aee947e8a3d2836971e30be115",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          }
+        ]
+      }
+    },
+    {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [
+        "tag-000001"
+      ],
+      "tagRevision": 1,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000011",
+      "contentRevision": 0,
+      "createdAt": "2026-11-09T12:00:00Z",
+      "updatedAt": "2026-11-09T12:00:00Z",
+      "committedAt": null,
+      "baseRevision": 0,
+      "formal": null,
+      "draft": {
+        "title": "合成标题",
+        "body": "合成纯草稿，尚未存入时光。",
+        "eventDate": "2026-11-09",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000012",
+            "assetId": "ast-7855dea458cee20f",
+            "caption": "合成说明",
+            "sha256": "7855dea458cee20f92c4fc65fde447bab8688497f29e7741e7abda188c6b08a1",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          }
+        ]
+      }
+    },
+    {
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "status": "trashed",
+      "trashedAt": "2026-11-09T12:00:00Z",
+      "recordId": "rec-000013",
+      "contentRevision": 1,
+      "createdAt": "2026-11-09T12:00:00Z",
+      "updatedAt": "2026-11-09T12:00:00Z",
+      "committedAt": "2026-11-09T12:00:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成标题",
+        "body": "合成回收站记录",
+        "eventDate": "2026-11-09",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000014",
+            "assetId": "ast-bae4c974bce18ec7",
+            "caption": "合成说明",
+            "sha256": "bae4c974bce18ec7fa4dd98989cba28c8f0acfa61d8e60f21a6d15923adb222b",
+            "bytes": 27812,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": null
+    }
+  ]
+}
