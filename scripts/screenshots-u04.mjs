@@ -10,12 +10,16 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const out = join(root, "evidence", "unit-0.4");
 await mkdir(out, { recursive: true });
 const port = 14800 + Math.floor(Math.random() * 500);
-const server = await startPreviewServer(port);
+let server;
+let browser;
+let failure;
 const base = `http://127.0.0.1:${port}/`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
+
 const results = [];
 const errors = [];
 try {
+  server = await startPreviewServer(port);
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
   const run = async (viewport, fn) => {
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: "zh-CN" });
     const page = await context.newPage();
@@ -27,7 +31,7 @@ try {
   const desktop = { width: 960, height: 720 };
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?demo=1`);
-    await page.getByTestId("draft-item").first().waitFor();
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("timeline-tab").click();
     await page.getByTestId("trash-button").first().waitFor();
     await shot("01-timeline-trash-button.png");
@@ -35,7 +39,8 @@ try {
     await page.getByTestId("confirm-ok").waitFor();
     await shot("02-confirm-move-to-trash.png");
     await page.getByTestId("confirm-ok").click();
-    await page.getByTestId("trash-tab").click();
+    await page.getByTestId("data-tab").click();
+    await page.getByTestId("open-trash").click();
     await page.getByTestId("trash-item").first().waitFor();
     await shot("03-trash-view.png");
     await page.getByTestId("purge-button").first().click();
@@ -48,7 +53,7 @@ try {
   });
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?demo=1&fail=conflict`);
-    await page.getByTestId("draft-item").first().waitFor();
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("timeline-tab").click();
     await page.getByRole("button", { name: "修改" }).first().click();
     await page.getByTestId("editor-body").waitFor();
@@ -62,16 +67,21 @@ try {
   });
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?fail=locked`);
-    await page.getByTestId("store-blocked").waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.locator("#timeline-list").getByTestId("blocked-state").waitFor({ state: "visible" });
     await shot("08-store-locked.png");
     await page.goto(`${base}?fail=schema`);
-    await page.getByTestId("store-blocked").waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.locator("#timeline-list").getByTestId("blocked-state").waitFor({ state: "visible" });
     await shot("09-schema-too-new.png");
   });
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?demo=1&media=missing`);
-    await page.getByTestId("draft-item").first().waitFor();
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("timeline-tab").click();
+    // 演示数据里带照片的记录在首屏以下，需滚入视口才会加载封面占位。
+    await page.getByTestId("timeline-cover").first().waitFor();
+    await page.getByTestId("timeline-cover").first().scrollIntoViewIfNeeded();
     await page.getByTestId("photo-missing").first().waitFor();
     await shot("10-photo-missing.png");
   });
@@ -80,14 +90,18 @@ try {
     await page.getByTestId("timeline-tab").click();
     await page.getByTestId("trash-button").first().click();
     await page.getByTestId("confirm-ok").click();
-    await page.getByTestId("trash-tab").click();
+    await page.getByTestId("data-tab").click();
+    await page.getByTestId("open-trash").click();
     await page.getByTestId("trash-item").first().waitFor();
     await shot("11-mobile-trash.png");
   });
+} catch (error) {
+  failure = error;
 } finally {
-  await writeFile(join(out, "screenshots.log"), [`page errors: ${errors.length}`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n");
-  await browser.close();
-  server.close();
+  await writeFile(join(out, "screenshots.log"), [`status: ${failure ? "BLOCKED/FAILED" : "PASS"}`, ...(failure ? [`failure: ${String(failure)}`] : []), `page errors: ${errors.length} (only loaded pages)`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n");
+  if (browser) await browser.close();
+  if (server) server.close();
 }
+if (failure) throw failure;
 if (errors.length) throw new Error(`页面报错 ${errors.length} 个：${errors.join("; ")}`);
 console.log(results.join("\n"));

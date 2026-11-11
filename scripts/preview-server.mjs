@@ -20,7 +20,10 @@ export function startPreviewServer(listenPort = port) {
       res.writeHead(404).end("not found");
     }
   });
-  return new Promise((resolve) => server.listen(listenPort, "127.0.0.1", () => resolve(server)));
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(listenPort, "127.0.0.1", () => resolve(server));
+  });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

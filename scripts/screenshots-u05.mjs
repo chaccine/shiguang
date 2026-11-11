@@ -10,12 +10,16 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const out = join(root, "evidence", "unit-0.5");
 await mkdir(out, { recursive: true });
 const port = 15300 + Math.floor(Math.random() * 500);
-const server = await startPreviewServer(port);
+let server;
+let browser;
+let failure;
 const base = `http://127.0.0.1:${port}/`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
+
 const results = [];
 const errors = [];
 try {
+  server = await startPreviewServer(port);
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
   const run = async (viewport, fn) => {
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: "zh-CN" });
     const page = await context.newPage();
@@ -27,7 +31,7 @@ try {
   const desktop = { width: 960, height: 900 };
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?demo=1`);
-    await page.getByTestId("draft-item").first().waitFor();
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("data-tab").click();
     await page.getByTestId("export-backup").waitFor();
     await shot("01-data-page-not-implemented.png", true);
@@ -72,10 +76,13 @@ try {
     await page.getByTestId("export-result").waitFor({ state: "visible" });
     await shot("09-mobile-export.png", true);
   });
+} catch (error) {
+  failure = error;
 } finally {
-  await writeFile(join(out, "screenshots.log"), [`page errors: ${errors.length}`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n");
-  await browser.close();
-  server.close();
+  await writeFile(join(out, "screenshots.log"), [`status: ${failure ? "BLOCKED/FAILED" : "PASS"}`, ...(failure ? [`failure: ${String(failure)}`] : []), `page errors: ${errors.length} (only loaded pages)`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n");
+  if (browser) await browser.close();
+  if (server) server.close();
 }
+if (failure) throw failure;
 if (errors.length) throw new Error(`页面报错 ${errors.length} 个：${errors.join("; ")}`);
 console.log(results.join("\n"));
