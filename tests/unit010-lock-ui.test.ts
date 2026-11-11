@@ -3,13 +3,16 @@ import assert from "node:assert/strict";
 import { PersonalUi } from "../src/ui/personal.ts";
 import { MemoryAdapter } from "../src/platform/memory-adapter.ts";
 
+let activeControl: Control | undefined;
 class Control {
   value = ""; hidden = false; disabled = false; inert = false; textContent = ""; dataset: Record<string,string> = {}; style = {};
   children: Control[] = [];
+  focusables: Control[] = []; isConnected = true;
   handlers = new Map<string, (() => void)[]>();
   addEventListener(name: string, fn: () => void): void { this.handlers.set(name,[...(this.handlers.get(name) ?? []),fn]); }
-  fire(name: string): void { for (const fn of this.handlers.get(name) ?? []) (fn as (e: {preventDefault():void})=>void)({preventDefault(){}}); }
-  focus(): void {} close(): void {} replaceChildren(...nodes: Control[]): void { this.children=nodes; }
+  fire(name: string, event: object = {preventDefault(){}}): void { for (const fn of this.handlers.get(name) ?? []) (fn as (e: object)=>void)(event); }
+  focus(): void { activeControl = this; } close(): void {} replaceChildren(...nodes: Control[]): void { this.children=nodes; }
+  querySelectorAll(): Control[] { return this.focusables; }
 }
 let tick = () => {};
 async function until(predicate:()=>boolean):Promise<void> {
@@ -26,7 +29,7 @@ test("app-lock UI enables/confirms, clears every password input, gates restart, 
     window:{localStorage:{getItem:()=>null,setItem:()=>{}},setInterval:(fn:()=>void)=>{tick=fn;return 0;},
       matchMedia:()=>({matches:false,addEventListener(){}}),addEventListener:(name:string,fn:()=>void)=>background.addEventListener(name,fn),
       __TAURI__:{window:{getCurrentWindow:()=>({onFocusChanged:async(fn:(e:{payload:boolean})=>void)=>{nativeFocus=fn;return ()=>{};}})}}},
-    document:{hidden:false,documentElement:root,querySelector:(selector:string)=>selector===".app-shell"?shell:get(selector.match(/data-testid="([^"]+)"/)![1]),
+    document:{hidden:false,documentElement:root,get activeElement(){return activeControl;},querySelector:(selector:string)=>selector===".app-shell"?shell:get(selector.match(/data-testid="([^"]+)"/)![1]),
       querySelectorAll:()=>[],addEventListener(){},createElement:()=>new Control()},
   });
   try {
@@ -38,7 +41,13 @@ test("app-lock UI enables/confirms, clears every password input, gates restart, 
     get("lock-new").value=get("lock-confirm").value="482615";get("lock-settings-form").fire("submit");
     await until(()=>get("lock-feedback").textContent==="口令已设置。");
     for(const id of ["lock-new","lock-current","lock-confirm"]) assert.equal(get(id).value,"");
-    get("lock-now").fire("click");assert.equal(shell.inert,true);assert.equal(get("app-lock-screen").hidden,false);
+    get("lock-now").focus();get("lock-now").fire("click");assert.equal(shell.inert,true);assert.equal(get("app-lock-screen").hidden,false);
+    const gate = get("app-lock-screen"), passcode = get("app-passcode"), unlock = get("app-unlock");
+    gate.focusables = [passcode, unlock]; assert.equal(activeControl, passcode);
+    let prevented = false; unlock.focus(); gate.fire("keydown", {key:"Tab",shiftKey:false,preventDefault(){prevented=true;}});
+    assert.equal(prevented,true); assert.equal(activeControl,passcode);
+    prevented=false; gate.fire("keydown", {key:"Tab",shiftKey:true,preventDefault(){prevented=true;}});
+    assert.equal(prevented,true); assert.equal(activeControl,unlock);
     get("app-passcode").value="1111";get("unlock-form").fire("submit");
     await until(()=>get("unlock-feedback").textContent.includes("不正确"));
     await until(()=>!get("app-unlock").disabled);
@@ -55,6 +64,7 @@ test("app-lock UI enables/confirms, clears every password input, gates restart, 
     await until(() => !get("app-unlock").disabled);
     get("app-passcode").value="482615";get("unlock-form").fire("submit");
     await until(()=>!shell.inert);assert.equal(get("app-passcode").value,"");
+    assert.equal(activeControl,get("lock-now"));
     nativeFocus!({payload:false});assert.equal(shell.inert,true);nativeFocus!({payload:true});assert.equal(shell.inert,false);
     get("lock-feedback").textContent="";
     get("lock-current").value="482615";get("lock-new").value=get("lock-confirm").value="735182";get("lock-settings-form").fire("submit");

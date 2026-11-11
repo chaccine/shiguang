@@ -61,7 +61,11 @@ test("real bootstrap opens timeline, all five navigation actions work, Mine reac
     assert.equal(id("view-timeline").hidden,false);assert.equal(byTest("app-lock-screen").hidden,true);
     const nav=id("nav-tabs");assert.equal(nav.children.length,5);
     assert.deepEqual(nav.children.map(n=>n.dataset.navTab),["timeline","calendar","create","museum","mine"]);
+    assert.equal(nav.children.filter(n=>n.getAttribute("aria-current")==="page").length,1);
+    assert.equal(byTest("timeline-tab").getAttribute("aria-current"),"page");
+    for (const button of nav.children) assert.equal(button.getAttribute("role"),null);
     byTest("museum-tab").fire("click");await until(()=>!id("view-museum").hidden);
+    byTest("museum-timeline").fire("click");await until(()=>!id("view-timeline").hidden);
     byTest("mine-tab").fire("click");await until(()=>!id("view-mine").hidden);
     byTest("drafts-tab").fire("click");await until(()=>!id("view-drafts").hidden);
     byTest("create-tab").fire("click");await until(()=>!id("view-editor").hidden);
@@ -80,11 +84,16 @@ test("real bootstrap opens timeline, all five navigation actions work, Mine reac
     byTest("calendar-tab").fire("click");await until(()=>!id("view-calendar").hidden);
     byTest("cal-month-input").value="2026-11";byTest("cal-month-input").fire("change");
     await until(()=>id("cal-grid").children.some(n=>n.dataset.date==="2026-11-11"));
+    for (const day of id("cal-grid").children.filter(n=>n.dataset.date)) {
+      assert.match(day.getAttribute("aria-label")!,/2026.*11.*时光/);
+      assert.equal(day.getAttribute("aria-controls"),"day-panel");
+    }
     id("cal-grid").children.find(n=>n.dataset.date==="2026-11-11")!.fire("click");
     await until(()=>!!id("day-panel-list").querySelector('[data-testid="edit-button"]'));
+    assert.equal(id("cal-grid").children.find(n=>n.dataset.date==="2026-11-11")!.getAttribute("aria-pressed"),"true");
     const dateText=id("day-panel-date").textContent;
     id("day-panel-list").querySelector('[data-testid="edit-button"]')!.fire("click");
-    await until(()=>!id("view-reading").hidden);assert.equal(byTest("calendar-tab").getAttribute("aria-selected"),"true");
+    await until(()=>!id("view-reading").hidden);assert.equal(byTest("calendar-tab").getAttribute("aria-current"),"page");
     byTest("reading-back").fire("click");assert.equal(id("view-calendar").hidden,false);assert.equal(id("day-panel-date").textContent,dateText);
   } finally {Object.assign(globalThis,original);}
 });

@@ -81,5 +81,6 @@ test("UI navigation wires drafts under Mine, museum is honest placeholder, readi
   assert.match(html.slice(html.indexOf('id="view-museum"'),html.indexOf('id="view-mine"')),/建设中/);
   for(const id of ["app-passcode","lock-current","lock-new","lock-confirm"]) assert.match(html,new RegExp(`data-testid="${id}" type="password" inputmode="numeric"`));
   assert.match(html,/data-testid="reading-edit">编辑/);
-  assert.match(html,/safe-area-inset-bottom/);
+  assert.match(html,/href="\.\/ui\/styles.css"/);
+  assert.match(readFileSync(new URL("../src/ui/styles.css",import.meta.url),"utf8"),/safe-area-inset-bottom/);
 });
