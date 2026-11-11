@@ -5,7 +5,7 @@
 - 已核对 README、UNIT0.8_REPORT、仓库各单元 SPEC，以及 `/workspace/specs/` 的 m01 + audit（v1.3）、m06 + audit、m07 + audit、contract G01–G06、outline（实际文件为 v2.6，包含历史 v2.5）。本轮授权优先于旧规划中的未开工表述。
 - 全部为合成夹具；无真实私人数据、秘密或 keystore。无网络/云/AI 功能，无 Android INTERNET 权限变更。未改领域模型、MemoryAdapter、Tauri adapter 或 Rust core；既有测试与 G01–G06 断言未修改。
 - 本轮不 stage、commit、merge 或 push；`.git` 只读，提交由编排侧执行。原先未跟踪的 `src-tauri/gen/` 不纳入交付。
-- CI: GitHub Actions run 42979346894 (PR #8, code tip b19bcfc) **7/7 success**；更早 run 42974345706（322c906）7/7 success。最终提交的 CI 见 PR #8。
+- CI: GitHub Actions run 42979346894 (PR #8, code tip b19bcfc) **7/7 success**；更早 run 42974345706（322c906）7/7 success。最终代码提交 94faa12：run 42980602822 **7/7 success**。
 
 ## PASS
 
@@ -77,7 +77,7 @@ npm run screenshots:u10
 - Android/macOS/Windows 安装、升级、离线使用、跨端备份恢复、原生 HEIC、签名和 APK 实包权限/versionCode 检查：NOT_RUN。版本 0.1.10 / versionCode 1010 是仓库配置结论，未核验本单元安装包。
 - Android 后台/恢复的应用锁及 60 秒重锁、系统最近任务预览、系统字体缩放、中文 IME/软键盘、安全区/横屏：NOT_RUN。
 - 新一轮 5000 条压力测试、100 张大原图/100 MB 备份、物理断电与三端文件授权：NOT_RUN；不复用历史测试冒充本轮结果。
-- CI 与三端原生打包：NOT_RUN，待编排侧填写。
+- CI 原生构建已跑通（run 42980602822，94faa12，7/7：三端 core+cli+ts、三端 tauri bundle、Android APK）；CI 产物未下载、未安装，安装包真机验证仍 NOT_RUN。
 
 ## BLOCKED（及额外检查失败）
 
