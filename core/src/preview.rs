@@ -1,4 +1,5 @@
-//! 派生预览图：从原图 asset 生成确定性 PNG 缩略图。
+//! Synthetic PNG fixture generator for tests / CLI sample data only.
+//! Production thumbnail decoding lives outside core; these stripes are never a photo preview.
 //!
 //! 预览是可随时删除、可由原图重建的缓存；生成过程只读原图，绝不改写或删除 asset。
 

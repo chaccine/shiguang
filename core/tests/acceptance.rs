@@ -71,17 +71,26 @@ fn ac_u0_02b_missing_or_invalid_date_is_rejected() {
     let tmp = TempRoot::new("bad-date");
     let mut store = Store::open(tmp.path()).unwrap();
     let row = store.create_draft(None, "", "正文", "", None).unwrap();
-    assert_eq!(store.commit(&row.record_id, 0).unwrap_err().code, "MISSING_EVENT_DATE");
+    assert_eq!(
+        store.commit(&row.record_id, 0).unwrap_err().code,
+        "MISSING_EVENT_DATE"
+    );
 
     let row2 = store
         .create_draft(None, "", "正文", "2026-02-30", None)
         .unwrap();
-    assert_eq!(store.commit(&row2.record_id, 0).unwrap_err().code, "INVALID_EVENT_DATE");
+    assert_eq!(
+        store.commit(&row2.record_id, 0).unwrap_err().code,
+        "INVALID_EVENT_DATE"
+    );
 
     let row3 = store
         .create_draft(None, "", "正文", "2026-11-09", Some("25:00"))
         .unwrap();
-    assert_eq!(store.commit(&row3.record_id, 0).unwrap_err().code, "INVALID_EVENT_TIME");
+    assert_eq!(
+        store.commit(&row3.record_id, 0).unwrap_err().code,
+        "INVALID_EVENT_TIME"
+    );
     assert!(formal_ids(&store).is_empty());
 }
 
@@ -178,7 +187,10 @@ fn ac_u0_06_two_photos_independent_captions_and_sha_verifiable() {
         let stored = store.asset_path(&use_ref.asset_id).expect("原图已落盘");
         let bytes = fs::read(&stored).unwrap();
         assert_eq!(sha256::hex_digest(&bytes), use_ref.sha256);
-        assert_eq!(sha256::hex_digest(&bytes), sha256::hex_digest(&fs::read(src).unwrap()));
+        assert_eq!(
+            sha256::hex_digest(&bytes),
+            sha256::hex_digest(&fs::read(src).unwrap())
+        );
         assert_eq!(bytes.len() as u64, use_ref.bytes);
     }
 
@@ -190,7 +202,13 @@ fn ac_u0_06_two_photos_independent_captions_and_sha_verifiable() {
     assert_eq!(formal.photos[1].caption, "第二张：桌上的茶");
 
     // 预览由原图派生，可生成
-    let created = store.ensure_previews().unwrap();
+    let created = store
+        .ensure_previews_with(|source, target| {
+            fs::create_dir_all(target.parent().unwrap())?;
+            fs::copy(source, target)?;
+            Ok(())
+        })
+        .unwrap();
     assert_eq!(created.len(), 2);
     assert!(store.preview_path(&use_a.asset_id).exists());
     assert!(store.preview_path(&use_b.asset_id).exists());
@@ -210,8 +228,18 @@ fn ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically() {
             .attach_photo(&row.record_id, &png, "独立 caption", None)
             .unwrap();
         store.commit(&row.record_id, 0).unwrap();
-        store.ensure_previews().unwrap();
-        (row.record_id, use_ref.asset_id, store.assets_on_disk().unwrap())
+        store
+            .ensure_previews_with(|source, target| {
+                fs::create_dir_all(target.parent().unwrap())?;
+                fs::copy(source, target)?;
+                Ok(())
+            })
+            .unwrap();
+        (
+            row.record_id,
+            use_ref.asset_id,
+            store.assets_on_disk().unwrap(),
+        )
     };
 
     // 模拟“清缓存”：删除整个预览目录
@@ -228,17 +256,32 @@ fn ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically() {
     assert_eq!(formal.photos[0].caption, "独立 caption");
 
     // 重建预览，且内容确定
-    let first = preview::preview_bytes(&before_assets[0].sha256);
-    let created = store.ensure_previews().unwrap();
+    let first = fs::read(store.asset_path(&asset_id).unwrap()).unwrap();
+    let created = store
+        .ensure_previews_with(|source, target| {
+            fs::create_dir_all(target.parent().unwrap())?;
+            fs::copy(source, target)?;
+            Ok(())
+        })
+        .unwrap();
     assert_eq!(created, vec![asset_id.clone()]);
     let rebuilt = fs::read(store.preview_path(&asset_id)).unwrap();
     assert_eq!(rebuilt, first);
     // 再次清理重建结果一致
     store.clear_previews().unwrap();
-    store.ensure_previews().unwrap();
+    store
+        .ensure_previews_with(|source, target| {
+            fs::create_dir_all(target.parent().unwrap())?;
+            fs::copy(source, target)?;
+            Ok(())
+        })
+        .unwrap();
     assert_eq!(fs::read(store.preview_path(&asset_id)).unwrap(), first);
     // 原图没有被预览流程改写
-    assert_eq!(store.assets_on_disk().unwrap()[0].sha256, before_assets[0].sha256);
+    assert_eq!(
+        store.assets_on_disk().unwrap()[0].sha256,
+        before_assets[0].sha256
+    );
 }
 
 #[test]
@@ -320,9 +363,17 @@ fn ac_u0_10_future_date_without_time_keeps_null_time() {
         .unwrap();
     store.commit(&row.record_id, 0).unwrap();
     // 空白时刻也应保持 None
-    store.create_draft(Some(&row.record_id), "", "", "", None).unwrap();
     store
-        .save_draft(&row.record_id, None, Some("补一句"), None, Some(Some("   ")))
+        .create_draft(Some(&row.record_id), "", "", "", None)
+        .unwrap();
+    store
+        .save_draft(
+            &row.record_id,
+            None,
+            Some("补一句"),
+            None,
+            Some(Some("   ")),
+        )
         .unwrap();
     store.commit(&row.record_id, 1).unwrap();
 
@@ -385,10 +436,19 @@ fn ac_u0_11_manifest_lists_formal_records_and_media_sha() {
         Some(use_ref.sha256.as_str())
     );
     let assets = manifest.get("assets").and_then(Json::as_arr).unwrap();
-    assert_eq!(assets[0].get("assetId").and_then(Json::as_str), Some(use_ref.asset_id.as_str()));
+    assert_eq!(
+        assets[0].get("assetId").and_then(Json::as_str),
+        Some(use_ref.asset_id.as_str())
+    );
     let platform = manifest.get("platform").unwrap();
-    assert_eq!(platform.get("seed").and_then(Json::as_str), Some("20261109"));
-    assert_eq!(platform.get("rustc").and_then(Json::as_str), Some("test-rustc"));
+    assert_eq!(
+        platform.get("seed").and_then(Json::as_str),
+        Some("20261109")
+    );
+    assert_eq!(
+        platform.get("rustc").and_then(Json::as_str),
+        Some("test-rustc")
+    );
 
     let out = tmp.path().join("manifest.json");
     fs::write(&out, manifest.pretty()).unwrap();
@@ -402,9 +462,19 @@ fn s0_guard_formal_state_never_references_missing_asset() {
     let tmp = TempRoot::new("s0-guard");
     let png = write_asset(&tmp.path().join("input"), "g.png", "synthetic-guard");
     let mut store = Store::open(tmp.path()).unwrap();
-    let row = store.create_draft(None, "", "", "2026-11-09", None).unwrap();
-    let use_ref = store.attach_photo(&row.record_id, &png, "guard", None).unwrap();
-    store.ensure_previews().unwrap();
+    let row = store
+        .create_draft(None, "", "", "2026-11-09", None)
+        .unwrap();
+    let use_ref = store
+        .attach_photo(&row.record_id, &png, "guard", None)
+        .unwrap();
+    store
+        .ensure_previews_with(|source, target| {
+            fs::create_dir_all(target.parent().unwrap())?;
+            fs::copy(source, target)?;
+            Ok(())
+        })
+        .unwrap();
     // 清预览不影响提交
     store.clear_previews().unwrap();
     store.commit(&row.record_id, 0).unwrap();

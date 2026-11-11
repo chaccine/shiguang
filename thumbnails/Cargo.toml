@@ -1,0 +1,13 @@
+[package]
+name = "shiguang_thumbnails"
+version = "0.1.9"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+
+[workspace]
+
+[dev-dependencies]
+shiguang_core = { path = "../core" }

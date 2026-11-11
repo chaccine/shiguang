@@ -12,6 +12,8 @@ use shiguang_core::Store;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Manager;
 
+#[cfg(target_os = "android")]
+mod android_thumb;
 mod backup_cmd;
 mod u07_cmd;
 
@@ -239,6 +241,8 @@ async fn store_status(
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
     let shared = state.inner().clone();
+    #[cfg(not(target_os = "android"))]
+    let _ = window;
     tauri::async_runtime::spawn_blocking(move || {
         let slot = shared.store.wait_lock()?;
         match slot.as_ref() {
@@ -506,6 +510,64 @@ fn list_drafts(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, C
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn photo_thumb_url(
+    asset_id: String,
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, CommandError> {
+    // Run decoding and hashing off the IPC/UI thread. Store mutex serializes cache writers.
+    let shared = state.inner().clone();
+    #[cfg(not(target_os = "android"))]
+    let _ = window;
+    tauri::async_runtime::spawn_blocking(move || {
+        let slot = shared.store.wait_lock()?;
+        let store = slot.as_ref().map_err(|e| CommandError::from(e.clone()))?;
+        match store.photo_status(&asset_id).map_err(CommandError::from)? {
+            PhotoStatus::Available => {}
+            PhotoStatus::Missing => return Err(command_error("ASSET_MISSING", "原图缺失")),
+            PhotoStatus::Corrupt => {
+                return Err(command_error("ASSET_HASH_MISMATCH", "原图校验失败"))
+            }
+        }
+        let source = store
+            .asset_path(&asset_id)
+            .ok_or_else(|| command_error("ASSET_MISSING", "原图缺失"))?;
+        // v2 suffix prevents reusing Unit-0's synthetic stripe caches.
+        let target = store.preview_path(&asset_id);
+        if !target.exists() {
+            let heic = store.all_photos().iter().any(|p| {
+                p.asset_id == asset_id
+                    && matches!(p.media_type.as_str(), "image/heic" | "image/heif")
+            });
+            let decoded = shiguang_thumbnails::generate(&source, &target);
+            #[cfg(target_os = "android")]
+            let decoded = decoded.or_else(|_| android_thumb::generate(window, &source, &target));
+            decoded.map_err(|_| {
+                command_error(
+                    if heic {
+                        "HEIC_UNSUPPORTED"
+                    } else {
+                        "PREVIEW_UNSUPPORTED"
+                    },
+                    if heic {
+                        "无法预览 HEIC 图片"
+                    } else {
+                        "图片暂时无法显示"
+                    },
+                )
+            })?;
+        }
+        let bytes = std::fs::read(target).map_err(|e| command_error("ASSET_READ_FAILED", e))?;
+        Ok(format!(
+            "data:image/png;base64,{}",
+            shiguang_core::base64::encode(&bytes)
+        ))
+    })
+    .await
+    .map_err(|e| command_error("PREVIEW_UNSUPPORTED", e))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn photo_data_url(
     asset_id: String,
     state: tauri::State<'_, AppState>,
@@ -690,6 +752,7 @@ pub fn run() {
             discard_draft,
             list_drafts,
             photo_data_url,
+            photo_thumb_url,
             commit_record,
             list_formal_records,
             get_record,

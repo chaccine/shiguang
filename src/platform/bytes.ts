@@ -53,5 +53,12 @@ export function sniffMediaType(name: string, bytes: Uint8Array): string {
   if (bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 56) return "image/gif";
   if (bytes.length > 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
     && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP") return "image/webp";
-  return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" } as Record<string, string>)[name.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
+  if (bytes.length >= 16 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp") {
+    const end = Math.min(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0), bytes.length);
+    const brands: string[] = [];
+    for (let i = 8; i + 4 <= end; i += 4) if (i !== 12) brands.push(String.fromCharCode(...bytes.slice(i, i + 4)));
+    if (brands.some((b) => ["heic", "heix", "hevc", "hevx"].includes(b))) return "image/heic";
+    if (brands.some((b) => ["heif", "mif1", "msf1"].includes(b))) return "image/heif";
+  }
+  return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", heic: "image/heic", heif: "image/heif" } as Record<string, string>)[name.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
 }
