@@ -4,11 +4,12 @@
 
 **当前版本：0.1.10**（Android versionCode 1010）· 分支开发、PR 合并由 Cine 决定。
 
-## 进度（Unit-0.10 Task A + B / 0.1.10）
+## 进度（Unit-0.10 Task A + B + C / 0.1.10）
 
 | 单元 | 内容 | 状态 |
 |---|---|---|
 | Unit-0.10 Task A + B | schema v4 迁移及备份兼容；M01 说明/封面/顺序/地点/心情的数据与命令；主题与应用锁 UI；规范五入口导航、正式阅读页、编辑器新字段及只读存储统计 | 本地实现；设备/视觉验证边界，验证见 [SPEC](evidence/unit-0.10/SPEC.md) 和 [记录](evidence/unit-0.10/REPORT.md) |
+| Unit-0.10 Task C | A 暖纸本与独立“灯下展馆”夜间样式、语义 token、首屏主题/字号缓存、实时跟随系统、外观预览、焦点/名称/触控约束及对比度自动检查 | 本地实现；浏览器截图 BLOCKED，200% 实际布局/读屏/真机 NOT_RUN；见 [设计系统](evidence/unit-0.10/DESIGN_SYSTEM.md) |
 | Unit-0 ~ 0.2 | 草稿/正式双态、原子落盘、照片 asset/photoUse 分离、自动保存与草稿恢复、暖纸本桌面 UI | 已合并 |
 | Unit-0.3 | Tauri Android APK（arm64 debug 侧载） | 已合并 |
 | Unit-0.4 / 0.1.3 | 多实例写锁（Android 无 flock 时回落进程内注册表 + `.owner`）、schemaVersion 迁移、回收站与删除标记、照片一致性核查、冲突副本 | 已合并 |
@@ -75,6 +76,7 @@ cargo test --offline --locked --workspace --features fault-injection   # 含故�
 npm test                 # TS 领域层与 MemoryAdapter 测试
 npm run typecheck
 npm run build            # 输出 dist/index.html + dist/ui/main.js
+npm run test:a11y:u010    # 可启动 Chrome 的环境：主题/200%/触控/键盘及合成截图；本沙箱 BLOCKED
 ```
 
 CLI 示例（自动使用工程内数据目录，演示用合成数据）：

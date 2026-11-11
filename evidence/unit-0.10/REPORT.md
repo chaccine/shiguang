@@ -210,3 +210,82 @@ Tauri 焦点回调/输入清空/主题事件。DOM 测试使用最小事件夹�
 
 无阻塞当前代码交付的问题。后续需在可启动浏览器及三端原生环境核验布局、Tauri/Android
 后台事件和 60 秒重锁、主题/字号/软键盘；另行设计 blocks 迁移、可用空间 API 和系统截图保护。
+
+## Task C · M06 灯下展馆、主题及可访问性（2026-11-11）
+
+分支 unit-0.10；本轮起点/仍为 HEAD：
+`322c906 docs(u010): Task B validation and deferred scope`。
+A/B 已有 `d70635f`（数据/设置/应用锁）、`d98cc7a`（存储统计）、`f2e59c1`（UI）等，
+本轮没有提交、合并或推送；不伪造新 hash。src-tauri/gen/ 是启动时已有的未跟踪目录，
+未改动、不得加入编排提交。
+
+### 已实现
+
+- 浅色延续 A 暖纸本；深色为独立“灯下展馆”：暖墨/胡桃木分层、琥珀操作色、
+  展框内线/内高光、低强度灯光与纸纹、独立排版参数及纯 CSS 占位构图。
+  时光轴、日历、导航、阅读、编辑、输入、按钮、提示/错误、弹窗和锁屏同源。
+  博物馆仍只有明确建设中及回时光轴入口，照片无调色/滤镜。
+- 色彩集中 tokens.css，两套完整语义集合；组件只引用 token。样式从 HTML 外移，
+  构建复制两份 CSS。原有合成照片 SVG 移至 platform/synthetic-media.ts，原色不变。
+- head 同步应用经过校验的主题/字号绘制缓存，后台原设置仍权威；三种偏好、实时系统事件、
+  预览选择及写入失败回退落地。覆盖恢复后刷新主题；刷新失败不保留已消费的导入 token
+  或旧编辑会话，也不把内容恢复操作撤回成“未恢复”。字体标准/大/特大沿原本机钩子，
+  根字号相对用户默认值，全控件继承字体，支持减少动态效果。
+- 命名输入/模态弹窗、跳到内容、可见焦点、主导航 aria-current、日历完整日期/计数/
+  选中/今天/珍藏、44–48px CSS 触控约束、应用锁 Tab 循环及解锁后焦点恢复。
+  200% 使用换行/可变容器/内部滚动路径；真实布局是否无截断仍须浏览器验证。
+- [设计系统](DESIGN_SYSTEM.md) 记录夜间理由、候选 token 表及边界。无 schema/领域/
+  Rust/adapter 数据契约变更，无依赖下载、网络/云/AI、秘密或 Android 权限变更。
+
+### 最终自动验证（Rust 1.90.0 / Node 24.22.1）
+
+| 命令 | 结果 | 日志 |
+| --- | --- | --- |
+| cargo test --offline --locked --workspace | **213 passed / 0 failed / 1 ignored** | task-c-cargo-test.log |
+| cargo test --offline --locked -p shiguang_core --features fault-injection | **258 passed / 0 failed / 1 ignored**（正常核心及故障注入一起计数） | task-c-fault-injection.log |
+| npm test | **21 个文件 passed / 0 failed** | task-c-npm-test.log |
+| node --test --test-isolation=none tests/*.test.ts | **170 项 passed / 0 failed / 0 skipped** | task-c-npm-cases.log |
+| npm run typecheck / npm run build | **PASS** | task-c-typecheck.log / task-c-build.log |
+| 组件颜色 rg 扫描 | **0 处固定 hex/rgb/hsl** | task-c-color-check.log |
+| node --check scripts/a11y-u010.mjs / git diff --check | **PASS**（语法/空白检查） | 本地执行 |
+
+Rust 唯一 ignored 仍是仅允许在原 v3 核心运行的历史夹具生成器；冻结旧库兼容测试实际运行。
+新加 10 项前端用例：对比度计算/独立 token/结构/触控样式约束，首屏脚本、三个偏好、实时
+系统事件、失败回退、相对字号和缓存不可读、Tauri 契约消费。已有 bootstrap/锁 UI 事件测试
+补充当前页、占位返回、日历标签/选中和焦点循环断言。
+
+对比度测试直接读实际 token，用 sRGB 计算，覆盖不透明表面、渐变端点、双层纹理和最强
+灯光合成。正文/次级/状态文字 ≥4.5:1，控件边界/焦点 ≥3:1；早期叠加测试发现临界值后，
+已降低灯光强度并校准次级文字，未降低阈值。结构/触控约束和最小 DOM 事件测试不是实际
+像素、焦点系统送达或读屏验收，不把它们计作完整 AC04/WCAG 认证。
+
+### BLOCKED / NOT_RUN / 未实现
+
+Chrome 两次启动尝试均被沙箱系统调用权限阻断，未第三次重试：
+
+1. Playwright headless + no-sandbox / disable-dev-shm-usage / disable-crashpad-for-testing：
+   `FATAL:content/browser/sandbox_host_linux.cc:41 ... shutdown: Operation not permitted (1)`，SIGABRT。
+2. 追加 no-zygote / single-process / disable-gpu：同一 FATAL / SIGABRT。
+
+因此新截图 **BLOCKED**；npm run test:a11y:u010 的完整浏览器矩阵 **NOT_RUN**。
+脚本已提供（320/1280px、两主题、100/200%、实际触控矩形/键盘/动态效果/各页面与锁屏），
+本轮仅语法检查；全部资源通过本地 dist 拦截提供，不需监听端口或联网。
+真实 200% 无截断、屏幕阅读器、弱光视觉评审、系统字号/软键盘/安全区、三端壳/设备均
+**NOT_RUN**。不能据本轮单元测试宣称所有可访问性或原生体验通过。
+
+完整故事块/双模式、照片替换/撤销、R03 三分支、系统最近任务截图保护及 Task B 的其他
+延期不变。M04 展区、M05 搜索、M08 及网络/云/AI 未实现。
+
+### 建议提交拆分（由编排执行，尚无新 hash）
+
+1. feat(u010): add lamplit night design system and prepaint appearance
+   — tokens/styles/外观控制器、HTML/主界面/锁屏、合成媒体整理、CSS 构建复制，
+   同步必要旧测试。提交正文注明获批 M06 V14 导航语义用 aria-current 代替孤立 tab 的
+   aria-selected；安全区断言随 CSS 拆出读取 styles.css；原数据/故障断言不删不弱化。
+2. test(u010): verify theme contrast and accessibility contracts
+   — 新测试、已有事件测试增强、浏览器复测脚本及 package 命令。说明浏览器矩阵 NOT_RUN。
+3. docs(u010): document Task C night tokens and validation limits
+   — README、SPEC、DESIGN_SYSTEM、本报告、task-c 日志及其 .gitignore 例外。
+
+开放问题：无阻塞实现的产品问题；需在可启动 Chrome 的环境运行浏览器矩阵，再做 Cine
+视觉复核及三端系统字号/读屏/输入体验验收，候选色值可据此继续校准。

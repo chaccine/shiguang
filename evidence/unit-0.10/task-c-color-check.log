@@ -1,0 +1,1 @@
+PASS: no fixed hex/rgb/hsl paint in UI components; palettes only in tokens.css. Synthetic original-media fixtures live separately in src/platform/synthetic-media.ts.
