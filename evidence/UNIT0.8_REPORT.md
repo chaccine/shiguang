@@ -21,7 +21,7 @@
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| 版本 0.1.9 / versionCode 1009 | PASS（推导） | package、workspace、Tauri、两份既有 lockfile、README；APK 包内 versionCode 待 CI 产物检查 |
+| 版本 0.1.9 / versionCode 1009 | PASS（推导） | package、workspace、Tauri、两份既有 lockfile、README；CI 产物 aapt：versionCode 1009 / versionName 0.1.9 |
 | 草稿编辑器加/改/建标签 | PASS（core + TS + 预览截图） | `set_record_tags` 允许未提交的 active 草稿行（CAS 仍在）；`set_favorite` 仍要求正式记录；丢弃从未提交的草稿会删行；commit 只发布内容、保留标签。真机/桌面壳 NOT_RUN |
 | 列表真缩略图（JPEG/PNG/GIF/WebP） | PASS（crate 单测 + 浏览器预览） | 解码在独立 `thumbnails/` crate（`image` 0.25），不进 core。缓存 `previews/{assetId}.thumb-v2.png`，最大边 320px。时光轴/日历封面走 `photoThumbUrl`，不再拉原图。Tauri 壳在 CI 构建，本机无 webkit，桌面壳 check NOT_RUN/BLOCKED |
 | HEIC/HEIF 嗅探 + 占位 | PASS（core 嗅探 + MemoryAdapter 预览截图） | 无法解码时显示「无法预览 HEIC 图片」，不崩溃 |
@@ -29,7 +29,7 @@
 | macOS ImageIO / sips HEIC | NOT_RUN | 代码已写，未在 macOS 上跑 |
 | Windows WIC/WPF HEIC | NOT_RUN | 代码已写；系统可能没有 HEIF 扩展，失败应走占位 |
 | Linux 原生 HEIC 解码 | NOT_RUN | 未引入 libheif（无 sudo）；走占位 |
-| 写锁等待 15s + 多进程测试 | PASS（Linux） | 偏离 Unit-0.4 SPEC 的约 3s；正确性断言保留（80 条、seq 唯一、可解析、无丢失更新）。Windows CI 复跑待本 PR |
+| 写锁等待 15s + 多进程测试 | PASS（Linux） | 偏离 Unit-0.4 SPEC 的约 3s；正确性断言保留（80 条、seq 唯一、可解析、无丢失更新）。PR CI run 42937318633（tip `c357f1f`）Windows core+cli+ts **通过** |
 | 5000 条合成压力测试 | PASS | 见下表；默认 CI 规模 200 |
 | 旧截图脚本 0.4–0.6 | PASS | 见上 |
 
@@ -64,17 +64,29 @@ SHIGUANG_STRESS_SIZE=5000 SHIGUANG_STRESS_OUT="$PWD/evidence/unit-0.8/stress.jso
 
 `evidence/unit-0.4`、`unit-0.5`、`unit-0.6` 的 PNG 已按当前导航重跑。`evidence/unit-0.8/` 里 0.1.8 导航截图未改。
 
+
+## CI 与安装包
+
+- PR：https://github.com/chaccine/shiguang/pull/7（**未合并**，由 Cine 决定）
+- 分支 tip：`c357f1f`
+- CI：**7/7 通过**，run https://github.com/chaccine/shiguang/actions/runs/42937318633 （head `c357f1f`）
+
+| 文件 | 大小 | sha256 | 说明 |
+| --- | ---: | --- | --- |
+| `拾光_0.1.9_arm64-debug.apk` | 26,239,541 B | `8e724692ca50d8930fdf4afcc24074e3acda75254d59d6dfe968e47816f9a08f` | CI universal debug APK（已 strip）→ 去旧签名块 → `zipalign -p 4` → box `~/.android/debug.keystore`（androiddebugkey）重签；`apksigner verify` v2+v3 通过；证书 SHA-256 `59dbe106e00efc187b10faf0c2839fd575de09a42f7a964dc94c00e309af766f`（可覆盖安装 0.1.8，数据保留）；versionCode 1009 / versionName 0.1.9；权限仅 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，无 INTERNET。Drive：https://drive.google.com/file/d/1SBSJuE9at6ceYqs9WznjFqB_C-4-oo9y/view |
+| `拾光_0.1.9_aarch64.dmg` | 4,533,925 B | `d8586a6bccb72a9d04ad2f73b5b782e3a92bad6bf143684646080fc49af526ec` | CI 未签名；本机 `/workspace/u09dl/` |
+| `拾光_0.1.9_x64_zh-CN.msi` | 4,579,328 B | `f990a2aa9ff0e78e5b46de364d8fc870d68774e99470fa4432ca34306eeb14e2` | CI 未签名；本机 `/workspace/u09dl/` |
+
+NSIS `.exe` 本次未出：CI 因 `nsis_tauri_utils.dll` 从 GitHub Releases 下载持续 504，Windows job 仍只打 MSI（见 `.github/workflows/ci.yml`）。Cine 已允许补做 NSIS，需另想办法（例如把 dll 放进仓库或换镜像）后再开。
+
 ## 未跑 / 未做 / 需 Cine 决定
 
 - 真机与桌面安装包实际运行：NOT_RUN（等本 PR 的 APK / dmg / msi）
 - 三端原生 HEIC 解码：NOT_RUN
 - 本机 Tauri 桌面编译：预计仍 BLOCKED（box 无 webkit2gtk，与既往相同）
 - Windows 多进程锁测试：需看本 PR 的 CI
-- **未做（Cine 已取消）**：正式/发布签名、release keystore、正式签名 CI/Secrets
-- 仍待 Cine 决定（本单元未做）：
-  1. 把盒上同一把 debug keystore 放到 GitHub Secrets：CI 打出的 APK 就能直接覆盖安装，不必再在盒上重签。仍是调试证书，不是商店证书。
-  2. 是否同时分发 Windows NSIS `.exe`（`tauri.conf` 已配置简体中文；现在主要交 MSI）
-  3. 是否更新 Drive 里已过时的项目文档（例如仍写 SQLite 或旧导航）
+- **正式/发布签名**：Cine 已取消，未创建 release keystore，未向 CI/Secrets 添加正式签名。
+- Cine 已允许、尚未做完（不挡 0.1.9 安装）：把盒上同一把 debug keystore 放入 GitHub Secrets，让 CI APK 可直接覆盖安装；修复 NSIS 打包（当前被 GitHub Releases 504 挡住）；更新 Drive 里过时文档。
 
 ## 日志
 
