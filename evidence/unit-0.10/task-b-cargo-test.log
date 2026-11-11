@@ -1,0 +1,431 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/main.rs (target/debug/deps/shiguang-9ba26c151910bc4d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_multiprocess.rs (target/debug/deps/unit04_multiprocess-fbdcb0317d96b530)
+
+running 5 tests
+test child_instance_lock_causes_store_locked_and_preserves_all_files ... ok
+test four_processes_create_twenty_drafts_each_without_lost_updates ... ok
+test child_write_lock_blocks_entire_commit_without_changes ... ok
+test child_write_lock_blocks_open_cleanup_and_preserves_state_bytes ... ok
+test child_write_lock_blocks_save_transaction_without_changes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.02s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-a7e31858c13b7f4b)
+
+running 1 test
+test cli_backup_roundtrip_requires_yes_and_verify_is_store_free ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit06_backup.rs (target/debug/deps/unit06_backup-3ee32a619f7e15b6)
+
+running 2 tests
+test password_argv_is_rejected_without_echo_or_data_creation ... ok
+test encrypted_export_verify_plan_merge_restore_env_and_stdin ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/unit07_cli.rs (target/debug/deps/unit07_cli-b68afd90ad6968f4)
+
+running 2 tests
+test cli_platform_local_date_is_passed_into_pure_query ... ok
+test all_unit07_commands_end_to_end_and_confirmation_guards ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-3881f996e71caf28)
+
+running 29 tests
+test base64::tests::rfc4648_vectors_and_binary ... ok
+test json::tests::pretty_is_valid ... ok
+test json::tests::round_trip ... ok
+test json::tests::rejects_floats_and_trailing_garbage ... ok
+test json::tests::rejects_duplicate_keys ... ok
+test lock::tests::real_proc_starttime_parses_for_self ... ok
+test backup::tests::existing_safety_directory_is_never_removed_on_create_failure ... ok
+test lock::tests::stale_owner_from_dead_process_is_taken_over ... ok
+test preview::tests::crc_known_value ... ok
+test lock::tests::without_proc_an_unknown_owner_is_never_stolen ... ok
+test lock::tests::own_pid_leftover_is_stale_and_fresh_garbage_is_not ... ok
+test session::tests::failure_is_kept_and_actionable ... ok
+test lock::tests::live_other_process_owner_blocks_and_pid_reuse_is_detected ... ok
+test lock::tests::unsupported_falls_back_and_rejects_second_holder_in_process ... ok
+test store::tests::draft_round_trip_and_atomic_state ... ok
+test store::tests::normal_writes_report_durable_on_linux ... ok
+test preview::tests::produces_stable_png ... ok
+test store::tests::open_cleans_only_root_temp_files ... ok
+test store::unit08_sniff_tests::heic_ftyp_brands_and_extension ... ok
+test time::tests::date_validation ... ok
+test time::tests::epoch_and_known_dates ... ok
+test time::tests::time_validation ... ok
+test store::tests::serialization_mismatch_keeps_memory_and_disk ... ok
+test session::tests::timeout_reports_starting_not_panic ... ok
+test session::tests::begin_only_once_and_waiters_see_result ... ok
+test sha256::tests::known_vectors ... ok
+test json::unit08_regression::large_multilingual_document_roundtrips_strictly ... ok
+test app_lock::tests::diagnostics_redact_codes_salts_hashes_and_success_payloads ... ok
+test app_lock::tests::exponential_backoff_is_persisted_and_correct_code_waits_then_resets ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/acceptance.rs (target/debug/deps/acceptance-afaccf6087d0874b)
+
+running 13 tests
+test ac_u0_02_title_only_draft_cannot_be_committed ... ok
+test ac_u0_03_draft_survives_reopen_with_identical_hash ... ok
+test ac_u0_04_commit_creates_formal_record_and_increments_revision ... ok
+test ac_u0_05_formal_list_excludes_drafts ... ok
+test ac_u0_02b_missing_or_invalid_date_is_rejected ... ok
+test ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view ... ok
+test ac_u0_07b_missing_original_blocks_commit ... ok
+test ac_u0_09_edit_commit_updates_single_entry_with_stable_id ... ok
+test ac_u0_10_future_date_without_time_keeps_null_time ... ok
+test s0_guard_formal_state_never_references_missing_asset ... ok
+test ac_u0_11_manifest_lists_formal_records_and_media_sha ... ok
+test ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically ... ok
+test ac_u0_06_two_photos_independent_captions_and_sha_verifiable ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/hotfix07_reopen.rs (target/debug/deps/hotfix07_reopen-8394e065d852af34)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit010_faults.rs (target/debug/deps/unit010_faults-4958b99998f8453c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit010_lock.rs (target/debug/deps/unit010_lock-873004349df21233)
+
+running 9 tests
+test theme_persists_without_touching_content_and_stale_store_preserves_lock ... ok
+test real_command_backoff_survives_restart_and_cannot_be_reset_by_set_change_disable ... ok
+test malformed_lock_parameters_fail_closed_without_leaking_hash_or_rewriting_state ... ok
+test crafted_backup_lock_never_overrides_target_lock_in_overwrite_or_merge ... ok
+test v3_restore_retains_existing_lock_and_counter_and_merge_never_imports_settings ... ok
+test argon2id_random_salts_stored_parameters_and_no_plaintext_or_ipc_verifier ... ok
+test default_settings_and_passcode_format_validation_never_echo_inputs ... ok
+test portable_plain_encrypted_backups_omit_lock_and_overwrite_preserves_target_lock ... ok
+test set_verify_change_disable_require_current_and_remain_persisted_after_reopen ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+
+     Running tests/unit010_schema.rs (target/debug/deps/unit010_schema-1e553057bb90c855)
+
+running 15 tests
+test location_counts_unicode_scalars_without_stripping_and_mood_rejects_unknown_values ... ok
+test frozen_v3_state_migrates_losslessly_once_and_keeps_exact_original ... ok
+test future_v5_and_malformed_v4_fields_are_refused_without_modifying_file ... ok
+test photo_id_collision_remaps_manual_cover_in_both_slots_and_conflict_snapshot ... ok
+test cover_reorder_and_removal_fallback_keep_originals_and_formal_untouched ... ok
+test v3_conflict_snapshot_migrates_without_losing_caption_order_or_ownership ... ok
+test g01_all_new_fields_isolate_publish_atomically_and_discard_preserves_formal ... ok
+test reorder_of_repeated_identical_photo_uses_is_differing_content ... ok
+test equal_revision_differing_new_fields_keep_local_and_exact_incoming_conflict ... ok
+test frozen_v3_wrong_passphrase_is_rejected_without_any_live_changes ... ok
+test v4_plain_and_encrypted_roundtrip_all_new_fields_and_both_snapshot_slots ... ok
+test v3_merge_into_v4_preserves_drafts_trash_tags_favorites_and_is_idempotent ... ok
+test frozen_v3_plain_and_production_encrypted_backups_restore_without_loss ... ok
+test v3_import_into_nonempty_v4_store_keeps_local_new_fields_and_pending_draft ... ok
+test merge_compares_every_new_content_field_keeps_both_versions_and_reimports_idempotently ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+     Running tests/unit010_storage.rs (target/debug/deps/unit010_storage-f4d78160f729f030)
+
+running 2 tests
+test storage_skips_external_internal_and_looping_symlinks ... ok
+test storage_counts_nested_categories_without_changing_data ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit01_faults.rs (target/debug/deps/unit01_faults-55af2ec571e77cc6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit01_safety.rs (target/debug/deps/unit01_safety-8e9e04efd944dc62)
+
+running 14 tests
+test conflict_with_occupied_draft_keeps_disk_and_local_memory ... ok
+test t_a1_invalid_date_does_not_mutate_title_body ... ok
+test t_d2_truncated_asset_blocks_commit ... ok
+test t_a3_attach_missing_record_does_not_bump_seq ... ok
+test t_c1_truncated_state_rejected_and_file_untouched ... ok
+test t_c3_out_of_range_or_duplicate_rejected ... ok
+test t_c2_missing_fields_no_silent_default ... ok
+test t_c4_future_version_refused ... ok
+test t_d1_tampered_asset_blocks_commit ... ok
+test t_a2_failed_edit_draft_does_not_materialize_draft ... ok
+test t_e1_stale_base_revision_conflict ... ok
+test t_e2_clock_does_not_pick_winner ... ok
+test transactions_reload_disk_and_reject_corruption_without_changes ... ok
+test t_e3_expected_base_mismatch_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/unit02_drafts.rs (target/debug/deps/unit02_drafts-73a945a4159eab6b)
+
+running 10 tests
+test corrupt_state_blocks_all_new_mutations ... ok
+test invalid_byte_requests_leave_memory_state_and_media_unchanged ... ok
+test conflicting_existing_asset_never_changes_state_or_original_bytes ... ok
+test bytes_and_path_share_assets_but_not_photo_uses ... ok
+test missing_use_and_no_draft_leave_state_unchanged ... ok
+test attach_to_formal_materializes_draft_without_changing_formal_or_base ... ok
+test discard_pure_draft_removes_row_and_formal_draft_keeps_formal ... ok
+test list_drafts_orders_updates_and_ties_and_includes_formal_edits ... ok
+test remove_only_draft_use_preserves_formal_shared_and_orphan_assets ... ok
+test exactly_25_mib_is_accepted_and_explicit_type_is_kept ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running tests/unit04_conflict.rs (target/debug/deps/unit04_conflict-171d1e3702136efa)
+
+running 5 tests
+test restoring_copy_to_occupied_slot_rejects_without_any_change ... ok
+test occupied_disk_draft_preserves_local_copy_durably_without_overwriting_slot ... ok
+test keep_mine_rebases_without_auto_commit_then_user_can_commit ... ok
+test keep_formal_saves_recoverable_copy_and_restore_uses_current_revision ... ok
+test conflict_copy_only_photo_reference_survives_purge_and_reconcile ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit04_faults.rs (target/debug/deps/unit04_faults-f1d8a25ce9f7004b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_lock.rs (target/debug/deps/unit04_lock-02351af4af4cb828)
+
+running 2 tests
+test exclusive_instances_exclude_each_other_and_drop_releases_lock ... ok
+test rejected_exclusive_open_never_cleans_or_changes_any_file ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_lock_unsupported.rs (target/debug/deps/unit04_lock_unsupported-e678e531b28579b5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_media.rs (target/debug/deps/unit04_media-891ba7caca3b7e90)
+
+running 6 tests
+test reconciliation_requires_exclusive_instance_and_does_not_touch_files ... ok
+test orphan_and_partial_originals_move_to_quarantine_with_identical_sha ... ok
+test referenced_missing_original_is_reported_without_record_mutation ... ok
+test referenced_wrong_size_is_reported_as_corrupt ... ok
+test referenced_same_size_wrong_sha_is_reported_as_corrupt ... ok
+test references_in_formal_draft_and_trash_are_never_quarantined ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit04_schema.rs (target/debug/deps/unit04_schema-7d929c3eb8096d11)
+
+running 5 tests
+test too_new_schema_rejects_without_touching_state_temps_or_directories ... ok
+test migration_function_and_table_expose_v1_to_v2 ... ok
+test explicit_v1_uses_same_migration_chain ... ok
+test transaction_reloading_legacy_schema_refuses_to_overwrite ... ok
+test missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-8e70a25da07a2d08)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_attach_is_write_protected ... ok
+test trashed_commit_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_create_edit_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... ok
+test trashed_discard_is_write_protected ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-666a3172afe0e88f)
+
+running 35 tests
+test empty_unpersisted_library_roundtrips ... ok
+test absent_reference ... ok
+test double_dot ... ok
+test dot ... ok
+test absolute ... ok
+test duplicate ... ok
+test counts ... ok
+test backslash ... ok
+test export_reloads_disk_snapshot_and_reports_corrupt_media ... ok
+test encrypted ... ok
+test export_is_read_only_including_mtimes_and_refuses_existing_dest ... ok
+test format ... ok
+test entry_sha ... ok
+test invalid_state ... ok
+test long_name ... ok
+test legacy_v1_container_restores_and_migrates_to_v2 ... ok
+test open_removes_only_abandoned_staging_without_journal ... ok
+test malformed_json_and_excessive_nesting_fail_before_any_restore_write ... ok
+test restore_requires_exclusive_and_verify_does_not_create_store ... ok
+test media_outer ... ok
+test media_inner ... ok
+test missing_field ... ok
+test missing_state ... ok
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews ... ok
+test schema ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test size ... ok
+test traversal_media ... ok
+test traversal_state ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-c786df85acb1a17e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_crypto.rs (target/debug/deps/unit06_crypto-99a92c5e655d8637)
+
+running 6 tests
+test empty_password_and_invalid_kdf_rejected_without_artifacts ... ok
+test untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext ... ok
+test wrong_password_never_leaks_in_message_debug_or_changes_destination ... ok
+test wrong_password_wrappers_preserve_entire_existing_root ... ok
+test encrypted_roundtrip_password_wrappers_and_required_error ... ok
+test multichunk_tamper_truncation_header_aad_and_reorder_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s
+
+     Running tests/unit06_faults.rs (target/debug/deps/unit06_faults-8128ae85688e8520)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_merge.rs (target/debug/deps/unit06_merge-e38b1c46fd6e759a)
+
+running 15 tests
+test merge_requires_exclusive_and_invalid_package_writes_nothing ... ok
+test drafts_preserve_local_import_current_and_conflict_stale ... ok
+test incoming_markers_never_delete_local_and_union_is_idempotent ... ok
+test new_records_preserve_draft_and_trash_and_markers_preserve_local_trash ... ok
+test pure_table_revision_status_and_equal_content ... ok
+test merge_symlinks_and_malicious_journal_cannot_escape_root ... ok
+test collisions_remap_records_photos_conflicts_and_remain_idempotent ... ok
+test strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses ... ok
+test strict_validation_covers_conflict_ids_and_logical_photo_ownership ... ok
+test missing_media_and_hash_collision_preserve_local_original ... ok
+test dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts ... ok
+test reexported_collision_merges_back_without_duplicate_photos_or_conflicts ... ok
+test plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes ... ok
+test purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative ... ok
+test synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/unit07_backup.rs (target/debug/deps/unit07_backup-e1dde5ea07388007)
+
+running 9 tests
+test dictionary_cross_device_collisions_and_reimport_idempotence ... ok
+test independent_revision_winners_equal_local_wins_and_marker_union ... ok
+test incoming_alias_to_locally_deleted_terminal_becomes_tombstone ... ok
+test remapped_identity_survives_merge_delete_and_history_reexport ... ok
+test local_deletion_merge_alias_and_deleted_record_never_resurrect ... ok
+test v3_roundtrip_tags_favorites_aliases_tombs_and_counts ... ok
+test actual_v2_package_without_new_fields_verifies_restores_and_merges ... ok
+test store_merge_metadata_roundtrip_is_byte_identical_on_second_import ... ok
+test cross_device_history_collisions_are_valid_and_idempotent ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/unit07_faults.rs (target/debug/deps/unit07_faults-ae46d7ad0208ffe5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit07_meta.rs (target/debug/deps/unit07_meta-cbf4fdf4ef84a24e)
+
+running 4 tests
+test stale_store_cas_and_content_commit_keep_latest_independent_metadata ... ok
+test formal_only_trash_restore_purge_and_missing ... ok
+test draft_tag_creation_detach_cas_commit_and_discard ... ok
+test metadata_cas_does_not_publish_or_overwrite_drafts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit07_query.rs (target/debug/deps/unit07_query-f0674fa4e78cd475)
+
+running 5 tests
+test on_this_day_past_only_and_leap_day_exact ... ok
+test b02_all_ties_time_groups_and_directions ... ok
+test filters_formal_projection_calendar_and_date_move ... ok
+test entire_day_is_unbounded_queries_are_read_only_and_false_photo_filter ... ok
+test paging_3000_is_complete_fast_and_insertions_do_not_repeat ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running tests/unit07_schema.rs (target/debug/deps/unit07_schema-2b0dd7ff826bb956)
+
+running 2 tests
+test future_schema_and_invalid_metadata_reject_without_writes ... ok
+test migration_chain_defaults_and_exact_backup ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit07_tags.rs (target/debug/deps/unit07_tags-c76fc57091a6c2dd)
+
+running 3 tests
+test trimming_precedes_display_name_validation ... ok
+test names_rename_conflicts_and_normalization ... ok
+test merge_delete_atomic_links_alias_chain_and_content_survives ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit08_stress.rs (target/debug/deps/unit08_stress-da2b2caa97bc4854)
+
+running 1 test
+test synthetic_stress_open_query_export_restore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+
+     Running tests/v3_golden_generator.rs (target/debug/deps/v3_golden_generator-1ed5d220e14aba16)
+
+running 2 tests
+test generate_v3_golden_fixtures ... ignored, writes historical fixtures; run explicitly with the unmodified v3 core
+test frozen_v3_fixtures_have_original_schema_and_complete_media ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

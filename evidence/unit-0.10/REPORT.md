@@ -124,3 +124,89 @@ npm、typecheck、build）。共享文件需要按检查点/差异分段暂存�
 `src-tauri/gen/`、本目录 `.stage2/` 中间快照和检查点补丁均不纳入上述提交；避免用
 `git add .` 一次收进这些交接产物。实际源码、夹具、SPEC、摘要和报告才是提交内容。
 已按 Git blob 校验 v3 冻结夹具与第一检查点一致。没有可打印的本轮提交哈希。
+
+
+## Task B · UI / M01 + M06 + M07（2026-11-11）
+
+工作分支 `unit-0.10`，起始 HEAD `5000219`。未创建新提交，未 stage/merge/push；
+`.git` 只读且由编排侧提交。预先存在的 `src-tauri/gen/` 保持未跟踪，不列入交付。
+版本仍为 Task A 已落的 0.1.10。全部开发与测试数据均为合成夹具。
+
+### 本轮已完成
+
+- 规范手机五入口与桌面侧栏；默认时光轴；草稿/收藏标签/备份/回收站等功能均从我的可达。
+  博物馆仅建设中占位，M05 查找入口省略，无搜索功能。
+- 正式只读阅读页，显式编辑进入/继续修改草稿；标题、日期、地点、心情、突出封面、
+  权威顺序相册、纯文本多行说明、正文、标签/收藏；原图/预览故障可重试且不删引用。
+  返回保留来源、筛选/选中日、滚动上下文。往年今日卡片同样有阅读入口。
+- 编辑器说明、封面标记、无拖拽依赖的上/下移动、手写地点、心情。串行自动保存沿用
+  既有保存状态；照片失败写入保留待重试，切页/提交先 flush；不发布正式内容。
+- 只读 Rust 本机分类统计 + Tauri 命令 + TS/MemoryAdapter。跳过内部/外部/循环符号链接，
+  分类总和有测试；UI 明确预览数字是合成示例，可用空间未知，支持未来低空间数字的提示。
+  不提供删除或自动清理，不修改记录和原图。
+- 主题 light/dark/system，系统主题监听，本机字号偏好钩子；设置反馈保留持久化不确定语义。
+- 应用锁双输启用、当前码改码/关闭、立即锁定、启动门禁；原生窗口焦点及 DOM 可见性/
+  焦点监听；后台立即遮挡、离开满 60 秒后重锁；错码限速和倒计时调用核心状态。
+  输入提交即清空，finally 再清空，不记日志；诚实说明文件不加密、忘记口令无应用内找回、
+  Android 文件访问限制、最近任务截图未保护、备份口令独立。
+- 截图脚本沿我的二级入口及阅读→编辑路径更新，未删除原断言。原有导航测试仅依获批的
+  V04 五入口和默认启动规则更新期望；其它既有数据保护和故障测试未削弱。
+
+### 最终本地验证（Rust 1.90.0 / Node 24.22.1）
+
+| 命令 | 实际结果 | 证据 |
+| --- | --- | --- |
+| `cargo test --offline --locked --workspace` | **213 passed / 0 failed / 1 ignored** | task-b-cargo-test.log |
+| `cargo test --offline --locked -p shiguang_core --features fault-injection` | **258 passed / 0 failed / 1 ignored**（含正常核心及故障测试） | task-b-fault-injection.log |
+| `npm test` | **19 个模块 passed / 0 failed**（Node 24 默认以文件计数） | task-b-npm-test.log |
+| `node --test --test-isolation=none tests/*.test.ts` | **160 项 passed / 0 failed / 0 skipped** | task-b-npm-cases.log |
+| `npm run typecheck` | **PASS** | task-b-typecheck.log |
+| `npm run build` | **PASS** | task-b-build.log |
+| 修改的 Rust 文件 rustfmt 检查、`git diff --check` | **PASS** | 本地执行 |
+
+Rust 唯一忽略项仍为历史 v3 夹具生成器（只能在原 v3 核心显式运行）；正常冻结旧夹具
+兼容性测试实际执行，没有新增忽略。额外尝试的 workspace 全量 fmt 检查发现基线 lock.rs、
+time.rs 及旧测试已有格式差异，未改动这些无关文件；本轮修改的 Rust 文件已单独格式化并检查通过。
+
+新增验证包括：真实 main.ts 入口的 DOM 事件启动/五入口/我的草稿/编辑标量/阅读→修改→返回；
+实际阅读 renderer 的封面与相册顺序、字面说明及 formal 隔离；DraftSession 照片失败重试；
+存储列表与低空间提示、命令适配；PersonalUi 启用确认/错码/核心倒计时/改码/关闭/启动锁定/
+Tauri 焦点回调/输入清空/主题事件。DOM 测试使用最小事件夹具，不模拟布局、图像解码或
+系统真实焦点送达，不应被解释为设备或完整浏览器 E2E 通过。
+
+### 未实现 / NOT_RUN / BLOCKED
+
+- **BLOCKED：Chrome/截图。** 本轮一次启动 `/usr/bin/google-chrome`（Playwright headless）
+  在沙箱中被 `setsockopt: Operation not permitted` 阻断，Chrome SIGTRAP 退出；未反复重试，
+  未生成新截图。更新的既有截图脚本未执行完成，不能宣称像素/零 page errors 通过。
+- **NOT_RUN：原生壳构建、APK/桌面安装与真实生命周期、软键盘/安全区/读屏/对比度实测。**
+  Task A 已记录原生 Android 离线 check 缺 bit-set 缓存；Task B 未重复取包或尝试联网。
+  系统最近任务截图防护未实现。Tauri 适配代码/DOM 回调测试不代表原生编译或真机通过。
+- **明确延期：M01 图文块故事编辑及双模式。** m01 v1.3 首版要求成立，但现有正文+相册
+  模型须增 blocks、迁移、备份/合并及无损编辑测试，非简单 UI，按本任务 Cine 接受的延期记录。
+  完整 M01 的照片替换/撤销、R03 三分支重编选择仍未实现；默认继续现有修改草稿，不丢弃它。
+- 剩余空间原生探测未实现（显示未知）；缓存/备份清理操作未提供；本机字号偏好不随备份迁移。
+- M04 展区、M05 搜索、M08、云/网络/AI 均未实现；无新增 Android INTERNET 权限/依赖下载/秘密。
+
+### 提交记录与建议拆分（编排执行，本轮无新 hash）
+
+已落基线提交（只读核对）：
+
+- `f58b13f test(u010): freeze synthetic schema v3 state and .sgbak fixtures (plain + encrypted)`
+- `d70635f feat(u010): schema v4 (caption/cover/order/location/mood, theme, app lock), v3 migration, backup/merge compatibility, Argon2id app-lock core`
+- `5000219 chore(u010): drop Codex staging snapshot from evidence [skip ci]`
+
+本轮新提交：**无**。建议按逻辑拆成：
+
+1. `feat(u010): add read-only local storage usage statistics` — Rust storage 模块/命令/测试，
+   TS storageStats 类型与两个 adapter，相关存储契约（共享文件需按 hunk 拆分）。
+2. `feat(u010): complete M01 reading and M06/M07 navigation, editor and privacy UI` — 正式投影
+   地点/心情、串行照片自动保存、规范导航、我的、阅读/编辑/主题/应用锁、测试及脚本。
+   提交正文须注明：旧 navigation 测试期望按获批 V04 和默认时光轴变更，其余断言保留；
+   图文块故事编辑明确延期；浏览器截图/真机 NOT_RUN/BLOCKED。
+3. `docs(u010): record Task B validation and deferred scope` — README、SPEC、本报告及最终测试日志。
+
+### 开放事项
+
+无阻塞当前代码交付的问题。后续需在可启动浏览器及三端原生环境核验布局、Tauri/Android
+后台事件和 60 秒重锁、主题/字号/软键盘；另行设计 blocks 迁移、可用空间 API 和系统截图保护。
