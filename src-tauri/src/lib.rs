@@ -241,8 +241,6 @@ async fn store_status(
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
     let shared = state.inner().clone();
-    #[cfg(not(target_os = "android"))]
-    let _ = window;
     tauri::async_runtime::spawn_blocking(move || {
         let slot = shared.store.wait_lock()?;
         match slot.as_ref() {
