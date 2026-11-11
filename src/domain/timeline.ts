@@ -49,7 +49,7 @@ export function toItem(row: FormalRow, today: string): TimelineItem {
   const f = row.formal;
   return {
     recordId: row.recordId, eventDate: f.eventDate, eventTime: f.eventTime?.trim() ? f.eventTime : null,
-    title: f.title.trim(), excerpt: excerptOf(f.body), cover: f.photos[0] ?? null, photoCount: f.photos.length,
+    title: f.title.trim(), excerpt: excerptOf(f.body), cover: f.photos.find((p) => p.photoUseId === f.coverPhotoUseId) ?? null, photoCount: f.photos.length,
     favorite: row.favorite ?? false, favoriteRevision: row.favoriteRevision ?? 0,
     tagIds: [...(row.tagIds ?? [])], tagRevision: row.tagRevision ?? 0, createdAt: row.createdAt,
     isFuture: f.eventDate > today,

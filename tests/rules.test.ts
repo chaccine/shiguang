@@ -9,6 +9,7 @@ function snapshot(partial: Partial<Snapshot> = {}): Snapshot {
     body: "",
     eventDate: "2026-11-09",
     eventTime: null,
+    location: "", mood: null, coverPhotoUseId: partial.photos?.[0]?.photoUseId ?? null,
     photos: [],
     ...partial,
   };

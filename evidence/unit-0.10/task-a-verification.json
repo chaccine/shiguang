@@ -1,0 +1,41 @@
+{
+  "version": "0.1.10",
+  "branch": "unit-0.10",
+  "base": "b882029",
+  "checkedAt": "2026-11-11T05:57:26.970051+00:00",
+  "rust": "1.90.0",
+  "node": "v24.22.1",
+  "cargo": {
+    "passed": 211,
+    "failed": 0,
+    "ignored": 1
+  },
+  "faults": {
+    "passed": 266,
+    "failed": 0,
+    "ignored": 1,
+    "additional_vs_default": 55
+  },
+  "npm": {
+    "files": 16,
+    "cases": 153,
+    "failed": 0
+  },
+  "typecheck": "PASS",
+  "build": "PASS",
+  "version_consistency": "PASS (Android versionCode 1010 derived; APK NOT_RUN)",
+  "tauri_android_check": "BLOCKED: existing bit-set 0.11.1 unavailable offline; no fetch or dependency downgrade",
+  "native_ui_and_devices": "NOT_RUN",
+  "commits": "NONE (RESUME: orchestrator commits; .git read-only)",
+  "ignored": "Only the historical fixture generator: must run with v3 core, protected by CURRENT_SCHEMA_VERSION == 3. Frozen-byte compatibility tests ran.",
+  "logSha256": {
+    "task-a-cargo.log": "66967b2aba2efe98a0814a08310e093b692027959ce947355eb911863da42601",
+    "task-a-faults.log": "019b647692f700b5ac4ae0b06805e69a0dabf99fdf0ac26dca54368f13b0b879",
+    "task-a-npm.log": "b408ef4b333e81478d72b608dfd706e7e786547f6423326fee3a4fa1dfbb793d",
+    "task-a-npm-cases.log": "9553f40015fd1304d9958120cb25a624a15f09590d4c1218c60f435b378cb39e",
+    "task-a-typecheck.log": "c0ac44c05ebf955e36944f857b29b87aea14e1775ee947a449db68a6d0c0e202",
+    "task-a-build.log": "6372880b5e16f576f0a9422b8c4d1a11d4e32e2ac9d053e07092277bb0629937",
+    "task-a-tauri-android-check.log": "3614750295ec9e0be69309b26ae74b3676e7895f5206487686115cf2257e8e80"
+  },
+  "frozenFixtures": "PASS: unchanged Git blobs from 01-v3-fixtures.patch"
+}

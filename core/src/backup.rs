@@ -634,7 +634,7 @@ impl Store {
         {
             return Err(invalid());
         }
-        let state = self.backup_snapshot()?;
+        let state = self.portable_backup_snapshot()?;
         let references = refs(&state)?;
         let state_bytes = state.pretty().into_bytes();
         let mut entries = vec![Entry {
@@ -801,7 +801,10 @@ impl Store {
         }
         let _lock = write_lock(self.root())?;
         let mut source = File::open(path)?;
-        let verified = verify(&mut source)?;
+        let mut verified = verify(&mut source)?;
+        let mut restored_settings = State::from_json(&verified.state)?.settings;
+        restored_settings.app_lock = self.candidate_state()?.settings.app_lock;
+        schema::set(&mut verified.state, "settings", restored_settings.to_json())?;
         check_root(self.root())?;
         // Complete an earlier simulated interruption before creating another journal.
         recover(self.root())?;
@@ -842,12 +845,12 @@ impl Store {
                 }
                 fault::hit(FaultPoint::RestoreStage)?;
             }
-            if verified.info.schema_version < schema::CURRENT_SCHEMA_VERSION {
-                atomic(
-                    &staging.join("state.json"),
-                    verified.state.pretty().as_bytes(),
-                )?;
-            }
+            // Restore portable preferences, but retain this device's lock and backoff.
+            // Even a crafted incoming lock must never replace or reset the local gate.
+            atomic(
+                &staging.join("state.json"),
+                verified.state.pretty().as_bytes(),
+            )?;
             // If old and new JSON bytes coincide, a state-byte comparison cannot
             // identify the commit point. A trailing JSON whitespace byte makes
             // the staged representation distinct without changing domain data.

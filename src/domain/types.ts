@@ -9,12 +9,24 @@ export interface PhotoUse {
   mediaType: string;
 }
 
+export const MOODS = ["开心", "平静", "感动", "想念", "疲惫", "难过"] as const;
+export type Mood = typeof MOODS[number];
+export type ThemePreference = "light" | "dark" | "system";
+export interface AppLockStatus { enabled: boolean; failedAttempts: number; retryAfterMs: number }
+/** IPC view only; the device verifier is never returned. */
+export interface AppSettings { theme: ThemePreference; appLock: AppLockStatus }
+export interface SettingsResult { settings: AppSettings; durability: Durability }
+
 export interface Snapshot {
   title: string;
   body: string;
   eventDate: string;
   /** 可空；展示层不得为缺失时刻伪造时间。 */
   eventTime: string | null;
+  location: string;
+  mood: Mood | null;
+  coverPhotoUseId: string | null;
+  /** 唯一权威顺序，重排整个使用位及其说明。 */
   photos: PhotoUse[];
 }
 

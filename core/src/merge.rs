@@ -277,7 +277,9 @@ fn normalize_photos(
     target: &str,
     snapshot: &mut Snapshot,
 ) -> Result<(), CoreError> {
+    let mut use_mapping = BTreeMap::new();
     for p in &mut snapshot.photos {
+        let old_id = p.photo_use_id.clone();
         let source = incoming
             .merge_origins
             .iter()
@@ -309,6 +311,7 @@ fn normalize_photos(
             .find(|o| o.kind == "photo" && o.source_id == source && o.created_at == key.created_at)
         {
             p.photo_use_id = o.local_id.clone();
+            use_mapping.insert(old_id, p.photo_use_id.clone());
             continue;
         }
         let collision = s.photo_refs().iter().any(|(r, x)| {
@@ -325,6 +328,13 @@ fn normalize_photos(
             });
             p.photo_use_id = new;
         }
+        use_mapping.insert(old_id, p.photo_use_id.clone());
+    }
+    if let Some(cover) = &mut snapshot.cover_photo_use_id {
+        *cover = use_mapping
+            .get(cover)
+            .ok_or_else(|| bad("封面不属于当前快照"))?
+            .clone();
     }
     Ok(())
 }

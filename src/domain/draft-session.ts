@@ -19,7 +19,7 @@ export interface DraftSessionOptions<Handle> {
   debounceMs?: number;
 }
 const copy = <T>(value: T): T => structuredClone(value);
-const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, photos: [] });
+const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, location: "", mood: null, coverPhotoUseId: null, photos: [] });
 const problem = (code: string, message: string) => ({ code, message });
 
 /**
@@ -103,13 +103,14 @@ export class DraftSession<Handle = unknown> {
     this.emit();
   }
   edit(patch: DraftFields): void {
-    for (const field of ["title", "body", "eventDate", "eventTime"] as const) {
+    for (const field of ["title", "body", "eventDate", "location"] as const) {
       const value = patch[field];
       if (value !== undefined) {
-        if (field === "eventTime") this.data.snapshot.eventTime = value;
-        else this.data.snapshot[field] = value as string;
+        this.data.snapshot[field] = value;
       }
     }
+    if (patch.eventTime !== undefined) this.data.snapshot.eventTime = patch.eventTime;
+    if (patch.mood !== undefined) this.data.snapshot.mood = patch.mood;
     this.version++;
     if (!this.conflicted) {
       this.clearError(); this.data.status = this.queued ? "saving" : "dirty"; this.arm();
@@ -118,7 +119,7 @@ export class DraftSession<Handle = unknown> {
   }
   private hasInput(): boolean {
     const s = this.data.snapshot;
-    return [s.title, s.body, s.eventDate, s.eventTime ?? ""].some((v) => v.trim().length > 0) || s.photos.length > 0;
+    return [s.title, s.body, s.eventDate, s.eventTime ?? "", s.location, s.mood ?? ""].some((v) => v.trim().length > 0) || s.photos.length > 0;
   }
   private async drain(): Promise<void> {
     while (this.version !== this.savedVersion) {
@@ -135,11 +136,12 @@ export class DraftSession<Handle = unknown> {
         this.baseRevision = result.row.baseRevision;
       } else {
         result = await this.api.saveDraft({ recordId: this.data.recordId, title: snapshot.title,
-          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime });
+          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
       }
       this.savedVersion = sentVersion;
       // 不能把响应中的旧字段写回本地：在途期间的输入仍是权威的本地内容。
       this.data.snapshot.photos = copy(result.row.draft?.photos ?? snapshot.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft?.coverPhotoUseId ?? null;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) this.data.status = "saving";
       this.emit();
@@ -173,6 +175,7 @@ export class DraftSession<Handle = unknown> {
       }
       const result = await this.api.attachPhotoBytes({ ...input, recordId: this.data.recordId });
       this.data.snapshot.photos = copy(result.row.draft!.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) this.data.status = "dirty";
       this.emit();
@@ -187,6 +190,7 @@ export class DraftSession<Handle = unknown> {
       if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
       const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) { this.data.status = "dirty"; this.arm(); }
       this.emit(); return result;

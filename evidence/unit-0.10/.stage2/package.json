@@ -1,0 +1,30 @@
+{
+  "name": "shiguang-app",
+  "private": true,
+  "version": "0.1.10",
+  "type": "module",
+  "description": "拾光 Unit-0：草稿/正式分离与媒体持久化纵切",
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-ui.mjs",
+    "verify:evidence": "node scripts/verify-evidence.mjs",
+    "acceptance": "bash scripts/run_acceptance.sh",
+    "preview": "npm run build && node scripts/preview-server.mjs",
+    "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "tauri": "tauri",
+    "screenshots:mobile": "npm run build && node scripts/screenshots-mobile.mjs",
+    "screenshots:u04": "npm run build && node scripts/screenshots-u04.mjs",
+    "screenshots:u05": "npm run build && node scripts/screenshots-u05.mjs",
+    "screenshots:u06": "npm run build && node scripts/screenshots-u06.mjs",
+    "screenshots:u07": "npm run build && node scripts/screenshots-u07.mjs",
+    "screenshots:u08": "npm run build && node scripts/screenshots-u08.mjs",
+    "screenshots:u09": "npm run build && node scripts/screenshots-u09.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/node": "^24.10.1",
+    "playwright-core": "^1.65.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -205,7 +205,7 @@ fn item(r: &RecordRow, today: &str) -> TimelineItem {
             .take(80)
             .filter(|c| !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
             .collect(),
-        cover: s.photos.first().cloned(),
+        cover: s.cover().cloned(),
         photo_count: s.photos.len(),
         favorite: r.favorite,
         favorite_revision: r.favorite_revision,

@@ -359,17 +359,18 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "shiguang_core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "argon2",
  "chacha20poly1305",
  "getrandom",
+ "subtle",
  "zeroize",
 ]
 
 [[package]]
 name = "shiguang_thumbnails"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "image",
  "shiguang_core",

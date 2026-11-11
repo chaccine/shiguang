@@ -47,6 +47,7 @@ pub struct Store {
 
 #[derive(Clone)]
 pub struct State {
+    pub(crate) settings: crate::Settings,
     pub(crate) tags: Vec<crate::Tag>,
     pub(crate) tag_dict_revision: u64,
     pub(crate) tag_aliases: Vec<crate::TagAlias>,
@@ -497,6 +498,7 @@ impl Store {
             }
         } else {
             State {
+                settings: crate::Settings::default(),
                 tags: Vec::new(),
                 tag_dict_revision: 0,
                 tag_aliases: Vec::new(),
@@ -539,6 +541,14 @@ impl Store {
             Err(e) => Err(e.into()),
         }
     }
+    pub(crate) fn portable_backup_snapshot(&self) -> Result<Json, CoreError> {
+        let mut value = self.backup_snapshot()?;
+        let mut settings = State::from_json(&value)?.settings;
+        if settings.app_lock.take().is_some() {
+            schema::set(&mut value, "settings", settings.to_json())?;
+        }
+        Ok(value)
+    }
     pub(crate) fn install_restored_state(&mut self, value: &Json) -> Result<(), CoreError> {
         self.state = State::from_json(value)?;
         self.seed = value
@@ -572,7 +582,7 @@ impl Store {
 
     /// 事务：在候选状态上执行操作，序列化成功后再替换内存状态。
     /// 任一环节失败，`self.state` 保持不变。
-    fn transact<T>(
+    pub(crate) fn transact<T>(
         &mut self,
         op: impl FnOnce(&mut State) -> Result<T, CoreError>,
     ) -> Result<(T, Durability), CoreError> {
@@ -620,6 +630,23 @@ impl Store {
         event_date: &str,
         event_time: Option<&str>,
     ) -> Result<RecordRow, CoreError> {
+        self.create_draft_with_fields(
+            base,
+            &crate::DraftPatch {
+                title: Some(title.into()),
+                body: Some(body.into()),
+                event_date: Some(event_date.into()),
+                event_time: Some(event_time.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+    }
+
+    pub fn create_draft_with_fields(
+        &mut self,
+        base: Option<&str>,
+        fields: &crate::DraftPatch,
+    ) -> Result<RecordRow, CoreError> {
         let now = time::now_rfc3339();
         if let Some(base_id) = base {
             return self
@@ -640,14 +667,17 @@ impl Store {
                 })
                 .map(|(row, _)| row);
         }
-
+        crate::model::validate_location(fields.location.as_deref().unwrap_or(""))?;
         self.transact(|state| {
             let record_id = state.allocate_id("rec");
             let snapshot = Snapshot {
-                title: title.to_string(),
-                body: body.to_string(),
-                event_date: event_date.to_string(),
-                event_time: normalize_time(event_time),
+                title: fields.title.clone().unwrap_or_default(),
+                body: fields.body.clone().unwrap_or_default(),
+                event_date: fields.event_date.clone().unwrap_or_default(),
+                event_time: normalize_time(fields.event_time.as_ref().and_then(|v| v.as_deref())),
+                location: fields.location.clone().unwrap_or_default(),
+                mood: fields.mood.flatten(),
+                cover_photo_use_id: None,
                 photos: Vec::new(),
             };
             let row = RecordRow {
@@ -681,6 +711,30 @@ impl Store {
         event_date: Option<&str>,
         event_time: Option<Option<&str>>,
     ) -> Result<RecordRow, CoreError> {
+        self.save_draft_patch(
+            record_id,
+            &crate::DraftPatch {
+                title: title.map(str::to_owned),
+                body: body.map(str::to_owned),
+                event_date: event_date.map(str::to_owned),
+                event_time: event_time.map(|v| v.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+    }
+
+    pub fn save_draft_patch(
+        &mut self,
+        record_id: &str,
+        fields: &crate::DraftPatch,
+    ) -> Result<RecordRow, CoreError> {
+        let title = fields.title.as_deref();
+        let body = fields.body.as_deref();
+        let event_date = fields.event_date.as_deref();
+        let event_time = fields.event_time.as_ref().map(|v| v.as_deref());
+        if let Some(location) = &fields.location {
+            crate::model::validate_location(location)?;
+        }
         let now = time::now_rfc3339();
         self.transact(|state| {
             let row = state.row_mut(record_id)?;
@@ -726,6 +780,12 @@ impl Store {
             }
             if let Some(v) = event_time {
                 draft.event_time = normalize_time(v);
+            }
+            if let Some(v) = &fields.location {
+                draft.location = v.clone();
+            }
+            if let Some(v) = fields.mood {
+                draft.mood = v;
             }
             row.updated_at = now;
             Ok(row.clone())
@@ -820,11 +880,11 @@ impl Store {
             media_type,
         };
         let row = candidate.row_mut(record_id)?;
-        row.draft
-            .as_mut()
-            .expect("draft just ensured")
-            .photos
-            .push(use_ref.clone());
+        let draft = row.draft.as_mut().expect("draft just ensured");
+        draft.photos.push(use_ref.clone());
+        if draft.cover_photo_use_id.is_none() {
+            draft.cover_photo_use_id = Some(use_ref.photo_use_id.clone());
+        }
         row.updated_at = time::now_rfc3339();
 
         let asset_durability = if dest.exists() {
@@ -869,10 +929,99 @@ impl Store {
                 .position(|p| p.photo_use_id == photo_use_id)
                 .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
             draft.photos.remove(index);
+            if draft.cover_photo_use_id.as_deref() == Some(photo_use_id) {
+                draft.cover_photo_use_id = draft.photos.first().map(|p| p.photo_use_id.clone());
+            }
             row.updated_at = time::now_rfc3339();
             Ok(row.clone())
         })
         .map(|(row, _)| row)
+    }
+
+    /// Photo changes only mutate the draft slot; publication still uses the same commit CAS.
+    fn edit_draft_photos(
+        &mut self,
+        record_id: &str,
+        op: impl FnOnce(&mut Snapshot) -> Result<(), CoreError>,
+    ) -> Result<RecordRow, CoreError> {
+        self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            if row.draft.is_none() {
+                row.draft = Some(
+                    row.formal
+                        .clone()
+                        .ok_or_else(|| CoreError::new("NO_DRAFT", "记录没有可编辑内容"))?,
+                );
+                row.base_revision = row.content_revision;
+            }
+            let draft = row.draft.as_mut().expect("draft ensured");
+            op(draft)?;
+            draft.validate_details()?;
+            row.updated_at = time::now_rfc3339();
+            Ok(row.clone())
+        })
+        .map(|(row, _)| row)
+    }
+    pub fn set_draft_photo_caption(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+        caption: &str,
+    ) -> Result<RecordRow, CoreError> {
+        self.edit_draft_photos(record_id, |draft| {
+            let photo = draft
+                .photos
+                .iter_mut()
+                .find(|p| p.photo_use_id == photo_use_id)
+                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "记录中没有这张照片"))?;
+            photo.caption = caption.to_owned();
+            Ok(())
+        })
+    }
+    pub fn set_draft_cover(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+    ) -> Result<RecordRow, CoreError> {
+        self.edit_draft_photos(record_id, |draft| {
+            if !draft.photos.iter().any(|p| p.photo_use_id == photo_use_id) {
+                return Err(CoreError::new(
+                    "COVER_PHOTO_INVALID",
+                    "封面必须是当前记录中的照片",
+                ));
+            }
+            draft.cover_photo_use_id = Some(photo_use_id.to_owned());
+            Ok(())
+        })
+    }
+    pub fn reorder_draft_photos(
+        &mut self,
+        record_id: &str,
+        photo_use_ids: &[String],
+    ) -> Result<RecordRow, CoreError> {
+        self.edit_draft_photos(record_id, |draft| {
+            let by_id: std::collections::BTreeMap<_, _> = draft
+                .photos
+                .iter()
+                .map(|p| (p.photo_use_id.as_str(), p))
+                .collect();
+            let ids: std::collections::BTreeSet<_> =
+                photo_use_ids.iter().map(String::as_str).collect();
+            if ids.len() != photo_use_ids.len()
+                || ids.len() != by_id.len()
+                || ids.iter().any(|id| !by_id.contains_key(id))
+            {
+                return Err(CoreError::new(
+                    "PHOTO_ORDER_INVALID",
+                    "请提供所有照片的顺序，不能重复或遗漏",
+                ));
+            }
+            draft.photos = photo_use_ids
+                .iter()
+                .map(|id| by_id[id.as_str()].clone())
+                .collect();
+            Ok(())
+        })
     }
 
     /// 仅丢弃草稿槽，从未提交的记录整行移除；不清理 media。
@@ -1349,6 +1498,7 @@ impl State {
 
     pub fn to_json(&self, seed: &str) -> Json {
         Json::obj(vec![
+            ("settings", self.settings.to_json()),
             (
                 "tags",
                 Json::Arr(self.tags.iter().map(crate::Tag::to_json).collect()),
@@ -1491,6 +1641,11 @@ impl State {
             _ => return Err(CoreError::new("STATE_CORRUPT", "mergeOrigins 必须是数组")),
         };
         let state = State {
+            settings: crate::Settings::from_json(
+                value
+                    .get("settings")
+                    .ok_or_else(|| CoreError::new("STATE_CORRUPT", "缺少 settings"))?,
+            )?,
             tags: array("tags")?
                 .iter()
                 .map(crate::Tag::from_json)

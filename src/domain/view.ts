@@ -8,6 +8,9 @@ export interface FormalListItem {
   eventDate: string;
   eventTime: string | null;
   photos: Snapshot["photos"];
+  location: Snapshot["location"];
+  mood: Snapshot["mood"];
+  coverPhotoUseId: Snapshot["coverPhotoUseId"];
   /** 存在未提交修改草稿时为 true；列表仍显示旧正式内容。 */
   hasPendingDraft: boolean;
 }
@@ -36,6 +39,9 @@ export function formalItems(rows: readonly RecordRow[]): FormalListItem[] {
       eventDate: row.formal.eventDate,
       eventTime: row.formal.eventTime,
       photos: row.formal.photos,
+      location: row.formal.location,
+      mood: row.formal.mood,
+      coverPhotoUseId: row.formal.coverPhotoUseId,
       hasPendingDraft: row.draft !== null,
     }));
 }

@@ -1,4 +1,14 @@
 import type { FieldIssue, Snapshot } from "./types.ts";
+import { MOODS } from "./types.ts";
+
+export function validateSnapshotDetails(snapshot: Snapshot): FieldIssue | null {
+  if (typeof snapshot.location !== "string" || [...snapshot.location].length > 200) return { code: "LOCATION_TOO_LONG", message: "地点最多 200 个字符" };
+  if (snapshot.mood !== null && !MOODS.includes(snapshot.mood)) return { code: "MOOD_INVALID", message: "请选择列表中的心情，或留空" };
+  if ((snapshot.photos.length === 0 && snapshot.coverPhotoUseId !== null)
+    || (snapshot.photos.length > 0 && !snapshot.photos.some((p) => p.photoUseId === snapshot.coverPhotoUseId))) return { code: "COVER_PHOTO_INVALID", message: "封面必须是当前记录中的照片" };
+  if (new Set(snapshot.photos.map((p) => p.photoUseId)).size !== snapshot.photos.length) return { code: "PHOTO_ORDER_INVALID", message: "照片顺序不能有重复或缺失" };
+  return null;
+}
 
 /**
  * 与 Rust 核心同一套提交底线：
@@ -8,6 +18,7 @@ import type { FieldIssue, Snapshot } from "./types.ts";
  * - eventTime 可空，但有值必须是合法 HH:MM
  */
 export function validateForCommit(snapshot: Snapshot): FieldIssue | null {
+  const details = validateSnapshotDetails(snapshot); if (details) return details;
   const date = snapshot.eventDate.trim();
   if (date.length === 0) {
     return {

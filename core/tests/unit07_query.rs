@@ -157,6 +157,7 @@ fn filters_formal_projection_calendar_and_date_move() {
         sha256: "0".repeat(64),
         ..Default::default()
     }];
+    r[0].formal.as_mut().unwrap().cover_photo_use_id = Some("pu-009999".into());
     r[0].draft = Some(shiguang_core::Snapshot {
         title: "草稿不可见".into(),
         ..Default::default()

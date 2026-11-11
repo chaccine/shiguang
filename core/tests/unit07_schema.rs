@@ -14,8 +14,8 @@ fn migration_chain_defaults_and_exact_backup() {
         let bytes = format!(" \n{}\n", old.pretty()).into_bytes();
         fs::write(t.0.join("state.json"), &bytes).unwrap();
         let s = Store::open(&t.0).unwrap();
-        assert_eq!(CURRENT_SCHEMA_VERSION, 3);
-        assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(3)));
+        assert_eq!(CURRENT_SCHEMA_VERSION, 4);
+        assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(4)));
         let r = s.list_formal()[0];
         assert!(!r.favorite);
         assert_eq!(r.favorite_revision, 0);
@@ -43,7 +43,7 @@ fn future_schema_and_invalid_metadata_reject_without_writes() {
     let base = s.state_json();
     drop(s);
     let mut v = base.clone();
-    set(&mut v, "schemaVersion", Json::Num(4));
+    set(&mut v, "schemaVersion", Json::Num(5));
     fs::write(t.0.join("state.json"), v.pretty()).unwrap();
     let before = tree(&t.0);
     assert_eq!(Store::open(&t.0).err().unwrap().code, "SCHEMA_TOO_NEW");
