@@ -46,6 +46,8 @@ export interface ShiguangApi {
   discardDraft(recordId: string): Promise<DiscardResult>;
   commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult>;
   photoDataUrl(assetId: string): Promise<string>;
+  /** Bounded cached cover; HEIC_UNSUPPORTED produces a labeled placeholder. */
+  photoThumbUrl(assetId: string): Promise<string>;
   exportManifest(outPath: string): Promise<{ out: string; records: number }>;
   // ---- Unit-0.5 备份/恢复（G03 最小版：导出、完整校验、覆盖恢复）----
   backupCapabilities(): Promise<BackupCapabilities>;

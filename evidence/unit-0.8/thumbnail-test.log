@@ -1,0 +1,84 @@
+ Downloading crates ...
+  Downloaded color_quant v1.1.0
+  Downloaded gif v0.14.2
+  Downloaded byteorder-lite v0.1.0
+  Downloaded zune-jpeg v0.5.15
+  Downloaded quick-error v2.0.1
+  Downloaded zune-core v0.5.3
+  Downloaded crc32fast v1.5.5
+  Downloaded weezl v0.1.12
+  Downloaded moxcms v0.8.1
+  Downloaded image-webp v0.2.4
+  Downloaded image v0.25.10
+  Downloaded pxfm v0.1.30
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling cfg-if v1.0.5
+   Compiling subtle v2.6.1
+   Compiling simd-adler32 v0.3.10
+   Compiling autocfg v1.5.1
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.5
+   Compiling zeroize v1.9.1
+   Compiling cpufeatures v0.2.17
+   Compiling miniz_oxide v0.9.1
+   Compiling libc v0.2.191
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling generic-array v0.14.7
+   Compiling num-traits v0.2.19
+   Compiling quick-error v2.0.1
+   Compiling byteorder-lite v0.1.0
+   Compiling base64ct v1.8.3
+   Compiling weezl v0.1.12
+   Compiling zune-core v0.5.3
+   Compiling rand_core v0.6.4
+   Compiling flate2 v1.1.11
+   Compiling pxfm v0.1.30
+   Compiling color_quant v1.1.0
+   Compiling opaque-debug v0.3.1
+   Compiling bitflags v2.13.2
+   Compiling gif v0.14.2
+   Compiling zune-jpeg v0.5.15
+   Compiling password-hash v0.5.0
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling cipher v0.4.4
+   Compiling poly1305 v0.8.0
+   Compiling png v0.18.1
+   Compiling blake2 v0.10.6
+   Compiling chacha20 v0.9.1
+   Compiling image-webp v0.2.4
+   Compiling bytemuck v1.25.2
+   Compiling chacha20poly1305 v0.10.1
+   Compiling argon2 v0.5.3
+   Compiling getrandom v0.2.17
+   Compiling shiguang_core v0.1.9 (/workspace/shiguang-app/core)
+   Compiling moxcms v0.8.1
+   Compiling image v0.25.10
+   Compiling shiguang_thumbnails v0.1.9 (/workspace/shiguang-app/thumbnails)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.34s
+     Running unittests src/lib.rs (thumbnails/target/debug/deps/shiguang_thumbnails-9d63fe3841c21868)
+
+running 1 test
+test tests::real_formats_decode_to_small_stable_cache_and_preserve_original ... FAILED
+
+failures:
+
+---- tests::real_formats_decode_to_small_stable_cache_and_preserve_original stdout ----
+
+thread 'tests::real_formats_decode_to_small_stable_cache_and_preserve_original' panicked at src/lib.rs:151:13:
+assertion failed: cached.len() < original.len()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::real_formats_decode_to_small_stable_cache_and_preserve_original
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.11s
+
+error: test failed, to rerun pass `--lib`

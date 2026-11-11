@@ -10,14 +10,18 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const out = join(root, "evidence", "unit-0.6");
 await mkdir(out, { recursive: true });
 const port = 15900 + Math.floor(Math.random() * 500);
-const server = await startPreviewServer(port);
+let server;
+let browser;
+let failure;
 const base = `http://127.0.0.1:${port}/`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
+
 const results = [];
 const errors = [];
 // 合成口令只在本进程内存里，不打印。
 const pw = ["synthetic", "u06", String(port)].join("-");
 try {
+  server = await startPreviewServer(port);
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/usr/bin/google-chrome", headless: true });
   const run = async (viewport, fn) => {
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: "zh-CN" });
     const page = await context.newPage();
@@ -28,7 +32,7 @@ try {
   };
   const flow = async (page, shot, prefix, full) => {
     await page.goto(`${base}?demo=1`);
-    await page.getByTestId("draft-item").first().waitFor();
+    await page.waitForFunction(() => document.body.dataset.appReady === "1");
     await page.getByTestId("data-tab").click();
     await page.getByTestId("encrypt-toggle").check();
     await page.getByTestId("backup-password").fill(pw);
@@ -41,7 +45,8 @@ try {
     await page.getByTestId("timeline-tab").click();
     await page.getByTestId("trash-button").first().click();
     await page.getByTestId("confirm-ok").click();
-    await page.getByTestId("trash-tab").click();
+    await page.getByTestId("data-tab").click();
+    await page.getByTestId("open-trash").click();
     await page.getByTestId("purge-button").first().click();
     await page.getByTestId("confirm-ok").click();
     await page.waitForTimeout(600);
@@ -77,10 +82,13 @@ try {
     await page.getByTestId("encrypt-toggle").check();
     await shot("09-mobile-encrypt-option.png", true);
   });
+} catch (error) {
+  failure = error;
 } finally {
-  const log = [`page errors: ${errors.length}`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n";
+  const log = [`status: ${failure ? "BLOCKED/FAILED" : "PASS"}`, ...(failure ? [`failure: ${String(failure)}`] : []), `page errors: ${errors.length} (only loaded pages)`, ...errors, ...results.map((r) => `saved ${r}`)].join("\n") + "\n";
   await writeFile(join(out, "screenshots.log"), log.split(pw).join("[redacted]"));
-  await browser.close();
-  server.close();
+  if (browser) await browser.close();
+  if (server) server.close();
 }
+if (failure) throw failure;
 if (errors.length) throw new Error(`页面报错 ${errors.length} 个`);

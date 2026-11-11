@@ -255,7 +255,7 @@ fn formal<'a>(s: &'a mut State, id: &str) -> Result<&'a mut RecordRow, CoreError
     if r.formal.is_none() {
         return Err(CoreError::new(
             "RECORD_NOT_FORMAL",
-            "请先将草稿存入时光，再设置珍藏或标签",
+            "请先将草稿存入时光，再设置珍藏",
         ));
     }
     Ok(r)
@@ -311,13 +311,13 @@ impl Store {
         expected: Option<u32>,
     ) -> Result<MetaOutcome, CoreError> {
         let (r, d) = self.meta_transact(|s| {
-            let r = formal(s, id)?;
+            let r = s.row_mut(id)?;
             check_cas(r.tag_revision, expected, "标签关联")?;
             let ids = dedup(ids.iter().cloned());
             for id in &ids {
                 tag(s, id)?;
             }
-            let r = formal(s, id)?;
+            let r = s.row_mut(id)?;
             let same = r.tag_ids.iter().collect::<BTreeSet<_>>() == ids.iter().collect();
             if !same {
                 bump(&mut r.tag_revision)?;

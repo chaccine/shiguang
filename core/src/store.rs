@@ -6,7 +6,6 @@ use crate::model::{
     PhotoUse, PurgeOutcome, QuarantinedMedia, RecordRow, RecordStatus, Snapshot,
 };
 use crate::persist::{self, Durability};
-use crate::preview;
 use crate::sha256;
 use crate::time;
 use crate::{
@@ -1075,11 +1074,14 @@ impl Store {
     pub fn preview_path(&self, asset_id: &str) -> PathBuf {
         self.root
             .join(PREVIEW_DIR)
-            .join(format!("{asset_id}.preview.png"))
+            .join(format!("{asset_id}.thumb-v2.png"))
     }
 
     /// 生成缺失的预览；已有预览不重复写。返回本次生成的 assetId。
-    pub fn ensure_previews(&self) -> Result<Vec<String>, CoreError> {
+    pub fn ensure_previews_with(
+        &self,
+        mut generate: impl FnMut(&Path, &Path) -> Result<(), CoreError>,
+    ) -> Result<Vec<String>, CoreError> {
         let mut created = Vec::new();
         for photo in self.all_photos() {
             let preview_path = self.preview_path(&photo.asset_id);
@@ -1100,8 +1102,7 @@ impl Store {
                     format!("原图 SHA 与记录不一致：{}", photo.asset_id),
                 ));
             }
-            let png = preview::preview_bytes(&sha);
-            persist::write_atomic(&preview_path, &png)?;
+            generate(&asset_path, &preview_path)?;
             created.push(photo.asset_id.clone());
         }
         Ok(created)
@@ -1586,7 +1587,7 @@ pub(crate) fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreErro
         match crate::lock::try_acquire(root, ".write.lock")? {
             crate::lock::Acquire::Held(guard) => return Ok(guard),
             crate::lock::Acquire::Busy => {
-                if start.elapsed() >= Duration::from_secs(3) {
+                if start.elapsed() >= Duration::from_secs(15) {
                     return Err(CoreError::new(
                         "STORE_BUSY",
                         "另一个拾光窗口正在写入，请稍后重试；你的输入未丢失",
@@ -1625,6 +1626,28 @@ fn sniff_media_type(source: &Path, bytes: &[u8]) -> String {
     if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
         return "image/webp".to_string();
     }
+    if bytes.len() >= 16 && &bytes[4..8] == b"ftyp" {
+        let size = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+        let end = size.min(bytes.len());
+        if end < 16 {
+            return "application/octet-stream".into();
+        }
+        let mut heif = false;
+        for (index, brand) in bytes[8..end].chunks_exact(4).enumerate() {
+            if index == 1 {
+                continue;
+            } // minor version, not a brand
+            if [b"heic", b"heix", b"hevc", b"hevx"].contains(&brand.try_into().unwrap()) {
+                return "image/heic".into();
+            }
+            if [b"heif", b"mif1", b"msf1"].contains(&brand.try_into().unwrap()) {
+                heif = true;
+            }
+        }
+        if heif {
+            return "image/heif".into();
+        }
+    }
     let ext = source
         .extension()
         .and_then(|e| e.to_str())
@@ -1635,6 +1658,8 @@ fn sniff_media_type(source: &Path, bytes: &[u8]) -> String {
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
         "webp" => "image/webp",
+        "heic" => "image/heic",
+        "heif" => "image/heif",
         _ => "application/octet-stream",
     }
     .to_string()
@@ -1646,6 +1671,8 @@ fn extension_for(media_type: &str, source: &Path) -> String {
         "image/jpeg" => "jpg".to_string(),
         "image/gif" => "gif".to_string(),
         "image/webp" => "webp".to_string(),
+        "image/heic" => "heic".into(),
+        "image/heif" => "heif".into(),
         _ => source
             .extension()
             .and_then(|e| e.to_str())
@@ -1752,5 +1779,29 @@ mod tests {
         assert_eq!(store.state_json().dump(), before);
         assert_eq!(fs::read(root.join(STATE_FILE)).unwrap(), bytes);
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod unit08_sniff_tests {
+    use super::*;
+    #[test]
+    fn heic_ftyp_brands_and_extension() {
+        for (brand, media) in [
+            (b"heic", "image/heic"),
+            (b"heix", "image/heic"),
+            (b"mif1", "image/heif"),
+            (b"msf1", "image/heif"),
+        ] {
+            let mut bytes = vec![0, 0, 0, 20];
+            bytes.extend_from_slice(b"ftyp");
+            bytes.extend_from_slice(brand);
+            bytes.extend_from_slice(&[0; 8]);
+            assert_eq!(sniff_media_type(Path::new("unknown.bin"), &bytes), media);
+            assert!(matches!(
+                extension_for(media, Path::new("unknown.bin")).as_str(),
+                "heic" | "heif"
+            ));
+        }
     }
 }

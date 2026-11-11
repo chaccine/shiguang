@@ -350,7 +350,12 @@ fn run() -> Result<Json, CoreError> {
             ]))
         }
         "ensure-previews" => {
-            let created = store.ensure_previews()?;
+            let created = store.ensure_previews_with(|_, _| {
+                Err(CoreError::new(
+                    "PREVIEW_UNSUPPORTED",
+                    "CLI 未集成图片解码器；请在应用中按需重建缩略图",
+                ))
+            })?;
             Ok(Json::obj(vec![
                 ("ok", Json::Bool(true)),
                 (

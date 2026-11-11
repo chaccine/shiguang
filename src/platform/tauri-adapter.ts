@@ -38,6 +38,7 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     listDrafts: () => invoke("list_drafts"),
     listFormalRecords: () => invoke("list_formal_records"),
     getRecord: (recordId) => invoke("get_record", { recordId }),
+    photoThumbUrl: (assetId) => invoke("photo_thumb_url", { assetId }),
     photoDataUrl: (assetId) => invoke("photo_data_url", { assetId }),
     exportManifest: (outPath) => invoke("export_manifest", { outPath }),
     backupCapabilities: () => invoke("backup_capabilities"),

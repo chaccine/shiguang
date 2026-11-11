@@ -1,4 +1,5 @@
-page errors: 0
+status: PASS
+page errors: 0 (only loaded pages)
 saved /workspace/shiguang-app/evidence/unit-0.5/01-data-page-not-implemented.png
 saved /workspace/shiguang-app/evidence/unit-0.5/02-export-success.png
 saved /workspace/shiguang-app/evidence/unit-0.5/03-backup-verified.png

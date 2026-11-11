@@ -1,0 +1,6 @@
+   Compiling shiguang_core v0.1.9 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running tests/unit08_stress.rs (target/debug/deps/unit08_stress-d5689d73fec7c5ed)
+
+running 1 test
+test synthetic_stress_open_query_export_restore has been running for over 60 seconds

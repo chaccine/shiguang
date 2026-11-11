@@ -423,6 +423,40 @@ export class MemoryAdapter implements ShiguangApi {
     this.pendingConflicts.delete(recordId);
     return { recordId, contentRevision: row.contentRevision, committedAt: row.committedAt, durability: this.durabilityMode };
   }
+  private thumbs = new Map<string, Promise<string>>();
+  async photoThumbUrl(assetId: string): Promise<string> {
+    this.check("photoThumbUrl");
+    const state = this.reload();
+    const status = this.assetStatus(state, assetId);
+    if (status === "missing") fail("ASSET_MISSING", "原图缺失");
+    if (status === "corrupt") fail("ASSET_HASH_MISMATCH", "原图校验失败");
+    const asset = state.assets[assetId] ?? fail("ASSET_MISSING");
+    if (/^data:image\/hei[cf]/.test(asset.dataUrl)) fail("HEIC_UNSUPPORTED", "无法预览 HEIC 图片");
+    const cached = this.thumbs.get(assetId);
+    if (cached) return cached;
+    const pending = (async () => {
+      if (typeof createImageBitmap === "undefined") fail("PREVIEW_UNSUPPORTED", "当前环境无法生成缩略图");
+      const blob = await (await fetch(asset.dataUrl)).blob();
+      // Some browsers cannot create ImageBitmap from SVG demo fixtures; Image.decode can.
+      const bitmap = await createImageBitmap(blob).catch(async () => {
+        const img = new Image();
+        img.src = asset.dataUrl;
+        await Promise.race([img.decode(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("图片解码超时")), 5000))]);
+        return img;
+      });
+      try {
+        const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d") ?? fail("PREVIEW_UNSUPPORTED");
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      } finally { if ("close" in bitmap) bitmap.close(); }
+    })();
+    this.thumbs.set(assetId, pending);
+    try { return await pending; } catch (error) { this.thumbs.delete(assetId); throw error; }
+  }
   async photoDataUrl(assetId: string): Promise<string> {
     this.check("photoDataUrl");
     const status = this.assetStatus(this.reload(), assetId);
@@ -593,10 +627,10 @@ export class MemoryAdapter implements ShiguangApi {
   // ---- Unit-0.7：珍藏 / 标签（独立元数据，不触碰草稿与正文修订；CAS） ----
   /** “今天”（本地日期）；预览测试可注入。 */
   today: () => string = () => tl.localToday();
-  private metaRow(next: MemoryState, recordId: string): RecordRow {
+  private metaRow(next: MemoryState, recordId: string, requireFormal = true): RecordRow {
     const row = this.row(next, recordId);
     if (row.status === "trashed") fail("RECORD_TRASHED", "记录在回收站中，请先恢复");
-    if (row.formal === null) fail("RECORD_NOT_FORMAL", "草稿还没有存入时光，暂不能珍藏或加标签");
+    if (requireFormal && row.formal === null) fail("RECORD_NOT_FORMAL", "草稿还没有存入时光，暂不能珍藏");
     return row;
   }
   private meta(row: RecordRow): MetaResult {
@@ -614,7 +648,7 @@ export class MemoryAdapter implements ShiguangApi {
   }
   async setRecordTags(recordId: string, tagIds: string[], expectedRevision?: number | null): Promise<MetaResult> {
     this.check("setRecordTags");
-    const next = this.reload(), row = this.metaRow(next, recordId);
+    const next = this.reload(), row = this.metaRow(next, recordId, false);
     if (expectedRevision !== undefined && expectedRevision !== null && expectedRevision !== row.tagRevision) {
       fail("META_REVISION_CONFLICT", "标签已在别处改变，请刷新后重试");
     }

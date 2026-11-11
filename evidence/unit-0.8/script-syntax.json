@@ -1,0 +1,22 @@
+[
+  {
+    "command": "node --check scripts/screenshots-u04.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "command": "node --check scripts/screenshots-u05.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "command": "node --check scripts/screenshots-u06.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "command": "node --check scripts/screenshots-u09.mjs",
+    "exitCode": 0,
+    "output": ""
+  }
+]

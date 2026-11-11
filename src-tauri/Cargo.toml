@@ -1,6 +1,6 @@
 [package]
 name = "shiguang-desktop"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 rust-version = "1.90"
 description = "拾光 Unit-0 Tauri v2 桌面壳"
@@ -14,6 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+shiguang_thumbnails = { path = "../thumbnails" }
 zeroize = "1"
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
@@ -34,3 +35,6 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.poly1305]
 opt-level = 3
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"

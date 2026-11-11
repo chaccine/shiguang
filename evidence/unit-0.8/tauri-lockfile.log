@@ -1,0 +1,7 @@
+    Updating crates.io index
+     Locking 452 packages to latest compatible versions
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding jni v0.21.1 (available: v0.22.4)
+      Adding toml v0.8.2 (available: v0.8.23)
+      Adding toml_datetime v0.6.3 (available: v0.6.11)
+      Adding toml_edit v0.20.2 (available: v0.20.7)
