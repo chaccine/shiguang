@@ -55,10 +55,7 @@ fn formal_only_trash_restore_purge_and_missing() {
         s.set_favorite(&id, true, None).unwrap_err().code,
         "RECORD_NOT_FORMAL"
     );
-    assert_eq!(
-        s.set_record_tags(&id, &[], None).unwrap_err().code,
-        "RECORD_NOT_FORMAL"
-    );
+    assert!(s.set_record_tags(&id, &[], Some(0)).is_ok());
     s.commit(&id, 0).unwrap();
     s.set_favorite(&id, true, None).unwrap();
     let tag = s.create_tag("保留").unwrap();
@@ -115,4 +112,29 @@ fn stale_store_cas_and_content_commit_keep_latest_independent_metadata() {
     assert!(r.favorite);
     assert_eq!(r.tag_ids, vec![tag.tag_id]);
     assert_eq!(r.formal.as_ref().unwrap().body, "本地草稿");
+}
+
+#[test]
+fn draft_tag_creation_detach_cas_commit_and_discard() {
+    let t = Temp::new("u08-draft-tags");
+    let mut s = Store::open(&t.0).unwrap();
+    let id = draft(&mut s, "合成编辑器正文");
+    let tag = s.create_tag("写作中创建").unwrap();
+    s.set_record_tags(&id, &[tag.tag_id.clone()], Some(0))
+        .unwrap();
+    assert_eq!(
+        s.set_record_tags(&id, &[], Some(0)).unwrap_err().code,
+        "META_REVISION_CONFLICT"
+    );
+    s.set_record_tags(&id, &[], Some(1)).unwrap();
+    s.set_record_tags(&id, &[tag.tag_id.clone()], Some(2))
+        .unwrap();
+    s.commit(&id, 0).unwrap();
+    assert_eq!(s.row(&id).unwrap().tag_ids, vec![tag.tag_id.clone()]);
+    let unpublished = draft(&mut s, "将丢弃");
+    s.set_record_tags(&unpublished, &[tag.tag_id], Some(0))
+        .unwrap();
+    s.discard_draft(&unpublished).unwrap();
+    assert!(s.row(&unpublished).is_err());
+    assert_eq!(s.list_tags()[0].active_count, 1);
 }

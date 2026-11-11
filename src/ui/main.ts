@@ -508,13 +508,13 @@ async function loadPhoto(img: HTMLImageElement, assetId: string, holder: HTMLEle
       photoPlaceholder(holder, status);
       return;
     }
-    img.src = await api.photoDataUrl(assetId);
+    img.src = await api.photoThumbUrl(assetId);
   } catch (error) {
     const description = describeError(error);
     img.remove();
     const fallback = document.createElement("span");
     fallback.className = "photo-fallback";
-    fallback.textContent = description.title;
+    fallback.textContent = errorCode(error) === "HEIC_UNSUPPORTED" ? "无法预览 HEIC 图片" : description.title;
     fallback.title = description.detail;
     holder.append(fallback);
   }
@@ -566,9 +566,42 @@ function openInEditor(row: RecordRow | null): void {
   photoKey = null;
   session.open(row);
   fillEditor();
+  void refreshEditorTags();
   editorBadge.hidden = !(row !== null && row.formal !== null && row.draft !== null);
   if (row !== null) window.localStorage.setItem(LAST_DRAFT_KEY, row.recordId);
 }
+
+async function refreshEditorTags(): Promise<void> {
+  const rowElement = byTestId<HTMLDivElement>("editor-tag-chips");
+  const id = session.state.recordId;
+  rowElement.replaceChildren();
+  if (!id || blockedDescription !== null) return;
+  try {
+    const [row, tags] = await Promise.all([api.getRecord(id), api.listTags()]);
+    if (session.state.recordId !== id) return;
+    rowElement.replaceChildren(...row.tagIds.map((tagId) => {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.dataset.testid = "editor-tag-chip";
+      chip.textContent = tags.find((t) => t.tagId === tagId)?.name ?? "标签";
+      return chip;
+    }));
+  } catch (error) { showError(error); }
+}
+
+byTestId<HTMLButtonElement>("editor-tag-add").addEventListener("click", () => {
+  void (async () => {
+    if (!ensureWritable()) return;
+    await session.flush();
+    let id = session.state.recordId;
+    if (!id) {
+      const created = await api.createDraft(session.state.snapshot);
+      openInEditor(created.row);
+      id = created.row.recordId;
+    }
+    await openTagPicker(await api.getRecord(id));
+  })().catch(showError);
+});
 
 async function flushBeforeLeave(): Promise<boolean> {
   try {
@@ -1013,13 +1046,14 @@ function observeCover(img: HTMLImageElement, assetId: string): void {
 
 async function loadCoverImage(img: HTMLImageElement, assetId: string): Promise<void> {
   try {
-    img.src = await api.photoDataUrl(assetId);
-  } catch {
+    img.src = await api.photoThumbUrl(assetId);
+  } catch (error) {
     if (!img.isConnected) return;
     const fallback = document.createElement("span");
     fallback.className = "cover-fallback";
-    fallback.dataset.testid = "cover-fallback";
-    fallback.textContent = "图片暂时无法显示";
+    const code = errorCode(error);
+    fallback.dataset.testid = code === "ASSET_MISSING" ? "photo-missing" : code === "ASSET_HASH_MISMATCH" ? "photo-corrupt" : "cover-fallback";
+    fallback.textContent = code === "HEIC_UNSUPPORTED" ? "无法预览 HEIC 图片" : code === "ASSET_MISSING" ? "原图缺失" : code === "ASSET_HASH_MISMATCH" ? "原图校验失败" : "图片暂时无法显示";
     img.replaceWith(fallback);
   }
 }
@@ -1604,7 +1638,7 @@ async function openTagManager(): Promise<void> {
   }
 }
 
-interface PickerState { item: TimelineItem | null; revision: number; selected: Set<string> }
+interface PickerState { item: Pick<RecordRow, "recordId" | "favorite" | "favoriteRevision" | "tagIds" | "tagRevision"> | null; revision: number; selected: Set<string> }
 const picker: PickerState = { item: null, revision: 0, selected: new Set<string>() };
 
 async function renderTagPickerOptions(): Promise<void> {
@@ -1637,7 +1671,8 @@ async function renderTagPickerOptions(): Promise<void> {
   }
 }
 
-async function openTagPicker(item: TimelineItem): Promise<void> {
+async function openTagPicker(item: NonNullable<PickerState["item"]>): Promise<void> {
+  if (!ensureWritable()) return;
   clearErrorBox();
   picker.item = item;
   picker.revision = item.tagRevision;
@@ -1688,6 +1723,7 @@ async function savePickerTags(): Promise<void> {
       loaded.tagIds = [...result.tagIds];
       loaded.tagRevision = result.tagRevision;
     }
+    await refreshEditorTags();
     tagPickerDialog.close();
     showAppNotice("标签已保存；文字和草稿都没有改动", "ok");
     await reloadTimeline();
@@ -1697,6 +1733,7 @@ async function savePickerTags(): Promise<void> {
       setDialogStatus(tagPickerStatus, "标签已在别处改变，已刷新列表，请重新打开", "warn");
       showAppNotice("标签已在别处改变，已刷新列表", "warn");
       tagPickerDialog.close();
+      await refreshEditorTags();
       await reloadTimeline();
       if (currentView === "calendar") await refreshCalendar();
     } else {
