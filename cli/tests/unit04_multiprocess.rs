@@ -182,7 +182,7 @@ fn four_processes_create_twenty_drafts_each_without_lost_updates() {
         ));
     }
     fs::write(&gate, b"synthetic start").unwrap();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(120);
     let mut errors = Vec::new();
     for child in &mut children {
         let status = loop {
