@@ -4,1027 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>拾光</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --paper: #f7f0e7;
-        --card: #fffaf4;
-        --ink: #3c332d;
-        --muted: #8a7a6c;
-        --line: #e6d8c7;
-        --wood: #8a5a38;
-        --wood-dark: #70452a;
-        --wood-soft: #c99b72;
-        --ok: #5f7f57;
-        --warn: #a56a1f;
-        --danger: #a5432e;
-        --shadow: 0 10px 30px rgba(96, 66, 42, 0.08);
-        font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-      }
-      * { box-sizing: border-box; }
-      html, body { height: 100%; }
-      body {
-        margin: 0;
-        background: radial-gradient(circle at 20% 0%, #fbf6ef 0%, var(--paper) 55%, #f1e6d9 100%);
-        color: var(--ink);
-      }
-      [hidden] { display: none !important; }
-      button, input, textarea { font: inherit; color: inherit; }
-      button { cursor: pointer; }
-
-      .app-shell {
-        display: grid;
-        grid-template-columns: 196px minmax(0, 1fr);
-        height: 100vh;
-        overflow: hidden;
-      }
-
-      .sidebar {
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-        padding: 28px 18px;
-        background: linear-gradient(180deg, #efe2d2 0%, #ead9c6 100%);
-        border-right: 1px solid rgba(138, 90, 56, 0.12);
-      }
-      .brand { padding-left: 8px; }
-      .brand-title {
-        font-size: 24px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        color: var(--wood-dark);
-      }
-      .brand-sub {
-        display: block;
-        margin-top: 4px;
-        font-size: 11px;
-        letter-spacing: 0.22em;
-        color: #9a806c;
-      }
-      .tabs { display: flex; flex-direction: column; gap: 6px; }
-      .tab {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 100%;
-        padding: 11px 14px;
-        border: 1px solid transparent;
-        border-radius: 12px;
-        background: transparent;
-        color: #5c4b3d;
-        text-align: left;
-        letter-spacing: 0.08em;
-        transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-      }
-      .tab:hover { background: rgba(255, 250, 244, 0.55); }
-      .tab.is-active {
-        background: var(--card);
-        color: var(--wood-dark);
-        box-shadow: 0 4px 14px rgba(96, 66, 42, 0.08);
-      }
-      .tab-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--wood-soft);
-        opacity: 0.55;
-      }
-      .tab.is-active .tab-dot { background: var(--wood); opacity: 1; }
-      .sidebar-foot {
-        margin-top: auto;
-        padding: 0 8px;
-        font-size: 11px;
-        line-height: 1.7;
-        color: #9a806c;
-      }
-
-      .main {
-        position: relative;
-        overflow-y: auto;
-        padding: 26px 34px 40px;
-      }
-      .main-inner { width: min(100%, 720px); margin: 0 auto; }
-
-      .notice {
-        margin-bottom: 18px;
-        padding: 11px 14px;
-        border-radius: 12px;
-        background: #fff6e6;
-        border: 1px solid #ecd4ab;
-        color: #7a5a2e;
-        box-shadow: 0 4px 16px rgba(140, 96, 42, 0.06);
-        font-size: 13px;
-        line-height: 1.6;
-      }
-      .notice-line { margin: 0; }
-      .notice-line + .notice-line {
-        margin-top: 4px;
-        padding-top: 4px;
-        border-top: 1px dashed rgba(140, 96, 42, 0.22);
-      }
-      .notice-line.preview { color: #7a5a2e; }
-      .notice-line.calm { color: #6f5a46; }
-      .notice-line.ok { color: #4f7149; }
-      .notice-line.warn { color: #96601a; }
-
-      .error-box {
-        display: grid;
-        gap: 3px;
-        margin-bottom: 16px;
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid #e6b5a8;
-        background: #fff1ed;
-        color: #8c3827;
-        font-size: 13px;
-        line-height: 1.6;
-      }
-      .error-box strong { font-size: 13px; }
-      .error-box span { color: #96503f; }
-      .error-box.is-conflict { border-color: #e0a08f; background: #fdeee9; }
-
-      .view { animation: rise 0.2s ease; }
-      @keyframes rise {
-        from { opacity: 0; transform: translateY(3px); }
-        to { opacity: 1; transform: none; }
-      }
-
-      .view-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
-      }
-      .view-head h1 {
-        margin: 0;
-        font-size: 21px;
-        font-weight: 650;
-        letter-spacing: 0.08em;
-        color: #4b3b2f;
-      }
-      .view-sub { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-
-      .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 9px 16px;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        background: var(--wood);
-        color: #fffaf4;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        box-shadow: 0 5px 14px rgba(138, 90, 56, 0.18);
-        transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
-      }
-      .button:hover { background: var(--wood-dark); }
-      .button:active { transform: translateY(1px); }
-      .button:disabled { opacity: 0.55; cursor: wait; }
-      .button.ghost {
-        background: transparent;
-        color: var(--wood);
-        border-color: var(--line);
-        box-shadow: none;
-        font-weight: 500;
-      }
-      .button.ghost:hover { background: #f7eee4; }
-
-      .draft-list, .timeline-list { display: grid; gap: 12px; }
-      .draft-card {
-        display: block;
-        width: 100%;
-        padding: 16px 18px;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 16px;
-        background: var(--card);
-        text-align: left;
-        box-shadow: var(--shadow);
-        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-      }
-      .draft-card:hover {
-        transform: translateY(-1px);
-        border-color: rgba(138, 90, 56, 0.24);
-        box-shadow: 0 14px 32px rgba(96, 66, 42, 0.11);
-      }
-      .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .card-title { font-size: 16px; font-weight: 650; color: #43352a; }
-      .card-meta {
-        display: block;
-        margin-top: 7px;
-        font-size: 12px;
-        color: var(--muted);
-        letter-spacing: 0.02em;
-      }
-      .card-excerpt {
-        display: block;
-        margin: 9px 0 0;
-        font-size: 13px;
-        line-height: 1.65;
-        color: #7c6b5c;
-      }
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 9px;
-        border-radius: 999px;
-        font-size: 11px;
-        line-height: 1.6;
-        letter-spacing: 0.04em;
-      }
-      .pill.is-modifying { background: #f6e6d6; color: #96613a; }
-      .pill.is-pending { background: #fff1d8; color: #9a6a22; }
-      .empty-state {
-        margin: 24px 0;
-        padding: 34px 22px;
-        border: 1px dashed #d9c7b2;
-        border-radius: 16px;
-        background: rgba(255, 250, 244, 0.5);
-        color: #8f7d6d;
-        text-align: center;
-        font-size: 14px;
-        line-height: 1.8;
-      }
-
-      .editor-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-      .back-button {
-        border: none;
-        background: transparent;
-        color: #8a725c;
-        padding: 4px 0;
-        font-size: 13px;
-      }
-      .back-button:hover { color: var(--wood-dark); }
-      .editor-badge { margin-left: 8px; }
-      .save-status {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        min-height: 24px;
-        font-size: 12px;
-        color: #8a7a6c;
-        text-align: right;
-        flex-wrap: wrap;
-      }
-      .save-status.is-saved { color: var(--ok); }
-      .save-status.is-uncertain { color: var(--warn); font-weight: 600; }
-      .save-status.is-error { color: var(--danger); }
-      .status-text { max-width: 380px; line-height: 1.5; }
-      .retry {
-        padding: 3px 9px;
-        border: 1px solid #d9a99c;
-        border-radius: 8px;
-        background: #fff7f4;
-        color: #a5432e;
-        font-size: 12px;
-      }
-      .retry:hover { background: #fdece7; }
-
-      .editor-card {
-        padding: 22px;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 20px;
-        background: var(--card);
-        box-shadow: var(--shadow);
-      }
-      .editor-title {
-        width: 100%;
-        padding: 4px 2px 12px;
-        border: none;
-        border-bottom: 1px solid var(--line);
-        background: transparent;
-        font-size: 24px;
-        font-weight: 650;
-        color: #403126;
-        outline: none;
-      }
-      .editor-title::placeholder { color: #b3a291; }
-      .editor-title:focus { border-bottom-color: var(--wood-soft); }
-      .when-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-        margin: 18px 0;
-      }
-      .field { display: grid; gap: 6px; font-size: 12px; color: #8a7665; }
-      .field input {
-        width: 100%;
-        padding: 9px 11px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #fffdf9;
-        outline: none;
-      }
-      .field input:focus {
-        border-color: var(--wood-soft);
-        box-shadow: 0 0 0 3px rgba(201, 155, 114, 0.18);
-      }
-      .editor-tag-row, .editor-tag-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-      .editor-tag-row { padding: 12px 0; }
-      .editor-tag-row button { min-height: 48px; }
-      .editor-body {
-        width: 100%;
-        min-height: 210px;
-        padding: 12px 2px;
-        border: none;
-        background: transparent;
-        resize: vertical;
-        font-size: 15px;
-        line-height: 1.85;
-        color: #43362c;
-        outline: none;
-      }
-      .editor-body::placeholder { color: #b3a291; }
-
-      .photo-section { margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
-      .photo-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 10px;
-      }
-      .photo-label { font-size: 12px; color: #8a7665; }
-      .visually-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-      .photo-pick { cursor: pointer; font-size: 13px; color: #7a5638; background: #f3e7d8; border: 1px solid #e3cfb7; border-radius: 999px; padding: 5px 14px; }
-      .photo-pick:hover { background: #ecdcc6; }
-      .photo-input { max-width: 230px; font-size: 12px; color: #8a7665; }
-      .photo-input::file-selector-button {
-        margin-right: 10px;
-        padding: 6px 11px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: #f8efe4;
-        color: #6f533a;
-        cursor: pointer;
-      }
-      .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
-      .photo-cell {
-        position: relative;
-        aspect-ratio: 4 / 3;
-        overflow: hidden;
-        border: 1px solid rgba(138, 90, 56, 0.14);
-        border-radius: 12px;
-        background: #efe4d6;
-      }
-      .photo-thumb {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-      .photo-remove {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        width: 22px;
-        height: 22px;
-        padding: 0;
-        border: none;
-        border-radius: 50%;
-        background: rgba(60, 51, 45, 0.62);
-        color: #fff;
-        font-size: 15px;
-        line-height: 22px;
-      }
-      .photo-remove:hover { background: rgba(60, 51, 45, 0.82); }
-      .photo-empty {
-        grid-column: 1 / -1;
-        margin: 4px 0 0;
-        font-size: 12px;
-        color: #a08e7d;
-      }
-      .photo-fallback {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        min-height: 70px;
-        padding: 8px;
-        border-radius: 12px;
-        background: #f1e6d8;
-        color: #8a7665;
-        font-size: 11px;
-        text-align: center;
-      }
-      .editor-foot {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-top: 18px;
-        padding-top: 16px;
-        border-top: 1px solid var(--line);
-      }
-      .editor-hint { font-size: 12px; line-height: 1.6; color: #9b8b7b; }
-      .commit-button { padding: 11px 24px; }
-
-      .timeline-card {
-        padding: 18px 20px;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 18px;
-        background: var(--card);
-        box-shadow: var(--shadow);
-      }
-      .timeline-title { margin: 0; font-size: 18px; font-weight: 650; color: #43352a; }
-      .timeline-body {
-        margin: 10px 0 0;
-        font-size: 14px;
-        line-height: 1.8;
-        color: #6e5d4f;
-        white-space: pre-wrap;
-      }
-      .timeline-card .photo-grid {
-        margin-top: 12px;
-        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      }
-      .timeline-card .photo-thumb {
-        height: auto;
-        aspect-ratio: 4 / 3;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 12px;
-      }
-      .card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-
-      .button.danger { background: var(--danger); box-shadow: 0 5px 14px rgba(165, 67, 46, 0.18); }
-      .button.danger:hover { background: #8c3827; }
-      .button.ghost.danger {
-        background: transparent;
-        color: var(--danger);
-        border-color: #e0b3a8;
-        box-shadow: none;
-      }
-      .button.ghost.danger:hover { background: #fdeee9; }
-
-      .trash-note {
-        margin: -8px 0 14px;
-        font-size: 12px;
-        line-height: 1.6;
-        color: #9b8b7b;
-      }
-
-      .conflict-panel {
-        margin: 0 0 16px;
-        padding: 14px 16px;
-        border: 1px solid #e0a08f;
-        border-radius: 14px;
-        background: #fdeee9;
-      }
-      .conflict-panel .conflict-text {
-        margin: 0 0 10px;
-        font-size: 13px;
-        line-height: 1.6;
-        color: #8c3827;
-      }
-      .conflict-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
-
-      .conflict-copies { margin-top: 10px; }
-      .conflict-copies h2 {
-        margin: 0 0 4px;
-        font-size: 15px;
-        font-weight: 650;
-        color: #4b3b2f;
-      }
-      .conflict-copies .conflict-hint {
-        margin: 0 0 12px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .conflict-copies .timeline-card + .timeline-card { margin-top: 12px; }
-
-      /* ---- Unit-0.8 空态 / 继续写提示 / 收藏与标签 ---- */
-      .empty-card {
-        margin: 22px 0;
-        padding: 34px 22px;
-        border: 1px dashed #d9c7b2;
-        border-radius: 18px;
-        background: rgba(255, 250, 244, 0.62);
-        text-align: center;
-      }
-      .empty-card h2 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 650;
-        letter-spacing: 0.06em;
-        color: #574433;
-      }
-      .empty-card p {
-        margin: 8px 0 0;
-        font-size: 13px;
-        line-height: 1.8;
-        color: #8f7d6d;
-      }
-      .empty-card .button { margin-top: 16px; }
-
-      .resume-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin: 0 0 14px;
-        padding: 12px 14px;
-        border: 1px solid #e3cfb7;
-        border-radius: 14px;
-        background: linear-gradient(180deg, #fff8ec 0%, #fbf0df 100%);
-        box-shadow: 0 4px 16px rgba(140, 96, 42, 0.06);
-      }
-      .resume-text { font-size: 13px; line-height: 1.6; color: #7a5a2e; }
-      .resume-card .button { padding: 7px 15px; }
-
-      .calendar-empty {
-        margin: 12px 0 0;
-        padding-top: 10px;
-        border-top: 1px dashed rgba(138, 90, 56, 0.2);
-        font-size: 12px;
-        line-height: 1.8;
-        color: var(--muted);
-      }
-      .calendar-empty .button { margin-left: 8px; padding: 4px 11px; font-size: 12px; }
-
-      .view-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .entry-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-      .entry-card .data-desc { margin-bottom: 0; }
-
-      .collect-block { margin: 0 0 22px; }
-      .collect-title {
-        margin: 0 0 10px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid rgba(138, 90, 56, 0.16);
-        font-size: 16px;
-        font-weight: 650;
-        letter-spacing: 0.08em;
-        color: #574433;
-      }
-      .collect-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
-      .collect-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 14px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fffdf9;
-        color: #5c4b3d;
-        font-size: 13px;
-        line-height: 1.4;
-      }
-      .collect-tag:hover { background: #f7eee4; border-color: rgba(138, 90, 56, 0.3); }
-      .collect-tag-count { font-size: 11px; color: var(--muted); }
-
-      .data-card {
-        background: var(--card, #fffaf3); border: 1px solid rgba(120, 90, 60, 0.14); border-radius: 16px;
-        padding: 18px 20px; margin: 14px 0; box-shadow: 0 6px 18px rgba(90, 66, 44, 0.06);
-      }
-      .data-card h2 { margin: 0 0 6px; font-size: 1.05rem; }
-      .data-card.muted { opacity: 0.86; }
-      .data-desc { margin: 6px 0; line-height: 1.6; color: #6b5a4c; font-size: 0.92rem; }
-      .warn-text { color: #a5432e; }
-      .card-actions.start { justify-content: flex-start; flex-wrap: wrap; }
-      .data-result { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #f7eee4; line-height: 1.7; font-size: 0.92rem; word-break: break-all; }
-      .data-result.ok { background: #eef5ea; }
-      .data-result dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
-      .data-result dt { color: #8a7666; }
-      .data-result dd { margin: 0; }
-      .todo-list { margin: 6px 0; padding-left: 0; list-style: none; line-height: 1.9; font-size: 0.92rem; }
-      .pill.todo { background: #e9e1d8; color: #7a6a5c; margin-right: 8px; }
-      .pill.ok-pill { background: #e2efdc; color: #4c6b3f; margin-right: 8px; }
-      .check-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 0.95rem; color: #5a4a3d; }
-      .encrypt-fields { display: grid; gap: 8px; margin: 8px 0; max-width: 360px; }
-      .encrypt-fields input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(120, 90, 60, 0.25); background: #fffdf9; font-size: 0.95rem; }
-      .confirm-dialog {
-        width: min(100% - 40px, 390px);
-        padding: 22px;
-        border: 1px solid rgba(138, 90, 56, 0.16);
-        border-radius: 18px;
-        background: var(--card);
-        color: var(--ink);
-        box-shadow: 0 24px 60px rgba(60, 51, 45, 0.22);
-      }
-      .confirm-dialog::backdrop { background: rgba(60, 51, 45, 0.38); }
-      .confirm-dialog h2 {
-        margin: 0 0 10px;
-        font-size: 17px;
-        font-weight: 650;
-        color: #43352a;
-      }
-      .confirm-dialog p {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.8;
-        color: #7c6b5c;
-      }
-      .confirm-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 18px;
-      }
-
-      /* ---- Unit-0.7 时光轴工具条 / 年月日分组 / 卡片 ---- */
-      .timeline-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-end;
-        gap: 10px;
-        margin-bottom: 12px;
-        padding: 12px 14px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: rgba(255, 250, 244, 0.66);
-      }
-      .tool-field {
-        display: grid;
-        gap: 4px;
-        font-size: 11px;
-        letter-spacing: 0.04em;
-        color: var(--muted);
-      }
-      .tool-field select {
-        max-width: 230px;
-        padding: 8px 10px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: #fffdf9;
-        outline: none;
-      }
-      .tool-field select:focus,
-      .calendar-tools input:focus {
-        border-color: var(--wood-soft);
-        box-shadow: 0 0 0 3px rgba(201, 155, 114, 0.18);
-      }
-      .check-inline {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding-bottom: 10px;
-        font-size: 13px;
-        color: #6e5d4f;
-      }
-      .check-inline input { width: 16px; height: 16px; accent-color: var(--wood); }
-      .tag-filter-bar {
-        margin: 0 0 12px;
-        padding: 10px 12px;
-        border: 1px dashed #d9c7b2;
-        border-radius: 12px;
-        background: rgba(255, 250, 244, 0.5);
-      }
-      .tag-filter-hint { margin: 0 0 8px; font-size: 11px; color: var(--muted); }
-      .tag-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-      .tag-chip {
-        padding: 4px 11px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fffdf9;
-        color: #6e5d4f;
-        font-size: 12px;
-        line-height: 1.6;
-      }
-      .tag-chip:hover { background: #f7eee4; }
-      .tag-chip.is-active { background: var(--wood); border-color: var(--wood); color: #fffaf4; }
-      .timeline-summary { margin: 0 0 10px; font-size: 12px; color: var(--muted); letter-spacing: 0.03em; }
-      .timeline-sentinel { height: 1px; }
-      .timeline-year {
-        margin: 26px 0 4px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid rgba(138, 90, 56, 0.16);
-        font-size: 24px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        color: var(--wood-dark);
-      }
-      .timeline-year:first-child { margin-top: 0; }
-      .timeline-month {
-        margin: 18px 0 6px;
-        font-size: 15px;
-        font-weight: 650;
-        letter-spacing: 0.1em;
-        color: #7a5638;
-      }
-      .timeline-day-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin: 12px 0 8px;
-      }
-      .timeline-day-date { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #8a725c; }
-      .timeline-card--record { position: relative; padding-right: 54px; }
-      .favorite-toggle {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 34px;
-        height: 34px;
-        padding: 0;
-        border: 1px solid var(--line);
-        border-radius: 50%;
-        background: #fffdf9;
-        color: #b3a291;
-        font-size: 19px;
-        line-height: 1;
-        transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-      }
-      .favorite-toggle:hover { background: #fbf1e2; color: #a56a1f; }
-      .favorite-toggle.is-on { color: #b9822e; border-color: #e3c48e; background: #fff6e2; }
-      .favorite-toggle:disabled { opacity: 0.6; cursor: wait; }
-      .favorite-static { position: absolute; top: 14px; right: 16px; color: #b9822e; font-size: 17px; }
-      .timeline-time { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
-      .timeline-cover {
-        min-height: 120px;
-        max-height: 240px;
-        margin-top: 12px;
-        overflow: hidden;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 12px;
-        background: #efe4d6;
-      }
-      .timeline-cover img { display: block; width: 100%; max-height: 240px; object-fit: cover; }
-      .cover-fallback {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 120px;
-        padding: 12px;
-        color: #8a7665;
-        font-size: 12px;
-        text-align: center;
-      }
-      .timeline-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-      .tag-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 9px;
-        border-radius: 999px;
-        background: #f3e7d8;
-        color: #7a5638;
-        font-size: 11px;
-        line-height: 1.6;
-      }
-      .timeline-photo-count { font-size: 12px; color: var(--muted); }
-      .timeline-meta-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-      .timeline-meta-line .timeline-tags { margin-top: 0; }
-
-      /* ---- Unit-0.7 日历 ---- */
-      .calendar-layout { display: grid; gap: 16px; }
-      .calendar-card, .day-panel, .on-this-day {
-        padding: 16px 18px;
-        border: 1px solid rgba(138, 90, 56, 0.12);
-        border-radius: 18px;
-        background: var(--card);
-        box-shadow: var(--shadow);
-      }
-      .calendar-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-      }
-      .calendar-title { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: 0.08em; color: #4b3b2f; }
-      .cal-nav { padding: 5px 11px; font-size: 19px; line-height: 1.1; }
-      .calendar-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
-      .calendar-tools input {
-        padding: 7px 9px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: #fffdf9;
-        outline: none;
-        font-size: 13px;
-      }
-      .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-      .calendar-weekdays span { padding: 4px 0; font-size: 11px; color: var(--muted); text-align: center; }
-      .cal-day {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 2px;
-        min-height: 50px;
-        padding: 4px 2px;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        background: transparent;
-        color: #5c4b3d;
-      }
-      .cal-day:hover { background: #f7eee4; }
-      .cal-day.is-empty { pointer-events: none; }
-      .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--wood-soft); }
-      .cal-day.has-record { background: #fff6ea; }
-      .cal-day.is-selected { background: #f3e7d8; border-color: #e0c8ae; }
-      .cal-num { font-size: 13px; line-height: 1.2; }
-      .cal-mark { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 14px; font-size: 10px; color: #96613a; }
-      .cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--wood); }
-      .cal-star { font-size: 10px; color: #b9822e; }
-      .day-panel-title, .on-this-day-title { margin: 0; font-size: 16px; font-weight: 650; color: #4b3b2f; letter-spacing: 0.06em; }
-      .day-panel-date, .on-this-day-sub { min-height: 18px; margin: 4px 0 12px; font-size: 12px; color: var(--muted); }
-      .day-panel .empty-state, .on-this-day .empty-state { margin: 8px 0; padding: 24px 16px; font-size: 13px; }
-      .on-this-day-group + .on-this-day-group { margin-top: 16px; }
-      .on-this-day-group .timeline-card + .timeline-card { margin-top: 10px; }
-      .on-this-day-year { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: #7a5638; letter-spacing: 0.05em; }
-      .on-this-day .timeline-card { padding: 14px 52px 14px 16px; }
-      .on-this-day .timeline-title { font-size: 15px; }
-
-      /* ---- Unit-0.7 标签管理 / 标签选择 ---- */
-      .tag-dialog { width: min(100% - 32px, 560px); max-height: min(86vh, 760px); overflow: auto; }
-      .dialog-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.7; color: var(--muted); }
-      .dialog-status {
-        margin: 0 0 12px;
-        padding: 8px 11px;
-        border-radius: 10px;
-        background: #f7eee4;
-        color: #6e5d4f;
-        font-size: 12px;
-        line-height: 1.6;
-      }
-      .dialog-status.is-ok { background: #eef5ea; color: #4f7149; }
-      .dialog-status.is-warn { background: #fff6e6; color: #8a5a1e; }
-      .dialog-status.is-error { background: #fff1ed; color: #8c3827; }
-      .tag-new-row { display: flex; gap: 8px; margin-bottom: 10px; }
-      .tag-new-row input {
-        flex: 1;
-        min-width: 0;
-        padding: 9px 11px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: #fffdf9;
-        outline: none;
-      }
-      .tag-manage-list { display: grid; gap: 8px; }
-      .tag-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: #fffdf9;
-      }
-      .tag-row-name { font-size: 14px; font-weight: 600; color: #4b3b2f; }
-      .tag-row-count { margin-right: auto; font-size: 11px; color: var(--muted); }
-      .tag-row .button { padding: 5px 10px; font-size: 12px; }
-      .tag-row input, .tag-row select {
-        padding: 6px 8px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fffdf9;
-        font-size: 12px;
-      }
-      .tag-picker-list { display: grid; gap: 3px; max-height: 42vh; overflow: auto; margin-bottom: 12px; }
-      .tag-option-row {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        color: #5a4a3d;
-        font-size: 14px;
-      }
-      .tag-option-row:hover { background: #f7eee4; }
-      .tag-option-row input { width: 16px; height: 16px; accent-color: var(--wood); }
-      .tag-option-count { margin-left: auto; font-size: 11px; color: var(--muted); }
-
-      @media (min-width: 900px) {
-        .calendar-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 288px); align-items: start; }
-        .calendar-card { grid-column: 1; }
-        .on-this-day { grid-column: 1; }
-        .day-panel {
-          grid-column: 2;
-          grid-row: 1 / span 2;
-          position: sticky;
-          top: 0;
-          max-height: calc(100vh - 52px);
-          overflow: auto;
-        }
-      }
-
-      @media (max-width: 760px) {
-        .app-shell {
-          display: flex;
-          flex-direction: column;
-          height: auto;
-          min-height: 100vh;
-          overflow: visible;
-        }
-        /* 顶部只留品牌小标题栏，尊重刘海安全区。 */
-        .sidebar {
-          position: sticky;
-          top: 0;
-          z-index: 40;
-          flex-direction: row;
-          align-items: center;
-          gap: 16px;
-          padding: calc(12px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 12px calc(16px + env(safe-area-inset-left, 0px));
-          border-right: none;
-          border-bottom: 1px solid rgba(138, 90, 56, 0.12);
-          background: linear-gradient(180deg, #f3e7d7 0%, #efe0cf 100%);
-        }
-        .brand { padding: 0; flex-shrink: 0; }
-        .brand-title { font-size: 19px; white-space: nowrap; }
-        .brand-sub { display: none; }
-        .sidebar-foot { display: none; }
-
-        /* 主导航：底部固定、5 个等宽页签，永远可见。 */
-        .tabs {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 60;
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 2px;
-          margin: 0;
-          padding: 6px calc(4px + env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) calc(4px + env(safe-area-inset-left, 0px));
-          background: rgba(251, 245, 237, 0.97);
-          border-top: 1px solid rgba(138, 90, 56, 0.16);
-          box-shadow: 0 -8px 24px rgba(96, 66, 42, 0.08);
-          backdrop-filter: blur(8px);
-        }
-        .tab {
-          flex-direction: column;
-          justify-content: center;
-          gap: 3px;
-          min-height: 48px;
-          padding: 4px 2px;
-          border-radius: 10px;
-          font-size: 11px;
-          letter-spacing: 0;
-          text-align: center;
-          white-space: normal;
-          line-height: 1.2;
-        }
-        .tab-dot { width: 8px; height: 8px; flex: 0 0 auto; }
-        .tab-label { font-size: 11px; }
-
-        /* 内容底部留出固定页签栏 + 安全区的高度。 */
-        .main { padding: 18px 16px calc(88px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
-        .data-card { padding: 14px 14px; }
-        .when-row { grid-template-columns: 1fr; }
-        .editor-card { padding: 16px; }
-        .editor-title { font-size: 21px; }
-        .status-text { max-width: 100%; }
-        .editor-foot { flex-direction: column; align-items: stretch; }
-        .commit-button { width: 100%; }
-        .timeline-toolbar { padding: 10px 12px; gap: 8px; }
-        .tool-field { flex: 1 1 100%; }
-        .tool-field select { max-width: none; }
-        .check-inline { padding-bottom: 4px; }
-        .timeline-card--record { padding: 16px 52px 16px 16px; }
-        .timeline-year { font-size: 21px; }
-        .calendar-card, .day-panel, .on-this-day { padding: 14px; }
-        .calendar-tools { width: 100%; margin-left: 0; }
-        .calendar-tools input { flex: 1; min-width: 0; }
-        .cal-day { min-height: 45px; }
-        .tag-dialog { width: min(100% - 20px, 560px); padding: 18px; }
-        .tag-row .button { flex: 1 1 auto; }
-        .resume-card .button { flex: 1 1 100%; }
-        .view-head-actions { width: 100%; }
-        .view-head { flex-wrap: wrap; }
-        .collect-tag { flex: 1 1 auto; justify-content: space-between; }
-        .empty-card { padding: 28px 18px; }
-      }
-      .hub-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
-      label { display:block; margin:10px 0; }
-      input, select, textarea { max-width:100%; }
-      select, label input { padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
-      button { min-height:44px; }
-      .photo-grid { grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
-      .photo-cell { aspect-ratio:auto; padding:10px; overflow:visible; }
-      .photo-cell .photo-thumb { height:180px; }
-      .photo-cell textarea { width:100%; min-height:70px; margin-top:8px; }
-      .photo-controls { display:flex; flex-wrap:wrap; gap:6px; }
-      [data-testid="reading-content"] { max-width:760px; margin:24px auto; line-height:1.8; overflow-wrap:anywhere; }
-      .reading-body, .reading-caption { white-space:pre-wrap; }
-      .reading-photo { width:100%; max-height:80vh; object-fit:contain; }
-      .lock-screen { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:var(--paper); padding:20px; overflow:auto; }
-      .lock-screen form { width:min(100%,420px); }
-      :root[data-theme="dark"] { color-scheme:dark; --paper:#211e1a; --card:#302a24; --ink:#f2e6d7; --muted:#c0ad97; --line:#605040; --wood:#d7a77c; --wood-dark:#e4bc98; }
-      :root[data-theme="dark"] body, :root[data-theme="dark"] .sidebar, :root[data-theme="dark"] .tabs,
-      :root[data-theme="dark"] .editor-card, :root[data-theme="dark"] .data-card, :root[data-theme="dark"] .timeline-card,
-      :root[data-theme="dark"] .draft-card, :root[data-theme="dark"] dialog, :root[data-theme="dark"] .calendar-card,
-      :root[data-theme="dark"] .day-panel, :root[data-theme="dark"] .on-this-day { background:var(--paper); color:var(--ink); }
-      :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] button,
-      :root[data-theme="dark"] .tag-chip, :root[data-theme="dark"] .cal-cell { background:var(--card); color:var(--ink); }
-      @media (min-width:761px) { [data-nav-tab="create"] { background:var(--wood); color:var(--paper); order:5; } }
-      .desktop-nav-label { display:inline; } .mobile-nav-label { display:none; }
-      @media (max-width:760px) { .desktop-nav-label { display:none; } .mobile-nav-label { display:inline; } }
-    </style>
+    <script>
+      // Paint-only cache. Rust/MemoryAdapter settings remain authoritative after startup.
+      (() => {
+        let theme = "system", scale = "1";
+        try {
+          const cached = localStorage.getItem("shiguang.theme");
+          if (["light", "dark", "system"].includes(cached)) theme = cached;
+          const font = localStorage.getItem("shiguang.fontScale");
+          if (["1", "1.15", "1.3"].includes(font)) scale = font;
+        } catch { /* A denied cache must not prevent a usable first paint. */ }
+        const root = document.documentElement;
+        root.dataset.themePreference = theme;
+        root.dataset.theme = theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
+        root.style.fontSize = `${Math.round(Number(scale) * 100)}%`;
+      })();
+    </script>
+    <link rel="stylesheet" href="./ui/tokens.css" />
+    <link rel="stylesheet" href="./ui/styles.css" />
   </head>
   <body>
-    <div class="app-shell" id="app-shell">
+    <div class="app-shell" id="app-shell" inert>
+      <a class="skip-link" href="#main-content">跳到内容</a>
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-title">拾光</div>
@@ -1034,16 +35,27 @@
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
       </aside>
 
-      <main class="main">
+      <main class="main" id="main-content" tabindex="-1">
         <div class="main-inner">
           <div data-testid="notice" id="notice" class="notice" hidden>
             <p id="preview-notice" class="notice-line preview" hidden></p>
-            <p id="app-notice" class="notice-line" hidden></p>
+            <p id="app-notice" class="notice-line" role="status" aria-live="polite" hidden></p>
           </div>
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
 
           <section id="view-museum" class="view" data-testid="museum-placeholder" hidden>
-            <h1>回忆博物馆</h1><div class="data-card"><h2>建设中</h2><p>这里将慢慢成为回忆的展馆。现在可以先去时光轴，翻看已经收好的小事。</p></div>
+            <header class="view-head"><div><p class="eyebrow">私人的时光，慢慢珍藏</p><h1>回忆博物馆</h1></div></header>
+            <div class="museum-empty">
+              <div class="museum-scene" aria-hidden="true">
+                <div class="scene-arch"></div><div class="scene-light"></div>
+                <div class="scene-frame"><span class="scene-paper"></span></div>
+                <div class="scene-lamp"><span></span></div><div class="scene-shelf"></div>
+              </div>
+              <span class="pill museum-status">建设中</span>
+              <h2><span class="day-copy">为回忆，留一间展馆</span><span class="night-copy">灯下，留一处时光</span></h2>
+              <p>展馆还在慢慢布置。<br />已经收好的小事，都在时光轴里。</p>
+              <button class="button ghost" data-go="timeline" data-testid="museum-timeline">去翻看时光 <span aria-hidden="true">→</span></button>
+            </div>
           </section>
           <section id="view-mine" class="view" hidden><h1>个人空间</h1><p>照顾好你的时光，也照顾好本机的数据。</p>
             <div class="hub-grid">
@@ -1061,10 +73,33 @@
             <dl data-testid="storage-stats" class="data-card"></dl><p data-testid="storage-space" role="status"></p>
             <button class="button" data-testid="storage-refresh">刷新统计</button><p>不会自动删除记录或原图。缓存清理操作尚未提供。</p>
           </section>
-          <section id="view-appearance" class="view" hidden><h1>主题与外观</h1>
-            <label>主题 <select data-testid="theme-select"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
-            <label>字体大小 <select data-testid="font-scale"><option value="1">标准</option><option value="1.15">较大</option><option value="1.3">大</option></select></label>
-            <p>字体大小仅保存在本机界面偏好中。</p><p data-testid="appearance-feedback" role="status"></p>
+          <section id="view-appearance" class="view" hidden>
+            <header class="view-head"><div><p class="eyebrow">让阅读，顺着你的习惯</p><h1>主题与外观</h1><p class="view-sub">日光下的纸页，或灯下的一段时光。</p></div></header>
+            <div class="data-card appearance-card">
+              <div class="appearance-heading"><h2>展馆的光线</h2><label class="theme-select-label">外观模式 <select data-testid="theme-select"><option value="system">跟随系统</option><option value="light">浅色 · 暖纸本</option><option value="dark">深色 · 灯下展馆</option></select></label></div>
+              <div class="theme-options" role="group" aria-label="选择主题，含外观预览">
+                <button type="button" class="theme-option" data-theme-choice="light" aria-pressed="false">
+                  <span class="theme-preview" data-preview-theme="light" aria-hidden="true"><span class="preview-nav"></span><span class="preview-page"><span class="preview-title"></span><span class="preview-exhibit"><span></span><i></i><i></i></span></span></span>
+                  <span class="theme-option-title">暖纸本 <span class="theme-selection">已选择 ✓</span></span><span class="theme-option-hint">浅色 · 日光与纸页</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-choice="dark" aria-pressed="false">
+                  <span class="theme-preview" data-preview-theme="dark" aria-hidden="true"><span class="preview-nav"></span><span class="preview-page"><span class="preview-title"></span><span class="preview-exhibit"><span></span><i></i><i></i></span></span></span>
+                  <span class="theme-option-title">灯下展馆 <span class="theme-selection">已选择 ✓</span></span><span class="theme-option-hint">深色 · 暖墨与微光</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-choice="system" aria-pressed="false">
+                  <span class="theme-preview preview-system" aria-hidden="true"><span data-preview-theme="light"><span class="preview-exhibit"><i></i><i></i></span></span><span data-preview-theme="dark"><span class="preview-exhibit"><i></i><i></i></span></span></span>
+                  <span class="theme-option-title">跟随系统 <span class="theme-selection">已选择 ✓</span></span><span class="theme-option-hint">随设备的外观变化</span>
+                </button>
+              </div>
+              <p class="appearance-current" data-testid="appearance-current" role="status"></p>
+              <p class="data-desc">照片始终保留原色。夜间用柔和的暖光陪你阅读。</p>
+            </div>
+            <div class="data-card font-card"><h2>阅读字号</h2>
+              <label>字体大小 <select data-testid="font-scale"><option value="1">标准</option><option value="1.15">大</option><option value="1.3">特大</option></select></label>
+              <p class="font-sample">把值得记住的小事，一页一页收好。</p>
+              <p class="data-desc">以系统默认字号为基础；额外字号偏好仅保存在本机。</p>
+            </div>
+            <p data-testid="appearance-feedback" role="status" aria-live="polite"></p>
           </section>
           <section id="view-privacy" class="view" hidden><h1>隐私 · 应用锁</h1>
             <p>应用锁只挡住打开界面，不加密手机或电脑上的数据文件。忘记口令后没有应用内找回或无损重置入口，请保留文件和外部备份，不要卸载或清空数据。具有文件访问权限的人可在完全退出应用后自行审阅重置 settings.appLock；普通 Android 用户可能无法访问该文件。备份加密口令独立，丢失无法找回。</p>
@@ -1111,7 +146,7 @@
               </div>
             </div>
             <div class="editor-card">
-              <input id="editor-title" data-testid="editor-title" class="editor-title" type="text" maxlength="120" placeholder="给这段时光起个名字（可留空）" autocomplete="off" />
+              <input id="editor-title" data-testid="editor-title" class="editor-title" type="text" maxlength="120" placeholder="给这段时光起个名字（可留空）" aria-label="标题（可留空）" autocomplete="off" />
               <div class="when-row">
                 <label class="field">事件日期
                   <input id="editor-date" data-testid="editor-date" type="date" />
@@ -1123,12 +158,12 @@
               <div class="when-row"><label>地点（手写）<input data-testid="editor-location" type="text" /></label>
               <label>心情<select data-testid="editor-mood"><option value="">未选择</option><option>开心</option><option>平静</option><option>感动</option><option>想念</option><option>疲惫</option><option>难过</option></select></label></div>
               <div data-testid="editor-tag-row" class="editor-tag-row"><span>标签</span><div data-testid="editor-tag-chips" class="editor-tag-chips"></div><button type="button" class="button ghost" data-testid="editor-tag-add">＋ 添加 / 新建标签</button></div>
-              <textarea id="editor-body" data-testid="editor-body" class="editor-body" placeholder="写下此刻的小事……"></textarea>
+              <textarea id="editor-body" data-testid="editor-body" class="editor-body" placeholder="写下此刻的小事……" aria-label="时光正文"></textarea>
               <div class="photo-section">
                 <div class="photo-head">
                   <span class="photo-label">照片</span>
-                  <label class="photo-pick" for="photo-input">＋ 添加照片</label>
-                  <input id="photo-input" data-testid="photo-input" class="visually-hidden" type="file" accept="image/*" multiple />
+                  <button type="button" class="photo-pick" data-testid="add-photos">＋ 添加照片</button>
+                  <input id="photo-input" data-testid="photo-input" type="file" accept="image/*" aria-label="选择照片文件" multiple hidden />
                 </div>
                 <div id="photo-grid" class="photo-grid"></div>
               </div>
@@ -1191,10 +226,13 @@
                     <button type="button" class="button ghost" data-testid="cal-today" id="cal-today">回到今天</button>
                   </div>
                 </div>
+                <div class="calendar-matrix" tabindex="0" role="region" aria-label="月历，窄屏时可左右滚动">
                 <div class="calendar-weekdays" aria-hidden="true">
                   <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
                 </div>
                 <div class="calendar-grid" id="cal-grid"></div>
+                </div>
+                <p class="calendar-key">边框与“今”表示今天；下划线表示选中日期。</p>
                 <p class="calendar-empty" id="cal-empty" data-testid="cal-empty" hidden>
                   这个月还没有时光。
                   <button type="button" class="button ghost" id="cal-empty-write" data-testid="cal-empty-write">写下今天</button>
@@ -1273,8 +311,8 @@
               <p class="data-desc">把正式记录、草稿、回收站、冲突副本、删除记录和照片原件打包成一个 <code>.sgbak</code> 文件。导出不会改动现有数据。</p>
               <label class="check-row"><input type="checkbox" id="encrypt-toggle" data-testid="encrypt-toggle" /> 使用口令加密（可选）</label>
               <div id="encrypt-fields" class="encrypt-fields" hidden>
-                <input type="password" id="backup-password" data-testid="backup-password" placeholder="设置口令" autocomplete="new-password" />
-                <input type="password" id="backup-password2" data-testid="backup-password2" placeholder="再输入一次" autocomplete="new-password" />
+                <input type="password" id="backup-password" data-testid="backup-password" placeholder="设置口令" aria-label="备份加密口令" autocomplete="new-password" />
+                <input type="password" id="backup-password2" data-testid="backup-password2" placeholder="再输入一次" aria-label="再次输入备份加密口令" autocomplete="new-password" />
                 <p class="data-desc warn-text">口令丢失将无法找回备份内容——拾光不保存口令，也无法帮你重置。</p>
               </div>
               <p class="data-desc warn-text" id="plain-warning">不加密时是明文备份，任何拿到文件的人都能读到内容，请妥善保管。</p>
@@ -1294,7 +332,7 @@
                 <div id="picked-summary"></div>
                 <div id="unlock-area" class="encrypt-fields" hidden>
                   <p class="data-desc">这是加密备份，请输入导出时设置的口令。</p>
-                  <input type="password" id="unlock-password" data-testid="unlock-password" placeholder="备份口令" autocomplete="current-password" />
+                  <input type="password" id="unlock-password" data-testid="unlock-password" placeholder="备份口令" aria-label="解锁备份的口令" autocomplete="current-password" />
                   <div class="card-actions start">
                     <button type="button" class="button" data-testid="unlock-backup" id="unlock-backup">解锁并校验</button>
                   </div>
@@ -1326,8 +364,8 @@
       </main>
     </div>
 
-    <dialog id="confirm-dialog" data-testid="confirm-dialog" class="confirm-dialog">
-      <h2 id="confirm-title"></h2>
+    <dialog id="confirm-dialog" data-testid="confirm-dialog" class="confirm-dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <h2 id="confirm-title">确认操作</h2>
       <p id="confirm-message"></p>
       <div class="confirm-actions">
         <button type="button" class="button ghost" data-testid="confirm-cancel" id="confirm-cancel">取消</button>
@@ -1335,28 +373,28 @@
       </div>
     </dialog>
 
-    <dialog id="tag-dialog" data-testid="tag-dialog" class="confirm-dialog tag-dialog">
-      <h2>管理标签</h2>
+    <dialog id="tag-dialog" data-testid="tag-dialog" class="confirm-dialog tag-dialog" aria-modal="true" aria-labelledby="tag-dialog-title">
+      <h2 id="tag-dialog-title">管理标签</h2>
       <p class="dialog-hint">标签只保存在这台设备上。改名、合并或删除都不会改动记录的文字和照片。</p>
       <div class="tag-new-row">
-        <input type="text" id="tag-new-input" data-testid="tag-new-input" maxlength="40" placeholder="新建标签名" autocomplete="off" />
+        <input type="text" id="tag-new-input" data-testid="tag-new-input" maxlength="40" placeholder="新建标签名" aria-label="新建标签名" autocomplete="off" />
         <button type="button" class="button ghost" data-testid="tag-create" id="tag-create">新建</button>
       </div>
-      <p class="dialog-status" id="tag-dialog-status" data-testid="tag-dialog-status" hidden></p>
+      <p class="dialog-status" id="tag-dialog-status" data-testid="tag-dialog-status" role="status" hidden></p>
       <div class="tag-manage-list" id="tag-manage-list"></div>
       <div class="confirm-actions">
         <button type="button" class="button ghost" data-testid="tag-close" id="tag-close">关闭</button>
       </div>
     </dialog>
 
-    <dialog id="tag-picker-dialog" data-testid="tag-picker-dialog" class="confirm-dialog tag-dialog">
-      <h2>给这段时光加标签</h2>
+    <dialog id="tag-picker-dialog" data-testid="tag-picker-dialog" class="confirm-dialog tag-dialog" aria-modal="true" aria-labelledby="tag-picker-title">
+      <h2 id="tag-picker-title">给这段时光加标签</h2>
       <p class="dialog-hint">标签和珍藏单独保存，不会发布正在编辑的草稿。</p>
       <div class="tag-new-row">
-        <input type="text" id="tag-picker-new" data-testid="tag-picker-new" maxlength="40" placeholder="新建标签名" autocomplete="off" />
+        <input type="text" id="tag-picker-new" data-testid="tag-picker-new" maxlength="40" placeholder="新建标签名" aria-label="新建标签名" autocomplete="off" />
         <button type="button" class="button ghost" data-testid="tag-picker-create" id="tag-picker-create">新建</button>
       </div>
-      <p class="dialog-status" id="tag-picker-status" data-testid="tag-picker-status" hidden></p>
+      <p class="dialog-status" id="tag-picker-status" data-testid="tag-picker-status" role="status" hidden></p>
       <div class="tag-picker-list" id="tag-picker-list"></div>
       <div class="confirm-actions">
         <button type="button" class="button ghost" data-testid="tag-picker-cancel" id="tag-picker-cancel">取消</button>
@@ -1365,7 +403,7 @@
     </dialog>
 
     <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="应用锁">
-      <form data-testid="unlock-form" class="data-card"><h1>拾光 · 私人时光</h1><p data-testid="unlock-hint">正在检查应用锁…</p>
+      <form data-testid="unlock-form" class="data-card"><div class="lock-emblem" aria-hidden="true">⌑</div><p class="eyebrow">这一间展馆，只属于你</p><h1>拾光 · 私人时光</h1><p data-testid="unlock-hint">正在检查应用锁…</p>
       <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
       <button class="button" data-testid="app-unlock">解锁</button><p data-testid="unlock-feedback" role="status"></p></form>
     </div>

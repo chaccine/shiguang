@@ -1,8 +1,8 @@
-import { durabilityLabel } from "../domain/format.ts";
 import type { ShiguangApi } from "../platform/api.ts";
-import type { AppSettings, ThemePreference } from "../domain/types.ts";
+import type { AppSettings } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
 import { LockLifecycle, storageRows } from "../domain/personal.ts";
+import { AppearanceUi } from "./appearance.ts";
 const node = <T extends HTMLElement = HTMLElement>(id: string): T => document.querySelector<T>(`[data-testid="${id}"]`)!;
 
 /** UI credentials live only in input nodes and the current asynchronous call. */
@@ -14,34 +14,29 @@ export class PersonalUi {
   private unlocked: (() => void) | null = null;
   private busy = false;
   private away = false;
+  private returnFocus: HTMLElement | null = null;
   private retryUntil = 0;
-  private media = window.matchMedia("(prefers-color-scheme: dark)");
+  private appearance: AppearanceUi;
   private api: ShiguangApi;
   private preview: boolean;
   private flush: () => Promise<boolean>;
   constructor(api: ShiguangApi, preview: boolean, flush: () => Promise<boolean>) {
     this.api = api; this.preview = preview; this.flush = flush;
+    this.appearance = new AppearanceUi(api, settings => { this.settings = settings; this.paint(); });
     this.shell.inert = true;
+    this.gate.addEventListener("keydown", event => {
+      if (event.key !== "Tab") return;
+      const controls = [...this.gate.querySelectorAll<HTMLElement>("input:not([hidden]):not(:disabled), button:not([hidden]):not(:disabled)")];
+      const first = controls[0], last = controls.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     node("unlock-form").addEventListener("submit", e => { e.preventDefault(); void this.unlock(); });
     node("lock-settings-form").addEventListener("submit", e => { e.preventDefault(); void this.change(false); });
     node("lock-disable").addEventListener("click", () => { void this.change(true); });
     node("lock-now").addEventListener("click", () => { this.lifecycle.lock(); this.mask(true); });
     node("storage-refresh").addEventListener("click", () => { void this.renderStorage().catch(e => { node("storage-space").textContent = describeError(e).detail; }); });
-    node<HTMLSelectElement>("theme-select").addEventListener("change", () => {
-      const selector = node<HTMLSelectElement>("theme-select"); selector.disabled = true;
-      void this.api.setTheme(selector.value as ThemePreference).then(r => {
-        this.settings = r.settings; this.paint(); node("appearance-feedback").textContent = durabilityLabel(r.durability);
-      }).catch(e => {
-        node("appearance-feedback").textContent = describeError(e).detail;
-        if (this.settings) selector.value = this.settings.theme;
-      }).finally(() => { selector.disabled = false; });
-    });
-    const font = node<HTMLSelectElement>("font-scale");
-    font.value = window.localStorage.getItem("shiguang.fontScale") ?? "1";
-    if (!["1", "1.15", "1.3"].includes(font.value)) font.value = "1";
-    const applyFont = () => { document.documentElement.style.fontSize = `${Number(font.value) * 100}%`; };
-    applyFont(); font.addEventListener("change", () => { window.localStorage.setItem("shiguang.fontScale", font.value); applyFont(); });
-    this.media.addEventListener("change", () => this.paint());
     const tauriWindow = (window as unknown as { __TAURI__?: { window?: { getCurrentWindow?: () => {
       onFocusChanged: (handler: (event: {payload: boolean}) => void) => Promise<() => void>;
     } } } }).__TAURI__?.window?.getCurrentWindow?.();
@@ -61,6 +56,11 @@ export class PersonalUi {
     await new Promise<void>(resolve => { this.unlocked = resolve; });
   }
   private mask(locked: boolean): void {
+    const wasLocked = this.shell.inert;
+    if (locked && !wasLocked) {
+      const focused = document.activeElement;
+      this.returnFocus = focused && "focus" in focused ? focused as HTMLElement : null;
+    }
     this.gate.hidden = !locked; this.shell.inert = locked;
     if (locked) {
       for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog[open]")) dialog.close();
@@ -68,6 +68,10 @@ export class PersonalUi {
       node<HTMLInputElement>("app-passcode").hidden = !this.lifecycle.locked;
       node("app-unlock").hidden = !this.lifecycle.locked;
       if (this.lifecycle.locked) node<HTMLInputElement>("app-passcode").focus();
+    } else if (wasLocked) {
+      if (this.returnFocus?.isConnected) this.returnFocus.focus();
+      else node("timeline-tab")?.focus();
+      this.returnFocus = null;
     }
   }
   private background(): void {
@@ -89,8 +93,7 @@ export class PersonalUi {
   private paint(): void {
     if (!this.settings) return;
     const {theme, appLock} = this.settings;
-    document.documentElement.dataset.theme = theme === "system" ? (this.media.matches ? "dark" : "light") : theme;
-    node<HTMLSelectElement>("theme-select").value = theme;
+    this.appearance.sync(theme);
     node("lock-status").textContent = appLock.enabled ? "应用锁已启用" : "应用锁未启用";
     node("lock-current-label").hidden = !appLock.enabled;
     node("lock-enable").textContent = appLock.enabled ? "更改口令" : "启用应用锁";

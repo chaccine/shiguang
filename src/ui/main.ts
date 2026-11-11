@@ -40,10 +40,12 @@ for (const tab of NAV_TABS) {
   button.className = "tab";
   button.dataset.testid = tab.testId;
   button.dataset.navTab = tab.id;
-  button.setAttribute("role", "tab");
-  button.setAttribute("aria-selected", "false");
+  // Page navigation includes a create action and secondary pages, not an ARIA tab widget.
+  button.setAttribute("aria-current", "false");
   const dot = document.createElement("span");
   dot.className = "tab-dot";
+  dot.setAttribute("aria-hidden", "true");
+  dot.textContent = {timeline: "≡", calendar: "▦", create: "＋", museum: "⌂", mine: "◌"}[tab.id];
   const label = document.createElement("span");
   label.className = "tab-label";
   label.textContent = tab.label;
@@ -242,7 +244,13 @@ function setView(view: View): void {
   for (const [id, button] of tabButtons) {
     const on = id === active;
     button.classList.toggle("is-active", on);
-    button.setAttribute("aria-selected", String(on));
+    button.setAttribute("aria-current", on ? "page" : "false");
+  }
+  const panelId = view === "settings" ? "view-data" : `view-${view}`;
+  const heading = document.getElementById(panelId)?.querySelector<HTMLElement>("h1");
+  if (heading && !document.querySelector<HTMLElement>(".app-shell")?.inert) {
+    heading.tabIndex = -1;
+    heading.focus({preventScroll: true});
   }
   const remembered = rememberableTab(view);
   if (remembered !== null) window.localStorage.setItem(LAST_TAB_KEY, remembered);
@@ -1164,6 +1172,7 @@ function timelineCard(item: TimelineItem, readOnly = false): HTMLElement {
       star.className = "favorite-static";
       star.title = "已珍藏";
       star.textContent = "★";
+      star.setAttribute("aria-label", "已珍藏");
       article.append(star);
     }
   } else {
@@ -1338,6 +1347,9 @@ function renderCalendar(): void {
     button.className = "cal-day";
     button.dataset.testid = "cal-day";
     button.dataset.date = date;
+    button.setAttribute("aria-pressed", String(date === calSelectedDate));
+    button.setAttribute("aria-controls", "day-panel");
+    button.setAttribute("aria-label", `${date.slice(0, 4)}年${formatDayHeading(date)}${date === today ? "，今天" : ""}，${info?.count ?? 0} 条时光${info?.hasFavorite ? "，有珍藏" : ""}`);
     if (info) {
       button.classList.add("has-record");
       button.dataset.count = String(info.count);
@@ -1365,7 +1377,6 @@ function renderCalendar(): void {
         mark.append(star);
       }
       button.append(mark);
-      button.setAttribute("aria-label", `${formatDayHeading(date)}，${info.count} 条时光`);
     }
     button.addEventListener("click", () => { void selectCalendarDate(date); });
     return button;
@@ -1377,6 +1388,7 @@ function renderCalendar(): void {
 async function selectCalendarDate(date: string): Promise<void> {
   calSelectedDate = date;
   renderCalendar();
+  calGrid.querySelector<HTMLButtonElement>(`[data-date="${date}"]`)?.focus({preventScroll: true});
   await loadDayPanel(date);
   await refreshOnThisDay();
 }
@@ -1541,6 +1553,7 @@ function beginTagRename(row: HTMLDivElement, tag: TagInfo): void {
   input.value = tag.name;
   input.maxLength = 40;
   input.dataset.testid = "tag-rename-input";
+  input.setAttribute("aria-label", `重命名标签：${tag.name}`);
   const save = tagActionButton("保存", "tag-rename-confirm", () => { void commitTagRename(tag, input.value); });
   const cancel = tagActionButton("取消", "tag-rename-cancel", () => {
     void refreshTagManager().catch((error: unknown) => { showError(error); });
@@ -1597,6 +1610,7 @@ function beginTagMerge(row: HTMLDivElement, tag: TagInfo): void {
   }
   const select = document.createElement("select");
   select.dataset.testid = "tag-merge-target";
+  select.setAttribute("aria-label", `将标签「${tag.name}」合并到`);
   for (const other of others) {
     const option = document.createElement("option");
     option.value = other.tagId;
@@ -2216,6 +2230,8 @@ async function restoreBackupNow(): Promise<void> {
     const r = result.restored;
     showAppNotice(`恢复完成：${r.formal} 条正式记录、${r.drafts} 份草稿、${r.trashed} 条回收站记录。恢复前的数据已保存在 ${result.safetyBackup}`, "ok");
     exportResult.hidden = true;
+    // Content is already restored. A failed appearance refresh must not retain a consumed import token/session.
+    await personal.refresh().catch(showError);
     await refreshDrafts();
     await reloadTimeline();
   } catch (error) {
@@ -2349,7 +2365,7 @@ byTestId("reading-back").addEventListener("click", () => {
 });
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
   const view = button.dataset.go as View;
-  if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
+  if (view === "timeline") void showTimeline(); else if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
   else void flushBeforeLeave().then(ok => { if (ok) setView(view); });
 });
 byTestId<HTMLInputElement>("editor-location").addEventListener("input", e => session.edit({location: (e.target as HTMLInputElement).value}));
@@ -2388,6 +2404,7 @@ newDraftButton.addEventListener("click", () => { void startNewDraft(); });
 backButton.addEventListener("click", () => { void leaveEditor(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
+byTestId("add-photos").addEventListener("click", () => photoInput.click());
 
 openTrashButton.addEventListener("click", () => { void showTrash(); });
 backToSettingsButton.addEventListener("click", () => { void showData(); });
