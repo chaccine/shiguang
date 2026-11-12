@@ -141,7 +141,7 @@ impl OnThisDayYear {
         ])
     }
 }
-fn date(v: &str) -> Result<(), CoreError> {
+pub(crate) fn date(v: &str) -> Result<(), CoreError> {
     if !time::is_valid_date(v) {
         Err(CoreError::new(
             "INVALID_EVENT_DATE",
@@ -178,8 +178,8 @@ fn matches(r: &RecordRow, f: &TimelineFilter) -> bool {
         && (f.tag_ids.is_empty() || f.tag_ids.iter().any(|t| r.tag_ids.contains(t)))
         && f.has_photo.is_none_or(|p| p != s.photos.is_empty())
 }
-type Key<'a> = (&'a str, Option<&'a str>, &'a str, &'a str);
-fn key(r: &RecordRow) -> Key<'_> {
+pub(crate) type Key<'a> = (&'a str, Option<&'a str>, &'a str, &'a str);
+pub(crate) fn key(r: &RecordRow) -> Key<'_> {
     let s = r.formal.as_ref().expect("filtered formal");
     (
         &s.event_date,
@@ -188,7 +188,7 @@ fn key(r: &RecordRow) -> Key<'_> {
         &r.record_id,
     )
 }
-fn compare(a: Key<'_>, b: Key<'_>, order: Order) -> Ordering {
+pub(crate) fn compare(a: Key<'_>, b: Key<'_>, order: Order) -> Ordering {
     let direction = |c: Ordering| if order == Order::Asc { c } else { c.reverse() };
     direction(a.0.cmp(b.0))
         .then_with(|| b.1.is_some().cmp(&a.1.is_some()))
@@ -196,12 +196,12 @@ fn compare(a: Key<'_>, b: Key<'_>, order: Order) -> Ordering {
         .then_with(|| direction(a.2.cmp(b.2)))
         .then_with(|| direction(a.3.cmp(b.3)))
 }
-fn sorted<'a>(s: &'a State, f: &TimelineFilter) -> Vec<&'a RecordRow> {
+pub(crate) fn sorted<'a>(s: &'a State, f: &TimelineFilter) -> Vec<&'a RecordRow> {
     let mut rows: Vec<_> = s.records.iter().filter(|r| matches(r, f)).collect();
     rows.sort_unstable_by(|a, b| compare(key(a), key(b), f.order));
     rows
 }
-fn item(r: &RecordRow, today: &str) -> TimelineItem {
+pub(crate) fn item(r: &RecordRow, today: &str) -> TimelineItem {
     let s = r.formal.as_ref().expect("filtered formal");
     TimelineItem {
         record_id: r.record_id.clone(),
@@ -226,7 +226,7 @@ fn item(r: &RecordRow, today: &str) -> TimelineItem {
         is_future: s.event_date.as_str() > today,
     }
 }
-fn encode(r: &RecordRow, order: Order) -> String {
+pub(crate) fn encode(r: &RecordRow, order: Order) -> String {
     let k = key(r);
     crate::sha256::hex(
         Json::Arr(vec![
@@ -241,18 +241,18 @@ fn encode(r: &RecordRow, order: Order) -> String {
         .as_bytes(),
     )
 }
-struct Cursor {
+pub(crate) struct Cursor {
     date: String,
     time: Option<String>,
     created: String,
     id: String,
 }
 impl Cursor {
-    fn key(&self) -> Key<'_> {
+    pub(crate) fn key(&self) -> Key<'_> {
         (&self.date, self.time.as_deref(), &self.created, &self.id)
     }
 }
-fn decode(raw: &str, order: Order) -> Result<Cursor, CoreError> {
+pub(crate) fn decode(raw: &str, order: Order) -> Result<Cursor, CoreError> {
     let bad = || CoreError::new("INVALID_CURSOR", "分页位置无效，请刷新列表后重试");
     if raw.len() > 16384
         || !raw.len().is_multiple_of(2)
@@ -294,21 +294,31 @@ pub fn timeline_page(
     today: &str,
 ) -> Result<TimelinePage, CoreError> {
     validate_filter(f)?;
+    page_rows(sorted(s, f), f.order, cursor, limit, today)
+}
+
+/// Reuses the complete M02 key without cloning State or materializing all cards.
+pub(crate) fn page_rows(
+    rows: Vec<&RecordRow>,
+    order: Order,
+    cursor: Option<String>,
+    limit: usize,
+    today: &str,
+) -> Result<TimelinePage, CoreError> {
     date(today)?;
     if !(1..=500).contains(&limit) {
         return Err(CoreError::new("INVALID_LIMIT", "每页条数请设置为 1–500"));
     }
-    let c = cursor.as_deref().map(|c| decode(c, f.order)).transpose()?;
-    let rows = sorted(s, f);
+    let c = cursor.as_deref().map(|c| decode(c, order)).transpose()?;
     let total = rows.len();
     let mut remaining = rows.into_iter().filter(|r| {
         c.as_ref()
-            .is_none_or(|c| compare(key(r), c.key(), f.order) == Ordering::Greater)
+            .is_none_or(|c| compare(key(r), c.key(), order) == Ordering::Greater)
     });
     let selected: Vec<_> = remaining.by_ref().take(limit).collect();
     let more = remaining.next().is_some();
     let next_cursor = if more {
-        selected.last().map(|r| encode(r, f.order))
+        selected.last().map(|r| encode(r, order))
     } else {
         None
     };
@@ -398,23 +408,11 @@ pub fn on_this_day(
     day: u32,
     today: &str,
 ) -> Result<Vec<OnThisDayYear>, CoreError> {
-    date(today)?;
-    if day == 0 || day > time::days_in_month(2000, month) {
-        return Err(CoreError::new(
-            "INVALID_EVENT_DATE",
-            "月日无效，请检查月份和日期",
-        ));
-    }
-    let year: i64 = today[..4].parse().expect("validated year");
-    let suffix = format!("-{month:02}-{day:02}");
     let mut years = BTreeMap::<i64, Vec<TimelineItem>>::new();
-    for r in sorted(s, &TimelineFilter::default()) {
+    for r in crate::museum::reunion_rows(s, month, day, today)? {
         let d = &r.formal.as_ref().expect("formal").event_date;
-        date(d)?;
         let y = d[..4].parse().expect("validated year");
-        if y < year && d.ends_with(&suffix) {
-            years.entry(y).or_default().push(item(r, today));
-        }
+        years.entry(y).or_default().push(item(r, today));
     }
     Ok(years
         .into_iter()

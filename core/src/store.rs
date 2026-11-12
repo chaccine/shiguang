@@ -681,6 +681,7 @@ impl Store {
                 photos: Vec::new(),
             };
             let row = RecordRow {
+                museum_hidden: false,
                 favorite: false,
                 favorite_revision: 0,
                 tag_ids: Vec::new(),
