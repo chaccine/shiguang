@@ -80,7 +80,8 @@ test("M04 photo viewer preserves per-use caption/context, arrows, Escape and foc
     await env.api.saveDraft({ recordId: id, title: "未提交故事标题", body: "未提交正文" });
     await env.ui.enter(); await env.click("museum-enter-photos", "museum-photos");
     const grid = env.byTest("museum-list"), [first, second] = grid.children;
-    const image = first.querySelector("img")!; assert.equal(image.loading, "lazy"); assert.equal(image.alt, "合成说明 0\n<&>");
+    const image = env.created.find(n => n.tagName === "img" && n.alt === "合成说明 0\n<&>")!;
+    assert.equal(image.loading, "lazy"); assert.equal(first.getAttribute("aria-label"), "合成说明 0\n<&>");
     first.focus(); first.fire("keydown", { key: "ArrowRight" }); assert.equal(env.active(), second);
     assert.equal(second.tabIndex, 0); assert.equal(first.tabIndex, -1);
     second.fire("keydown", { key: "Home" }); assert.equal(env.active(), first);
@@ -176,5 +177,48 @@ test("M04 MemoryAdapter-driven home renders 5000 synthetic formal records within
     assert.ok(env.content.querySelectorAll("article").length <= 5); assert.ok(thumbs <= 8, `${thumbs} thumbnail requests`);
     assert.equal(env.content.querySelectorAll("img").length <= 8, true);
     console.log(`M04 5000-record home render: ${elapsed.toFixed(1)}ms, ${thumbs} bounded thumbnail requests (no layout/decoding)`);
+  } finally { env.restore(); }
+});
+
+test("M04 year rooms load incrementally and preserve the expanded year list on return", async () => {
+  const rows = dated(Array.from({ length: 50 }, (_, i) => `${1970 + i}-01-01`)); const env = setup(rows);
+  try {
+    await env.ui.enter(); await env.click("museum-enter-years", "museum-years");
+    assert.equal(env.content.querySelectorAll(".museum-year-card").length, 24);
+    env.observers.at(-1)!.intersect(); await settled(() => env.content.querySelectorAll(".museum-year-card").length === 48);
+    env.byTest("museum-more").fire("click"); await settled(() => env.content.querySelectorAll(".museum-year-card").length === 50);
+    env.main.scrollTop = 1400; env.byTest("museum-year-1970").focus();
+    await env.click("museum-year-1970", "museum-year"); await env.click("museum-back", "museum-years");
+    assert.equal(env.content.querySelectorAll(".museum-year-card").length, 50); assert.equal(env.main.scrollTop, 1400);
+  } finally { env.restore(); }
+});
+
+test("M04 viewer continues into the next photo page and boundary keys remain safe", async () => {
+  const rows = dated(["2024-11-12"]); photos(rows[0], 26); const env = setup(rows);
+  try {
+    await env.ui.enter(); await env.click("museum-enter-photos", "museum-photos");
+    const grid = env.byTest("museum-list"), last = grid.children[23];
+    grid.children[0].focus(); grid.children[0].fire("keydown", { key: "ArrowDown" }); assert.equal(env.active(), grid.children[2]);
+    grid.children[2].fire("keydown", { key: "ArrowUp" }); assert.equal(env.active(), grid.children[0]);
+    last.focus(); last.fire("click"); await settled(() => env.byTest("museum-viewer").open);
+    env.byTest("museum-viewer").fire("keydown", { key: "ArrowRight" });
+    await settled(() => env.byTest("museum-viewer").text().includes("使用位 24"));
+    assert.equal(grid.children.length, 26);
+    env.byTest("museum-viewer").fire("keydown", { key: "ArrowRight" }); await settled(() => env.byTest("museum-viewer-next").disabled);
+    env.byTest("museum-viewer").fire("keydown", { key: "ArrowRight" });
+    assert.match(env.byTest("museum-viewer").text(), /使用位 25/);
+    env.byTest("museum-viewer").fire("keydown", { key: "Escape" }); assert.equal(env.active(), last);
+  } finally { env.restore(); }
+});
+
+test("M04 failed next page keeps the loaded exhibition and a manual retry without an auto-retry loop", async () => {
+  const rows = dated(Array<string>(30).fill("2024-11-12")); rows.forEach(r => { r.favorite = true; }); const env = setup(rows);
+  try {
+    await env.ui.enter(); await env.click("museum-enter-favorites", "museum-favorites");
+    const before = env.byTest("museum-list").text(); env.api.failNext("DISK_FULL", "museumFavoritesPage");
+    env.observers.at(-1)!.intersect(); await settled(() => env.errors.length === 1);
+    assert.equal(env.byTest("museum-list").text(), before); assert.equal(env.byTest("museum-more").disabled, false);
+    assert.equal(env.observers.at(-1)!.disconnected, true);
+    env.byTest("museum-more").fire("click"); await settled(() => env.byTest("museum-list").children.length === 30);
   } finally { env.restore(); }
 });

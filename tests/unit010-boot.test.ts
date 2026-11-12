@@ -70,6 +70,19 @@ test("real bootstrap opens timeline, all five navigation actions work, Mine reac
     byTest("museum-tab").fire("click");await until(()=>!id("view-museum").hidden);
     await until(()=>!!byTest("museum-enter-reunion"));
     byTest("museum-enter-reunion").fire("click");await until(()=>!!byTest("museum-reunion"));
+    // Approved M04 replacement: the real app returns from formal reading to its museum area and offset.
+    await api.setFavorite(record,true);
+    await until(()=>!!byTest("museum-content").querySelector('[data-testid="museum-back"]'));
+    byTest("museum-content").querySelector('[data-testid="museum-back"]')!.fire("click");
+    await until(()=>!!byTest("museum-content").querySelector('[data-testid="museum-enter-favorites"]'));
+    byTest("museum-content").querySelector('[data-testid="museum-enter-favorites"]')!.fire("click");
+    await until(()=>!!byTest("museum-content").querySelector(`[data-testid="museum-read-${record}"]`));
+    const main=query(".main")!;main.scrollTop=420;
+    byTest("museum-content").querySelector(`[data-testid="museum-read-${record}"]`)!.fire("click");
+    await until(()=>!id("view-reading").hidden);assert.equal((await api.getRecord(record)).draft,null);
+    byTest("reading-back").fire("click");await until(()=>main.scrollTop===420);
+    assert.equal(id("view-museum").hidden,false);
+    assert.ok(byTest("museum-content").querySelector('[data-testid="museum-favorites"]'));
     byTest("mine-tab").fire("click");await until(()=>!id("view-mine").hidden);
     byTest("drafts-tab").fire("click");await until(()=>!id("view-drafts").hidden);
     byTest("create-tab").fire("click");await until(()=>!id("view-editor").hidden);

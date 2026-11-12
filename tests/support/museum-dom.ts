@@ -48,6 +48,7 @@ export function museumDom() {
   const undo = new MuseumNode("button"); undo.dataset.testid = "museum-undo"; undo.hidden = true;
   feedback.append(message, undo); root.append(content, feedback); main.append(root); shell.append(main);
   const observers: FakeObserver[] = [];
+  const created: MuseumNode[] = [];
   class FakeObserver {
     disconnected = false; target: unknown;
     callback: (entries: Array<{ isIntersecting: boolean }>) => void;
@@ -57,10 +58,10 @@ export function museumDom() {
     intersect() { if (!this.disconnected) this.callback([{ isIntersecting: true }]); }
   }
   const win = { scrollY: 0, scrollTo(_x: number, y: number) { this.scrollY = y; } };
-  Object.assign(globalThis, { document: { createElement: (tag: string) => new MuseumNode(tag), querySelector: (s: string) => matches(shell, s) ? shell : shell.querySelector(s),
+  Object.assign(globalThis, { document: { createElement: (tag: string) => { const node = new MuseumNode(tag); created.push(node); return node; }, querySelector: (s: string) => matches(shell, s) ? shell : shell.querySelector(s),
     get activeElement() { return activeNode; } }, window: win, IntersectionObserver: FakeObserver,
     getComputedStyle: () => ({ gridTemplateColumns: "100px 100px" }) });
-  return { root, shell, main, win, content, feedback, undo, observers, active: () => activeNode,
+  return { root, shell, main, win, content, feedback, undo, observers, created, active: () => activeNode,
     byTest(id: string) { const node = root.querySelector(`[data-testid="${id}"]`); assert.ok(node, `Missing ${id}`); return node; },
     restore() { Object.assign(globalThis, original); activeRoot = null; activeNode = null; } };
 }

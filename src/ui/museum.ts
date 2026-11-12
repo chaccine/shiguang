@@ -132,24 +132,30 @@ export class MuseumUi {
     const box = el("div", "", "museum-empty-note"); box.dataset.testid = "museum-empty";
     box.append(el("p", text), button("记录一件小事", "museum-write", this.host.write)); return box;
   }
-  private card(item: TimelineItem, recommend = false): HTMLElement {
+  private card(item: TimelineItem, recommend = false, context: string = this.place.area): HTMLElement {
     const card = el("article", "", "museum-exhibit"); card.dataset.recordId = item.recordId;
     const open = button("", `museum-read-${item.recordId}`, () => this.run(() => this.read(item.recordId)));
+    open.dataset.museumFocus = `${context}-read-${item.recordId}`;
     open.className = "museum-story";
     if (item.cover) open.append(this.photo(item.cover.assetId, item.cover.caption || `来自${item.title ? `《${item.title}》` : "无标题记录"}`, true));
     const label = el("span", "", "museum-placard");
     label.append(el("span", item.eventDate + (item.eventTime ? ` · ${item.eventTime}` : "") + (item.isFuture ? " · 未来时光" : ""), "museum-date"),
       el("span", item.title || "无标题记录", "museum-story-title"), el("span", item.excerpt, "museum-excerpt"));
     open.append(label); card.append(open);
-    if (recommend) card.append(button("暂时不看这条", `museum-hide-${item.recordId}`, () => this.run(() => this.hide(item.recordId))));
+    if (recommend) {
+      const hide = button("暂时不看这条", `museum-hide-${item.recordId}`, () => this.run(() => this.hide(item.recordId)));
+      hide.dataset.museumFocus = `${context}-hide-${item.recordId}`; card.append(hide);
+    }
     return card;
   }
   private photo(assetId: string, alt: string, thumb: boolean): HTMLElement {
     const mat = el("span", "", thumb ? "museum-mat" : "museum-full-photo");
     const img = el("img"); img.alt = alt; img.loading = thumb ? "lazy" : "eager"; img.decoding = "async";
+    const placeholder = el("span", "", "museum-photo-fallback");
     const fallback = (error?: unknown) => {
       img.remove(); const code = (error as { code?: string })?.code;
-      mat.replaceChildren(el("span", code === "HEIC_UNSUPPORTED" ? "无法预览 HEIC 图片" : "照片暂不可预览，说明和完整故事仍可查看。", "museum-photo-fallback"));
+      placeholder.textContent = code === "HEIC_UNSUPPORTED" ? "无法预览 HEIC 图片" : "照片暂不可预览，说明和完整故事仍可查看。";
+      mat.replaceChildren(placeholder);
     };
     img.addEventListener("error", () => fallback()); mat.append(img);
     void (thumb ? this.api.photoThumbUrl(assetId) : this.api.photoDataUrl(assetId)).then(url => { img.src = url; }).catch(fallback);
@@ -175,10 +181,10 @@ export class MuseumUi {
     };
     const r = room("reunion", "01", `${summary.reunionCount} 段重逢`, "今天，通往从前的同一天。");
     const firstGroup = reunion.groups[0];
-    if (firstGroup) { r.append(el("p", firstGroup.label, "museum-reunion-label"), this.card(firstGroup.items[0], true)); }
+    if (firstGroup) { r.append(el("p", firstGroup.label, "museum-reunion-label"), this.card(firstGroup.items[0], true, "reunion-preview")); }
     else r.append(el("p", "今天还没有往年的同日记录。也可以去其他展区走走。", "museum-quiet"));
     const f = room("favorites", "02", `${summary.favoriteCount} 段珍藏`, "由你亲手留下的特别席位。");
-    favorites.items.forEach(item => f.append(this.card(item)));
+    favorites.items.forEach(item => f.append(this.card(item, false, "favorites-preview")));
     if (!favorites.total) f.append(el("p", "遇到想多看几遍的故事，可以在记录上点亮珍藏。", "museum-quiet"));
     const p = room("photos", "03", `${summary.photoCount} 张照片`, "一帧一刻，都是生活的原色。");
     const strip = el("div", "", "museum-photo-strip");
@@ -191,7 +197,7 @@ export class MuseumUi {
     stage.append(rooms);
     const recommendation = el("section", "", "museum-recommendation"); recommendation.setAttribute("aria-label", "偶遇一段时光");
     recommendation.append(el("h2", "偶遇一段时光"), el("p", "从已发生的正式记录里，随手翻开一页。", "museum-quiet"));
-    const tray = el("div", "", "museum-card-grid"); shuffle.items.forEach(item => tray.append(this.card(item, true))); recommendation.append(tray);
+    const tray = el("div", "", "museum-card-grid"); shuffle.items.forEach(item => tray.append(this.card(item, true, "shuffle"))); recommendation.append(tray);
     const next = button("再看一段 ↻", "museum-reshuffle", () => this.run(async () => {
       this.shuffleSeed = this.seed(); this.previousIds = [...this.seen];
       const position = this.capture(); await this.render(true); this.restore(position);
@@ -235,7 +241,7 @@ export class MuseumUi {
       if ("featured" in results) {
         if (results.summary) stage.append(this.months(results.summary));
         const featured = el("section", "", "museum-featured"); featured.setAttribute("aria-label", "年度精选"); featured.append(el("h2", "精选"));
-        const cards = el("div", "", "museum-card-grid"); results.featured.forEach(item => cards.append(this.card(item, true)));
+        const cards = el("div", "", "museum-card-grid"); results.featured.forEach(item => cards.append(this.card(item, true, "featured")));
         if (!results.featured.length) featured.append(el("p", "这一年暂时没有可推荐的精选，全部记录仍在下方。", "museum-quiet"));
         featured.append(cards); stage.append(featured, el("h2", "这一年的全部记录"));
       }
@@ -270,11 +276,13 @@ export class MuseumUi {
   private async more(): Promise<void> {
     if (this.busy || !this.host.active()) return;
     if (this.place.area === "years") {
+      this.observer?.disconnect();
       const list = this.content.querySelector<HTMLElement>(".museum-year-list")!;
       const end = this.place.loaded + 24;
       this.yearSummaries.slice(this.place.loaded, end).forEach(year => list.append(this.yearCard(year)));
       this.place.loaded = end;
       if (end >= this.yearSummaries.length) this.content.querySelector('[data-testid="museum-more"]')?.remove();
+      this.observe();
       return;
     }
     if (!this.cursor) return;
