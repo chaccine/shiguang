@@ -22,6 +22,7 @@
     </script>
     <link rel="stylesheet" href="./ui/tokens.css" />
     <link rel="stylesheet" href="./ui/styles.css" />
+    <link rel="stylesheet" href="./ui/museum.css" />
   </head>
   <body>
     <div class="app-shell" id="app-shell" inert>
@@ -43,18 +44,11 @@
           </div>
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
 
-          <section id="view-museum" class="view" data-testid="museum-placeholder" hidden>
-            <header class="view-head"><div><p class="eyebrow">私人的时光，慢慢珍藏</p><h1>回忆博物馆</h1></div></header>
-            <div class="museum-empty">
-              <div class="museum-scene" aria-hidden="true">
-                <div class="scene-arch"></div><div class="scene-light"></div>
-                <div class="scene-frame"><span class="scene-paper"></span></div>
-                <div class="scene-lamp"><span></span></div><div class="scene-shelf"></div>
-              </div>
-              <span class="pill museum-status">建设中</span>
-              <h2><span class="day-copy">为回忆，留一间展馆</span><span class="night-copy">灯下，留一处时光</span></h2>
-              <p>展馆还在慢慢布置。<br />已经收好的小事，都在时光轴里。</p>
-              <button class="button ghost" data-go="timeline" data-testid="museum-timeline">去翻看时光 <span aria-hidden="true">→</span></button>
+          <section id="view-museum" class="view museum" data-testid="museum-view" aria-label="回忆博物馆" hidden>
+            <div data-testid="museum-content"><h1>回忆博物馆</h1></div>
+            <div class="museum-feedback" data-testid="museum-feedback" hidden>
+              <p role="status" aria-live="polite" data-testid="museum-message"></p>
+              <button class="button ghost" data-testid="museum-undo" hidden>撤销</button>
             </div>
           </section>
           <section id="view-mine" class="view" hidden><h1>个人空间</h1><p>照顾好你的时光，也照顾好本机的数据。</p>
@@ -65,7 +59,7 @@
               <button class="data-card" data-testid="mine-trash" data-go="trash">回收站</button>
               <button class="data-card" data-testid="storage-link" data-go="storage">存储空间</button>
               <button class="data-card" data-testid="appearance-link" data-go="appearance">主题与外观</button>
-              <button class="data-card" data-testid="privacy-link" data-go="privacy">隐私（应用锁）</button>
+              <button class="data-card" data-testid="privacy-link" data-go="privacy">隐私 · 回忆推荐偏好</button>
             </div>
           </section>
           <section id="view-storage" class="view" hidden><h1>存储空间</h1><p>仅统计本机应用目录；外部导出的备份不在统计内。符号链接不计入。</p>

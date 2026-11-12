@@ -64,8 +64,12 @@ test("real bootstrap opens timeline, all five navigation actions work, Mine reac
     assert.equal(nav.children.filter(n=>n.getAttribute("aria-current")==="page").length,1);
     assert.equal(byTest("timeline-tab").getAttribute("aria-current"),"page");
     for (const button of nav.children) assert.equal(button.getAttribute("role"),null);
+    const create=byTest("create-tab");
+    assert.equal(create.getAttribute("aria-label"),"＋记录");
+    assert.equal(create.children.map(n=>n.textContent).join("").match(/[＋+]/g)?.length,1);
     byTest("museum-tab").fire("click");await until(()=>!id("view-museum").hidden);
-    byTest("museum-timeline").fire("click");await until(()=>!id("view-timeline").hidden);
+    await until(()=>!!byTest("museum-enter-reunion"));
+    byTest("museum-enter-reunion").fire("click");await until(()=>!!byTest("museum-reunion"));
     byTest("mine-tab").fire("click");await until(()=>!id("view-mine").hidden);
     byTest("drafts-tab").fire("click");await until(()=>!id("view-drafts").hidden);
     byTest("create-tab").fire("click");await until(()=>!id("view-editor").hidden);

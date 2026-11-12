@@ -74,11 +74,13 @@ test("lock lifecycle starts locked, short resume remains open, repeated hidden s
   gate.background(100000); gate.background(159000); assert.equal(gate.resume(160000),true);
   gate.unlock(); gate.lock(); assert.equal(gate.resume(160001),true);
 });
-test("UI navigation wires drafts under Mine, museum is honest placeholder, reading edit and numeric password controls exist",()=>{
+test("UI navigation wires drafts under Mine, museum has its own region, reading edit and numeric password controls exist",()=>{
   const html=readFileSync(new URL("../src/ui/index.html",import.meta.url),"utf8");
   const mine=html.slice(html.indexOf('id="view-mine"'),html.indexOf('id="view-storage"'));
   assert.match(mine,/data-testid="drafts-tab" data-go="drafts"/);
-  assert.match(html.slice(html.indexOf('id="view-museum"'),html.indexOf('id="view-mine"')),/建设中/);
+  const museum=html.slice(html.indexOf('id="view-museum"'),html.indexOf('id="view-mine"'));
+  assert.match(museum,/aria-label="回忆博物馆"/); assert.match(museum,/data-testid="museum-content"/);
+  assert.doesNotMatch(museum,/建设中|手工主题展/);
   for(const id of ["app-passcode","lock-current","lock-new","lock-confirm"]) assert.match(html,new RegExp(`data-testid="${id}" type="password" inputmode="numeric"`));
   assert.match(html,/data-testid="reading-edit">编辑/);
   assert.match(html,/href="\.\/ui\/styles.css"/);

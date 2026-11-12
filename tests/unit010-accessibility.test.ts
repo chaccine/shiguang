@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 
 const ui = new URL("../src/ui/", import.meta.url);
 const html = readFileSync(new URL("index.html", ui), "utf8");
-const styles = readFileSync(new URL("styles.css", ui), "utf8");
+const styles = readFileSync(new URL("styles.css", ui), "utf8") + readFileSync(new URL("museum.css", ui), "utf8");
 const tokens = readFileSync(new URL("tokens.css", ui), "utf8");
 const palettes = [...tokens.matchAll(/\{([^{}]*--surface-canvas:[^{}]*)\}/g)].map(match =>
   Object.fromEntries([...match[1].matchAll(/--([\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2].trim()])));
@@ -150,6 +150,24 @@ test("static controls have accessible names, dialogs have names/descriptions and
   assert.ok(all.some(n => n.attrs.id === "app-shell" && "inert" in n.attrs));
   assert.ok(all.some(n => n.name === "nav" && n.attrs["aria-label"]));
   assert.equal(all.filter(n => n.attrs.role === "tab").length, 0, "page navigation uses native buttons, no orphan ARIA tabs");
-  const museum = all.find(n => n.attrs["data-testid"] === "museum-placeholder")!;
-  assert.match(museum.text, /建设中/); assert.doesNotMatch(museum.text, /今日重逢|年度展室|照片展墙/);
+  const museum = all.find(n => n.attrs["data-testid"] === "museum-view")!;
+  assert.equal(museum.attrs["aria-label"], "回忆博物馆");
+  assert.ok(museum.children.some(n => n.attrs["data-testid"] === "museum-content"));
+  assert.doesNotMatch(museum.text, /建设中|手工主题展/);
+});
+
+test("museum text, placards and month bars meet AA in both palettes including spotlight compositing", () => {
+  for (const palette of palettes) {
+    for (const bg of ["museum-wall", "museum-mat", "museum-placard"]) {
+      const base = rgb(palette[bg]);
+      const lit = (palette["museum-light"].match(/#[a-f\d]{8}/gi) ?? []).reduce((c, overlay) => composite(overlay, c), base);
+      for (const background of [base, lit]) {
+        for (const fg of ["text-primary", "text-secondary", "text-muted", "museum-label"]) {
+          assert.ok(contrast(rgb(palette[fg]), background) >= 4.5, `${fg} on ${bg}`);
+        }
+        assert.ok(contrast(rgb(palette.focus), background) >= 3);
+      }
+    }
+    assert.ok(contrast(rgb(palette["museum-bar"]), rgb(palette["museum-track"])) >= 3);
+  }
 });
