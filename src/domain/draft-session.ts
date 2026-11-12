@@ -19,7 +19,7 @@ export interface DraftSessionOptions<Handle> {
   debounceMs?: number;
 }
 const copy = <T>(value: T): T => structuredClone(value);
-const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, photos: [] });
+const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, location: "", mood: null, coverPhotoUseId: null, photos: [] });
 const problem = (code: string, message: string) => ({ code, message });
 
 /**
@@ -41,6 +41,15 @@ export class DraftSession<Handle = unknown> {
   private failureGeneration = 0;
   private tail: Promise<void> = Promise.resolve();
   private queued = 0;
+  private photoWrites: Array<{ action: "caption" | "cover" | "order"; id: string; value: string | string[] }> = [];
+  private applyPendingPhotos(): void {
+    const snapshot = this.data.snapshot;
+    for (const op of this.photoWrites) {
+      if (op.action === "caption") { const photo = snapshot.photos.find(p => p.photoUseId === op.id); if (photo) photo.caption = op.value as string; }
+      else if (op.action === "cover") snapshot.coverPhotoUseId = op.id;
+      else snapshot.photos = (op.value as string[]).map(id => snapshot.photos.find(p => p.photoUseId === id)!);
+    }
+  }
 
   constructor(options: DraftSessionOptions<Handle>) { this.api = options.api; this.options = options; }
   get state(): DraftSessionSnapshot { return copy(this.data); }
@@ -93,7 +102,7 @@ export class DraftSession<Handle = unknown> {
   }
 
   open(row: RecordRow | null): void {
-    if (this.queued || this.version !== this.savedVersion || this.conflicted) {
+    if (this.queued || this.photoWrites.length || this.version !== this.savedVersion || this.conflicted) {
       throw problem("SESSION_BUSY", "请先保存当前编辑；发生冲突时请保留本地副本并新建会话核对版本。");
     }
     this.stopTimer(); this.clearError(); this.version = this.savedVersion = 0;
@@ -103,13 +112,14 @@ export class DraftSession<Handle = unknown> {
     this.emit();
   }
   edit(patch: DraftFields): void {
-    for (const field of ["title", "body", "eventDate", "eventTime"] as const) {
+    for (const field of ["title", "body", "eventDate", "location"] as const) {
       const value = patch[field];
       if (value !== undefined) {
-        if (field === "eventTime") this.data.snapshot.eventTime = value;
-        else this.data.snapshot[field] = value as string;
+        this.data.snapshot[field] = value;
       }
     }
+    if (patch.eventTime !== undefined) this.data.snapshot.eventTime = patch.eventTime;
+    if (patch.mood !== undefined) this.data.snapshot.mood = patch.mood;
     this.version++;
     if (!this.conflicted) {
       this.clearError(); this.data.status = this.queued ? "saving" : "dirty"; this.arm();
@@ -118,9 +128,9 @@ export class DraftSession<Handle = unknown> {
   }
   private hasInput(): boolean {
     const s = this.data.snapshot;
-    return [s.title, s.body, s.eventDate, s.eventTime ?? ""].some((v) => v.trim().length > 0) || s.photos.length > 0;
+    return [s.title, s.body, s.eventDate, s.eventTime ?? "", s.location, s.mood ?? ""].some((v) => v.trim().length > 0) || s.photos.length > 0;
   }
-  private async drain(): Promise<void> {
+  private async drainScalars(): Promise<void> {
     while (this.version !== this.savedVersion) {
       this.stopTimer();
       if (this.data.recordId === null && !this.hasInput()) {
@@ -135,16 +145,35 @@ export class DraftSession<Handle = unknown> {
         this.baseRevision = result.row.baseRevision;
       } else {
         result = await this.api.saveDraft({ recordId: this.data.recordId, title: snapshot.title,
-          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime });
+          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
       }
       this.savedVersion = sentVersion;
       // 不能把响应中的旧字段写回本地：在途期间的输入仍是权威的本地内容。
       this.data.snapshot.photos = copy(result.row.draft?.photos ?? snapshot.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft?.coverPhotoUseId ?? null;
+      this.applyPendingPhotos();
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) this.data.status = "saving";
       this.emit();
     }
     this.stopTimer();
+  }
+  private async drain(): Promise<void> {
+    await this.drainScalars();
+    while (this.photoWrites.length) {
+      const op = this.photoWrites[0]; const id = this.data.recordId;
+      if (!id) throw problem("NO_DRAFT", "没有待保存的草稿");
+      this.data.status = "saving"; this.emit();
+      const result = op.action === "caption" ? await this.api.setDraftPhotoCaption(id, op.id, op.value as string)
+        : op.action === "cover" ? await this.api.setDraftCover(id, op.id)
+        : await this.api.reorderDraftPhotos(id, op.value as string[]);
+      this.photoWrites.shift();
+      this.data.snapshot.photos = copy(result.row.draft!.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
+      this.applyPendingPhotos();
+      this.saved(result.durability, result.row.updatedAt); this.emit();
+      await this.drainScalars();
+    }
   }
   flush(): Promise<void> {
     this.stopTimer();
@@ -173,6 +202,7 @@ export class DraftSession<Handle = unknown> {
       }
       const result = await this.api.attachPhotoBytes({ ...input, recordId: this.data.recordId });
       this.data.snapshot.photos = copy(result.row.draft!.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) this.data.status = "dirty";
       this.emit();
@@ -187,10 +217,18 @@ export class DraftSession<Handle = unknown> {
       if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
       const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
+      this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) { this.data.status = "dirty"; this.arm(); }
       this.emit(); return result;
     });
+  }
+  /** Photo writes share the scalar autosave queue; formal is never mutated. */
+  updatePhoto(action: "caption" | "cover" | "order", photoUseId: string, value: string | string[] = ""): Promise<void> {
+    this.photoWrites.push({action, id: photoUseId, value: copy(value)});
+    this.applyPendingPhotos();
+    this.data.status = this.conflicted ? "conflict" : "dirty"; this.emit();
+    return this.flush();
   }
   commit(): Promise<CommitResult> {
     this.stopTimer();

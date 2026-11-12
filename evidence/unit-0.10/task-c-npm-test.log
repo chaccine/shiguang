@@ -1,0 +1,33 @@
+
+> shiguang-app@0.1.10 test
+> node --test tests/*.test.ts
+
+✔ tests/conflict.test.ts (140.614036ms)
+✔ tests/draft-session.test.ts (301.999863ms)
+✔ tests/durability.test.ts (137.094708ms)
+✔ tests/errors.test.ts (179.472891ms)
+✔ tests/memory-adapter.test.ts (1718.777117ms)
+✔ tests/navigation.test.ts (165.58911ms)
+✔ tests/rules.test.ts (172.654068ms)
+✔ tests/startup.test.ts (169.085673ms)
+✔ tests/unit010-accessibility.test.ts (244.888445ms)
+✔ tests/unit010-appearance.test.ts (345.452135ms)
+✔ tests/unit010-boot.test.ts (463.981296ms)
+✔ tests/unit010-lock-ui.test.ts (1470.616311ms)
+✔ tests/unit010-lock.test.ts (1096.478908ms)
+✔ tests/unit010-schema.test.ts (392.171781ms)
+✔ tests/unit010-ui.test.ts (256.473366ms)
+✔ tests/unit04.test.ts (308.443236ms)
+✔ tests/unit05.test.ts (264.474098ms)
+✔ tests/unit06.test.ts (323.872573ms)
+✔ tests/unit07.test.ts (364.290877ms)
+✔ tests/unit08.test.ts (187.63916ms)
+✔ tests/view.test.ts (140.452417ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1745.610578

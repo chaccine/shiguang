@@ -1,0 +1,20 @@
+{
+  "cargo": {
+    "passed": 185,
+    "failed": 0,
+    "ignored": 1
+  },
+  "faults": {
+    "passed": 237,
+    "failed": 0,
+    "ignored": 1
+  },
+  "npm": {
+    "files": 14,
+    "cases": 127,
+    "failed": 0,
+    "note": "npm test plus node --test --test-isolation=none tests/*.test.ts for individual case counts under Node 24"
+  },
+  "typecheck": "PASS",
+  "build": "PASS"
+}

@@ -5,7 +5,7 @@ import { applyCommit, formalItems, nextRevision, readFormal } from "../src/domai
 import type { RecordRow, Snapshot } from "../src/domain/types.ts";
 
 function snap(partial: Partial<Snapshot> = {}): Snapshot {
-  return { title: "", body: "", eventDate: "2026-11-09", eventTime: null, photos: [], ...partial };
+  return { title: "", body: "", eventDate: "2026-11-09", eventTime: null, location: "", mood: null, coverPhotoUseId: partial.photos?.[0]?.photoUseId ?? null, photos: [], ...partial };
 }
 
 function row(partial: Partial<RecordRow> = {}): RecordRow {

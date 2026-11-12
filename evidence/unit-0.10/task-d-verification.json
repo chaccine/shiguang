@@ -1,0 +1,94 @@
+{
+  "unit": "Unit-0.10 Task D",
+  "head": "b19bcfc",
+  "syntheticOnly": true,
+  "environment": {
+    "rust": "1.90.0",
+    "node": "24.22.1",
+    "npm": "11.21.1"
+  },
+  "checks": {
+    "workspace": {
+      "status": "PASS",
+      "passed": 213,
+      "failed": 0,
+      "ignored": 1
+    },
+    "faultInjectionCore": {
+      "status": "PASS",
+      "passed": 258,
+      "failed": 0,
+      "ignored": 1,
+      "additionalFeatureCases": 55
+    },
+    "npm": {
+      "status": "PASS",
+      "files": 21,
+      "cases": 170,
+      "failed": 0
+    },
+    "typecheck": "PASS",
+    "build": "PASS",
+    "screenshotSyntax": "PASS",
+    "screenshots": {
+      "status": "NOT_RUN",
+      "expected": 32,
+      "saved": 0,
+      "reason": "User explicitly requires execution outside sandbox"
+    },
+    "tauriDesktop": {
+      "status": "BLOCKED",
+      "exitCode": 101,
+      "reason": "Offline dependency jiff 0.2.42 is not cached; compilation not reached"
+    },
+    "legacyEvidence": {
+      "status": "FAILED",
+      "reason": "Existing ignored acceptance/draft-kill.log has concatenated JSON; parser stops at position 676"
+    },
+    "devices": "NOT_RUN",
+    "screenReaders": "NOT_RUN",
+    "ci": "pending (filled by orchestrator)"
+  },
+  "logs": [
+    {
+      "path": "evidence/unit-0.10/task-d-cargo-test.log",
+      "bytes": 21132,
+      "sha256": "d847f299c2dfcfcef2a7802b6ca7f805471fae9c671b0bca73e191ff3dbdc139"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-fault-injection.log",
+      "bytes": 22788,
+      "sha256": "45befebeaa4a35ba4aae9dbde110461d865cc7e607985c9c4a56ff4703b0c12e"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-npm-test.log",
+      "bytes": 1101,
+      "sha256": "d709a42e54fc24a588fdfcfe66dd2c9c28c8e81cdd34f169ee75b63d37a268b0"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-npm-cases.log",
+      "bytes": 15848,
+      "sha256": "ec9022d80375dfdb4e9518e2fb65955066a9f56ffbd1116fb13ee160f4ee347b"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-typecheck.log",
+      "bytes": 57,
+      "sha256": "c0ac44c05ebf955e36944f857b29b87aea14e1775ee947a449db68a6d0c0e202"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-build.log",
+      "bytes": 179,
+      "sha256": "6372880b5e16f576f0a9422b8c4d1a11d4e32e2ac9d053e07092277bb0629937"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-syntax-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evidence/unit-0.10/task-d-tauri-desktop-check.log",
+      "bytes": 119,
+      "sha256": "2f1faeeedf8c4191f53f0da26cbf4129ed12136dddc75d549306fe00b36e507d"
+    }
+  ]
+}

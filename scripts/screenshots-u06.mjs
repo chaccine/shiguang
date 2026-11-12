@@ -33,6 +33,7 @@ try {
   const flow = async (page, shot, prefix, full) => {
     await page.goto(`${base}?demo=1`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("encrypt-toggle").check();
     await page.getByTestId("backup-password").fill(pw);
@@ -45,11 +46,13 @@ try {
     await page.getByTestId("timeline-tab").click();
     await page.getByTestId("trash-button").first().click();
     await page.getByTestId("confirm-ok").click();
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("open-trash").click();
     await page.getByTestId("purge-button").first().click();
     await page.getByTestId("confirm-ok").click();
     await page.waitForTimeout(600);
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("pick-backup").click();
     await page.getByTestId("unlock-password").waitFor({ state: "visible" });

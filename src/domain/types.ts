@@ -9,12 +9,24 @@ export interface PhotoUse {
   mediaType: string;
 }
 
+export const MOODS = ["开心", "平静", "感动", "想念", "疲惫", "难过"] as const;
+export type Mood = typeof MOODS[number];
+export type ThemePreference = "light" | "dark" | "system";
+export interface AppLockStatus { enabled: boolean; failedAttempts: number; retryAfterMs: number }
+/** IPC view only; the device verifier is never returned. */
+export interface AppSettings { theme: ThemePreference; appLock: AppLockStatus }
+export interface SettingsResult { settings: AppSettings; durability: Durability }
+
 export interface Snapshot {
   title: string;
   body: string;
   eventDate: string;
   /** 可空；展示层不得为缺失时刻伪造时间。 */
   eventTime: string | null;
+  location: string;
+  mood: Mood | null;
+  coverPhotoUseId: string | null;
+  /** 唯一权威顺序，重排整个使用位及其说明。 */
   photos: PhotoUse[];
 }
 
@@ -134,10 +146,15 @@ export interface TimelineFilter {
 }
 export interface TimelineItem {
   recordId: string; eventDate: string; eventTime: string | null; title: string; excerpt: string;
-  cover: PhotoUse | null; photoCount: number; favorite: boolean; favoriteRevision: number;
+  location: string; mood: Mood | null; cover: PhotoUse | null; photoCount: number; favorite: boolean; favoriteRevision: number;
   tagIds: string[]; tagRevision: number; createdAt: string; isFuture: boolean;
 }
 export interface TimelinePage { items: TimelineItem[]; nextCursor: string | null; total: number }
 export interface MonthCount { year: number; month: number; count: number }
 export interface CalendarDay { date: string; count: number; photoCount: number; hasFavorite: boolean }
 export interface OnThisDayGroup { year: number; items: TimelineItem[] }
+
+export interface StorageStats {
+  media: number; previews: number; backups: number; data: number; other: number; total: number;
+  available: number | null; skippedSymlinks: number;
+}

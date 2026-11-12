@@ -57,6 +57,7 @@ try {
     await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="timeline-cover"]')].some(img => img.naturalWidth > 0 && img.naturalWidth <= 320));
     await shot(`${layout}-timeline-thumbnails.png`);
     // Create an intentionally undecodable HEIC through the same browser import path.
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("new-draft").click();
     await page.getByTestId("editor-body").fill("合成 HEIC，测试无法解码占位。");

@@ -12,8 +12,8 @@ fn missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once() {
     let t = TempRoot::new("migration");
     let original = legacy(&t);
     let s = Store::open(t.path()).unwrap();
-    // Unit-0.7: v1 → v2 → v3 chain; the migrated file lands on the latest schema.
-    assert_eq!(CURRENT_SCHEMA_VERSION, 3);
+    // v1 → v2 → v3 → v4: the migrated file lands on the latest schema.
+    assert_eq!(CURRENT_SCHEMA_VERSION, 4);
     assert_eq!(
         s.state_json().get("version").and_then(Json::as_i64),
         Some(1)

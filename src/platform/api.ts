@@ -1,14 +1,17 @@
 import type { TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupOptions, ExportBackupResult, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult, BackupSummary } from "../domain/types.ts";
+import type { Mood, AppSettings, SettingsResult, ThemePreference } from "../domain/types.ts";
 
 export interface DraftFields {
   title?: string;
   body?: string;
   eventDate?: string;
   eventTime?: string | null;
+  location?: string;
+  mood?: Mood | null;
 }
 export interface CreateDraftInput extends DraftFields { baseRecordId?: string | null }
-export interface SaveDraftInput extends DraftFields { recordId: string; clearEventTime?: boolean }
+export interface SaveDraftInput extends DraftFields { recordId: string; clearEventTime?: boolean; clearMood?: boolean }
 export interface AttachPhotoBytesInput {
   recordId: string;
   fileName: string;
@@ -21,6 +24,14 @@ export interface DiscardResult { row: RecordRow | null; durability: Durability }
 
 /** Rust 命令与浏览器预览共享的契约。所有错误均以 rejection 传给调用方。 */
 export interface ShiguangApi {
+  storageStats(): Promise<import("../domain/types.ts").StorageStats>;
+  getSettings(): Promise<AppSettings>;
+  setTheme(theme: ThemePreference): Promise<SettingsResult>;
+  /** Optional UI gate; the real app uses Rust Argon2id, never file encryption. */
+  setAppLock(passcode: string): Promise<SettingsResult>;
+  verifyAppLock(passcode: string): Promise<SettingsResult>;
+  changeAppLock(currentPasscode: string, newPasscode: string): Promise<SettingsResult>;
+  disableAppLock(currentPasscode: string): Promise<SettingsResult>;
   /** 回收站保留正式版与草稿；永久删除必须由调用方明确触发。 */
   trashRecord(recordId: string): Promise<SaveResult>;
   restoreRecord(recordId: string): Promise<SaveResult>;
@@ -43,6 +54,9 @@ export interface ShiguangApi {
   saveDraft(input: SaveDraftInput): Promise<SaveResult>;
   attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult>;
   removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult>;
+  setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult>;
+  setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult>;
+  reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult>;
   discardDraft(recordId: string): Promise<DiscardResult>;
   commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult>;
   photoDataUrl(assetId: string): Promise<string>;

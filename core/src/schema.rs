@@ -1,8 +1,12 @@
 //! 有序迁移链；容器 version 与数据结构 schemaVersion 分开演进。
 use crate::{json::Json, CoreError};
-pub const CURRENT_SCHEMA_VERSION: i64 = 3;
+pub const CURRENT_SCHEMA_VERSION: i64 = 4;
 pub type Migration = fn(Json) -> Result<Json, CoreError>;
-pub const MIGRATIONS: &[(i64, Migration)] = &[(1, migrate_v1_to_v2), (2, migrate_v2_to_v3)];
+pub const MIGRATIONS: &[(i64, Migration)] = &[
+    (1, migrate_v1_to_v2),
+    (2, migrate_v2_to_v3),
+    (3, migrate_v3_to_v4),
+];
 
 pub(crate) fn set(value: &mut Json, key: &str, item: Json) -> Result<(), CoreError> {
     let Json::Obj(fields) = value else {
@@ -100,5 +104,67 @@ pub fn migrate_v2_to_v3(mut value: Json) -> Result<Json, CoreError> {
     }
     set(&mut value, "tagDictRevision", Json::Num(0))?;
     set(&mut value, "schemaVersion", Json::Num(3))?;
+    Ok(value)
+}
+
+/// Add content fields to EVERY snapshot, including trash, edit drafts and conflicts.
+/// Captions and photo array order already exist in v3 and are preserved verbatim.
+pub fn migrate_v3_to_v4(mut value: Json) -> Result<Json, CoreError> {
+    fn snapshot(v: &mut Json) -> Result<(), CoreError> {
+        let photos = v
+            .get("photos")
+            .and_then(Json::as_arr)
+            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "快照 photos 必须是数组"))?;
+        let cover = photos
+            .first()
+            .map(|p| {
+                p.get("photoUseId")
+                    .cloned()
+                    .ok_or_else(|| CoreError::new("STATE_CORRUPT", "照片缺少 photoUseId"))
+            })
+            .transpose()?
+            .unwrap_or(Json::Null);
+        set(v, "coverPhotoUseId", cover)?;
+        set(v, "location", Json::str(""))?;
+        set(v, "mood", Json::Null)
+    }
+    let mut rows = value
+        .get("records")
+        .and_then(Json::as_arr)
+        .ok_or_else(|| CoreError::new("STATE_CORRUPT", "records 必须是数组"))?
+        .to_vec();
+    for row in &mut rows {
+        for key in ["formal", "draft"] {
+            let mut v = row
+                .get(key)
+                .cloned()
+                .ok_or_else(|| CoreError::new("STATE_CORRUPT", "记录缺少快照槽"))?;
+            if v != Json::Null {
+                snapshot(&mut v)?;
+            }
+            set(row, key, v)?;
+        }
+    }
+    set(&mut value, "records", Json::Arr(rows))?;
+    let mut conflicts = value
+        .get("conflictCopies")
+        .and_then(Json::as_arr)
+        .ok_or_else(|| CoreError::new("STATE_CORRUPT", "conflictCopies 必须是数组"))?
+        .to_vec();
+    for copy in &mut conflicts {
+        let mut v = copy
+            .get("snapshot")
+            .cloned()
+            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "冲突副本缺少快照"))?;
+        snapshot(&mut v)?;
+        set(copy, "snapshot", v)?;
+    }
+    set(&mut value, "conflictCopies", Json::Arr(conflicts))?;
+    set(
+        &mut value,
+        "settings",
+        crate::settings::Settings::default().to_json(),
+    )?;
+    set(&mut value, "schemaVersion", Json::Num(4))?;
     Ok(value)
 }

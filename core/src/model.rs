@@ -109,12 +109,68 @@ impl PhotoUse {
 }
 
 /// 一次可提交的内容快照（标题/正文/事件日期/可选时刻/照片引用）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mood {
+    Happy,
+    Calm,
+    Moved,
+    Missing,
+    Tired,
+    Sad,
+}
+impl Mood {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Happy => "开心",
+            Self::Calm => "平静",
+            Self::Moved => "感动",
+            Self::Missing => "想念",
+            Self::Tired => "疲惫",
+            Self::Sad => "难过",
+        }
+    }
+    pub fn parse(value: &str) -> Result<Self, CoreError> {
+        match value {
+            "开心" => Ok(Self::Happy),
+            "平静" => Ok(Self::Calm),
+            "感动" => Ok(Self::Moved),
+            "想念" => Ok(Self::Missing),
+            "疲惫" => Ok(Self::Tired),
+            "难过" => Ok(Self::Sad),
+            _ => Err(CoreError::new("MOOD_INVALID", "请选择列表中的心情，或留空")),
+        }
+    }
+}
+
+/// Scalar content changes. None = unchanged; Some(None) clears an optional field.
+#[derive(Clone, Debug, Default)]
+pub struct DraftPatch {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub event_date: Option<String>,
+    pub event_time: Option<Option<String>>,
+    pub location: Option<String>,
+    pub mood: Option<Option<Mood>>,
+}
+
+pub const MAX_LOCATION_CHARS: usize = 200;
+pub fn validate_location(value: &str) -> Result<(), CoreError> {
+    if value.chars().count() > MAX_LOCATION_CHARS {
+        return Err(CoreError::new("LOCATION_TOO_LONG", "地点最多 200 个字符"));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
     pub title: String,
     pub body: String,
     pub event_date: String,
     pub event_time: Option<String>,
+    pub location: String,
+    pub mood: Option<Mood>,
+    pub cover_photo_use_id: Option<String>,
+    /// The array is the sole authoritative photo order; no second ordering list.
     pub photos: Vec<PhotoUse>,
 }
 
@@ -123,6 +179,20 @@ impl Snapshot {
         Json::obj(vec![
             ("title", Json::str(self.title.clone())),
             ("body", Json::str(self.body.clone())),
+            ("location", Json::str(&self.location)),
+            (
+                "mood",
+                self.mood
+                    .map(|m| Json::str(m.as_str()))
+                    .unwrap_or(Json::Null),
+            ),
+            (
+                "coverPhotoUseId",
+                self.cover_photo_use_id
+                    .as_ref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
             ("eventDate", Json::str(self.event_date.clone())),
             (
                 "eventTime",
@@ -147,13 +217,45 @@ impl Snapshot {
             Some(_) => return Err("字段 photos 必须是数组".to_string()),
             None => return Err("字段 photos 缺失".to_string()),
         };
-        Ok(Snapshot {
+        let snapshot = Snapshot {
             title: req_str(value, "title")?,
             body: req_str(value, "body")?,
             event_date: req_str(value, "eventDate")?,
             event_time: req_opt_str(value, "eventTime")?.filter(|s| !s.is_empty()),
+            location: req_str(value, "location")?,
+            mood: req_opt_str(value, "mood")?
+                .map(|s| Mood::parse(&s).map_err(|e| e.message))
+                .transpose()?,
+            cover_photo_use_id: req_opt_str(value, "coverPhotoUseId")?,
             photos,
-        })
+        };
+        snapshot.validate_details().map_err(|e| e.message)?;
+        Ok(snapshot)
+    }
+
+    pub fn cover(&self) -> Option<&PhotoUse> {
+        self.cover_photo_use_id
+            .as_ref()
+            .and_then(|id| self.photos.iter().find(|p| &p.photo_use_id == id))
+    }
+    pub fn validate_details(&self) -> Result<(), CoreError> {
+        validate_location(&self.location)?;
+        if (self.photos.is_empty() && self.cover_photo_use_id.is_some())
+            || (!self.photos.is_empty() && self.cover().is_none())
+        {
+            return Err(CoreError::new(
+                "COVER_PHOTO_INVALID",
+                "封面必须是当前记录中的照片",
+            ));
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        if self.photos.iter().any(|p| !ids.insert(&p.photo_use_id)) {
+            return Err(CoreError::new(
+                "PHOTO_ORDER_INVALID",
+                "照片顺序不能有重复或缺失",
+            ));
+        }
+        Ok(())
     }
 
     /// 规范化哈希：用于验收中“重启前后内容一致”的比对。
@@ -163,6 +265,7 @@ impl Snapshot {
 
     /// 提交规则：eventDate 必填且合法；正文非空 或 至少 1 张照片；仅标题拒绝。
     pub fn validate_for_commit(&self) -> Result<(), CoreError> {
+        self.validate_details()?;
         let date = self.event_date.trim();
         if date.is_empty() {
             return Err(CoreError::new(

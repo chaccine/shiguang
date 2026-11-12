@@ -337,6 +337,8 @@ fn dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts() {
         .clone();
     let mut snap = snap;
     set(&mut snap, "photos", Json::Arr(vec![]));
+    // v4: this synthetic no-photo snapshot must also clear its cover reference.
+    set(&mut snap, "coverPhotoUseId", Json::Null);
     set(&mut v, "seq", Json::Num(100));
     set(
         &mut v,

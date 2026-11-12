@@ -27,6 +27,8 @@ pub struct TimelineItem {
     pub title: String,
     pub excerpt: String,
     pub cover: Option<PhotoUse>,
+    pub location: String,
+    pub mood: Option<crate::Mood>,
     pub photo_count: usize,
     pub favorite: bool,
     pub favorite_revision: u32,
@@ -78,6 +80,13 @@ impl TimelineItem {
                     .unwrap_or(Json::Null),
             ),
             ("photoCount", Json::Num(self.photo_count as i64)),
+            ("location", Json::str(&self.location)),
+            (
+                "mood",
+                self.mood
+                    .map(|m| Json::str(m.as_str()))
+                    .unwrap_or(Json::Null),
+            ),
             ("favorite", Json::Bool(self.favorite)),
             ("favoriteRevision", Json::Num(self.favorite_revision as i64)),
             (
@@ -205,7 +214,9 @@ fn item(r: &RecordRow, today: &str) -> TimelineItem {
             .take(80)
             .filter(|c| !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
             .collect(),
-        cover: s.photos.first().cloned(),
+        cover: s.cover().cloned(),
+        location: s.location.clone(),
+        mood: s.mood,
         photo_count: s.photos.len(),
         favorite: r.favorite,
         favorite_revision: r.favorite_revision,

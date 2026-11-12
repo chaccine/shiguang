@@ -32,6 +32,7 @@ try {
   await run(desktop, async (page, shot) => {
     await page.goto(`${base}?demo=1`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("export-backup").waitFor();
     await shot("01-data-page-not-implemented.png", true);
@@ -39,11 +40,13 @@ try {
     await page.getByTestId("export-result").waitFor({ state: "visible" });
     await shot("02-export-success.png", true);
     // 导出后新建一条草稿，恢复后应消失。
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("new-draft").click();
     await page.getByTestId("editor-body").fill("这条合成草稿写在备份之后，覆盖恢复后会被替换。");
     await page.getByTestId("editor-date").fill("2026-11-10");
     await page.waitForTimeout(1200);
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("data-tab").click();
     await page.getByTestId("pick-backup").click();
     await page.getByTestId("picked-backup").waitFor({ state: "visible" });

@@ -14,6 +14,13 @@ export interface TauriApi extends ShiguangApi {
 
 export function createTauriApi(invoke: InvokeFn): TauriApi {
   return {
+    storageStats: () => invoke("storage_stats"),
+    getSettings: () => invoke("get_settings"),
+    setTheme: (theme) => invoke("set_theme", { theme }),
+    setAppLock: (passcode) => invoke("set_app_lock", { passcode }),
+    verifyAppLock: (passcode) => invoke("verify_app_lock", { passcode }),
+    changeAppLock: (currentPasscode, newPasscode) => invoke("change_app_lock", { currentPasscode, newPasscode }),
+    disableAppLock: (currentPasscode) => invoke("disable_app_lock", { currentPasscode }),
     // 原样传递结构化错误及 durability，不把启动/迁移失败转为成功。
     trashRecord: (recordId) => invoke("trash_record", { recordId }),
     restoreRecord: (recordId) => invoke("restore_record", { recordId }),
@@ -28,11 +35,15 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     storeStatus: () => invoke("store_status"),
     createDraft: (input) => invoke("create_draft", { input }),
     saveDraft: (input) => invoke("save_draft", {
-      input: { ...input, clearEventTime: input.clearEventTime || input.eventTime === null },
+      input: { ...input, clearEventTime: input.clearEventTime || input.eventTime === null,
+        ...(input.mood !== undefined || input.clearMood ? { clearMood: input.clearMood || input.mood === null } : {}) },
     }),
     attachPhoto: (input) => invoke("attach_photo", { input }),
     attachPhotoBytes: (input) => invoke("attach_photo_bytes", { input: { ...input, bytes: Array.from(input.bytes) } }),
     removeDraftPhoto: (recordId, photoUseId) => invoke("remove_draft_photo", { recordId, photoUseId }),
+    setDraftPhotoCaption: (recordId, photoUseId, caption) => invoke("set_draft_photo_caption", { recordId, photoUseId, caption }),
+    setDraftCover: (recordId, photoUseId) => invoke("set_draft_cover", { recordId, photoUseId }),
+    reorderDraftPhotos: (recordId, photoUseIds) => invoke("reorder_draft_photos", { recordId, photoUseIds }),
     discardDraft: (recordId) => invoke("discard_draft", { recordId }),
     commitRecord: (recordId, expectedBaseRevision) => invoke("commit_record", { recordId, expectedBaseRevision }),
     listDrafts: () => invoke("list_drafts"),

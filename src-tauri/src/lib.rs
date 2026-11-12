@@ -15,6 +15,7 @@ use tauri::Manager;
 #[cfg(target_os = "android")]
 mod android_thumb;
 mod backup_cmd;
+mod u010_cmd;
 mod u07_cmd;
 
 /// 进程级共享状态：在注册命令前就交给 Tauri 管理（热修复：不再只在 setup 里 manage）。
@@ -58,6 +59,8 @@ pub struct CreateDraftInput {
     pub body: String,
     pub event_date: String,
     pub event_time: Option<String>,
+    pub location: String,
+    pub mood: Option<String>,
     pub base_record_id: Option<String>,
 }
 
@@ -68,6 +71,8 @@ impl Default for CreateDraftInput {
             body: String::new(),
             event_date: String::new(),
             event_time: None,
+            location: String::new(),
+            mood: None,
             base_record_id: None,
         }
     }
@@ -82,6 +87,9 @@ pub struct SaveDraftInput {
     pub event_date: Option<String>,
     pub event_time: Option<String>,
     pub clear_event_time: bool,
+    pub location: Option<String>,
+    pub mood: Option<String>,
+    pub clear_mood: bool,
 }
 
 impl Default for SaveDraftInput {
@@ -93,6 +101,9 @@ impl Default for SaveDraftInput {
             event_date: None,
             event_time: None,
             clear_event_time: false,
+            location: None,
+            mood: None,
+            clear_mood: false,
         }
     }
 }
@@ -396,12 +407,22 @@ fn create_draft(
     let mut slot = state.store.wait_lock()?;
     let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     let row = store
-        .create_draft(
+        .create_draft_with_fields(
             input.base_record_id.as_deref(),
-            &input.title,
-            &input.body,
-            &input.event_date,
-            input.event_time.as_deref(),
+            &shiguang_core::DraftPatch {
+                title: Some(input.title),
+                body: Some(input.body),
+                event_date: Some(input.event_date),
+                event_time: Some(input.event_time),
+                location: Some(input.location),
+                mood: Some(
+                    input
+                        .mood
+                        .as_deref()
+                        .map(shiguang_core::Mood::parse)
+                        .transpose()?,
+                ),
+            },
         )
         .map_err(CommandError::from)?;
     save_value(Some(&row), store)
@@ -417,15 +438,28 @@ fn save_draft(
     let time_patch = if input.clear_event_time {
         Some(None)
     } else {
-        input.event_time.as_deref().map(Some)
+        input.event_time.map(Some)
     };
     let row = store
-        .save_draft(
+        .save_draft_patch(
             &input.record_id,
-            input.title.as_deref(),
-            input.body.as_deref(),
-            input.event_date.as_deref(),
-            time_patch,
+            &shiguang_core::DraftPatch {
+                title: input.title,
+                body: input.body,
+                event_date: input.event_date,
+                event_time: time_patch,
+                location: input.location,
+                mood: if input.clear_mood {
+                    Some(None)
+                } else {
+                    input
+                        .mood
+                        .as_deref()
+                        .map(shiguang_core::Mood::parse)
+                        .transpose()?
+                        .map(Some)
+                },
+            },
         )
         .map_err(CommandError::from)?;
     save_value(Some(&row), store)
@@ -483,6 +517,41 @@ fn remove_draft_photo(
     let row = store
         .remove_draft_photo(&record_id, &photo_use_id)
         .map_err(CommandError::from)?;
+    save_value(Some(&row), store)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn set_draft_photo_caption(
+    record_id: String,
+    photo_use_id: String,
+    caption: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state.store.wait_lock()?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store.set_draft_photo_caption(&record_id, &photo_use_id, &caption)?;
+    save_value(Some(&row), store)
+}
+#[tauri::command(rename_all = "camelCase")]
+fn set_draft_cover(
+    record_id: String,
+    photo_use_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state.store.wait_lock()?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store.set_draft_cover(&record_id, &photo_use_id)?;
+    save_value(Some(&row), store)
+}
+#[tauri::command(rename_all = "camelCase")]
+fn reorder_draft_photos(
+    record_id: String,
+    photo_use_ids: Vec<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    let mut slot = state.store.wait_lock()?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let row = store.reorder_draft_photos(&record_id, &photo_use_ids)?;
     save_value(Some(&row), store)
 }
 
@@ -747,6 +816,9 @@ pub fn run() {
             attach_photo,
             attach_photo_bytes,
             remove_draft_photo,
+            set_draft_photo_caption,
+            set_draft_cover,
+            reorder_draft_photos,
             discard_draft,
             list_drafts,
             photo_data_url,
@@ -766,6 +838,13 @@ pub fn run() {
             media_report,
             photo_status,
             store_status,
+            u010_cmd::get_settings,
+            u010_cmd::storage_stats,
+            u010_cmd::set_theme,
+            u010_cmd::set_app_lock,
+            u010_cmd::verify_app_lock,
+            u010_cmd::change_app_lock,
+            u010_cmd::disable_app_lock,
             backup_cmd::backup_capabilities,
             backup_cmd::export_backup,
             backup_cmd::pick_backup,

@@ -1,19 +1,19 @@
 /**
- * 0.1.8 主导航：五个一级页签永远可见，与数据状态（有无记录/草稿）无关。
+ * 0.1.10 主导航：五个一级页签永远可见，与数据状态（有无记录/草稿）无关。
  * 纯函数，便于测试；UI 只负责渲染。
  */
-export type MainTab = "timeline" | "calendar" | "drafts" | "collect" | "settings";
+export type MainTab = "timeline" | "calendar" | "create" | "museum" | "mine";
 /** 一级页签之外的二级视图：编辑器、回收站（从设置进入）。 */
-export type View = MainTab | "editor" | "trash";
+export type View = MainTab | "drafts" | "collect" | "settings" | "editor" | "trash" | "reading" | "storage" | "appearance" | "privacy";
 
 export interface NavTab { id: MainTab; label: string; testId: string }
 
 export const NAV_TABS: readonly NavTab[] = Object.freeze([
   { id: "timeline", label: "时光轴", testId: "timeline-tab" },
   { id: "calendar", label: "日历", testId: "calendar-tab" },
-  { id: "drafts", label: "草稿", testId: "drafts-tab" },
-  { id: "collect", label: "标签·收藏", testId: "collect-tab" },
-  { id: "settings", label: "设置", testId: "data-tab" },
+  { id: "create", label: "＋记录", testId: "create-tab" },
+  { id: "museum", label: "博物馆", testId: "museum-tab" },
+  { id: "mine", label: "我的", testId: "mine-tab" },
 ]);
 
 export const DEFAULT_TAB: MainTab = "timeline";
@@ -24,7 +24,7 @@ export function isMainTab(value: unknown): value is MainTab {
 }
 
 /** 旧的 ?view= 取值（0.1.7 及以前）映射到新页签。 */
-const LEGACY: Record<string, MainTab> = { data: "settings", backup: "settings", tags: "collect", favorites: "collect" };
+const LEGACY: Record<string, View> = { data: "settings", backup: "settings", tags: "collect", favorites: "collect" };
 
 export interface InitialViewInput {
   /** URL ?view= 参数（预览/截图脚本用）。 */
@@ -33,11 +33,12 @@ export interface InitialViewInput {
   lastTab?: string | null;
 }
 
-/** 启动时的页签：显式参数 > 上次页签 > 时光轴。永远不因“没有记录/没有草稿”而落到别的页。 */
-export function initialTab(input: InitialViewInput = {}): MainTab {
-  for (const raw of [input.param, input.lastTab]) {
+/** 启动时的页签：显式预览参数 > 时光轴；上次页签不影响正常启动。永远不因“没有记录/没有草稿”而落到别的页。 */
+export function initialTab(input: InitialViewInput = {}): View {
+  for (const raw of [input.param]) {
     if (raw == null) continue;
-    if (isMainTab(raw)) return raw;
+    if (isMainTab(raw) && raw !== "create") return raw;
+    if (["drafts", "collect", "settings"].includes(raw)) return raw as View;
     const legacy = LEGACY[raw];
     if (legacy !== undefined) return legacy;
   }
@@ -46,14 +47,15 @@ export function initialTab(input: InitialViewInput = {}): MainTab {
 
 /** 某个视图属于哪个一级页签（用于高亮）。 */
 export function tabOf(view: View): MainTab {
-  if (view === "editor") return "drafts";
-  if (view === "trash") return "settings";
+  if (view === "editor") return "create";
+  if (view === "reading") return "timeline";
+  if (!isMainTab(view)) return "mine";
   return view;
 }
 
 /** 只有一级页签才记为“上次页签”；编辑器/回收站不记，避免下次启动直接进二级页。 */
 export function rememberableTab(view: View): MainTab | null {
-  return isMainTab(view) ? view : null;
+  return isMainTab(view) && view !== "create" ? view : null;
 }
 
 export interface DataState { formalCount: number; draftCount: number }

@@ -5,6 +5,19 @@ export interface ErrorDescription {
 }
 
 const validation: Record<string, string> = {
+  LOCATION_TOO_LONG: "地点最多 200 个字符，当前输入仍保留。",
+  MOOD_INVALID: "请选择列表中的心情，或留空。",
+  COVER_PHOTO_INVALID: "封面必须是当前记录中的照片，请重新选择。",
+  PHOTO_ORDER_INVALID: "请提供所有照片的顺序，不能重复或遗漏。",
+  THEME_INVALID: "主题必须为 light、dark 或 system。",
+  APP_LOCK_CODE_INVALID: "应用锁密码须为 4–8 位数字。",
+  APP_LOCK_WRONG: "应用锁密码不正确，请重试。",
+  APP_LOCK_THROTTLED: "尝试次数过多，请等待后再试。关闭和重新打开应用不会清除等待。",
+  APP_LOCK_ALREADY_SET: "应用锁已启用，更改密码需要当前密码。",
+  APP_LOCK_NOT_SET: "应用锁尚未启用。",
+  APP_LOCK_CHANGED: "应用锁状态已改变，请重新尝试。",
+  APP_LOCK_CRYPTO_FAILED: "应用锁操作未完成，请重试。",
+  APP_LOCK_INTERNAL: "应用锁或设置操作未完成，请重试。",
   EMPTY_CONTENT: "写下一点正文，或附上一张照片后，就可以存入时光。仅填写标题还不够。",
   MISSING_EVENT_DATE: "请填写这段回忆发生的日期。时刻可以留空。",
   INVALID_EVENT_DATE: "请填写真实的日期，格式为 YYYY-MM-DD。当前输入仍保留在本地编辑区。",

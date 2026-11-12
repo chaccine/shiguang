@@ -9,16 +9,16 @@ test("默认打开时光轴（无参数、无上次页签）", () => {
   assert.equal(initialTab({ param: null, lastTab: null }), "timeline");
 });
 
-test("显式参数优先，其次上次页签；非法值回落时光轴", () => {
+test("显式预览参数优先；每次正常启动默认时光轴", () => {
   assert.equal(initialTab({ param: "calendar", lastTab: "drafts" }), "calendar");
-  assert.equal(initialTab({ lastTab: "collect" }), "collect");
+  assert.equal(initialTab({ lastTab: "collect" }), "timeline");
   assert.equal(initialTab({ param: "editor", lastTab: "trash" }), "timeline");
   assert.equal(initialTab({ param: "garbage" }), "timeline");
   assert.equal(initialTab({ param: "data" }), "settings");
 });
 
-test("五个一级页签：时光轴 / 日历 / 草稿 / 标签·收藏 / 设置", () => {
-  assert.deepEqual(NAV_TABS.map((t) => t.label), ["时光轴", "日历", "草稿", "标签·收藏", "设置"]);
+test("五个一级页签：时光轴 / 日历 / ＋记录 / 博物馆 / 我的", () => {
+  assert.deepEqual(NAV_TABS.map((t) => t.label), ["时光轴", "日历", "＋记录", "博物馆", "我的"]);
   assert.equal(new Set(NAV_TABS.map((t) => t.testId)).size, 5);
 });
 
@@ -30,8 +30,8 @@ test("零记录零草稿时，每个视图都显示全部五个页签（无死�
 });
 
 test("二级视图高亮所属页签，且不记为上次页签", () => {
-  assert.equal(tabOf("editor"), "drafts");
-  assert.equal(tabOf("trash"), "settings");
+  assert.equal(tabOf("editor"), "create");
+  assert.equal(tabOf("trash"), "mine");
   assert.equal(rememberableTab("editor"), null);
   assert.equal(rememberableTab("trash"), null);
   assert.equal(rememberableTab("calendar"), "calendar");

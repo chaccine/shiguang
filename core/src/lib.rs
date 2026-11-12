@@ -6,7 +6,9 @@
 //! - 原图 asset 不可变、无删除接口；预览是派生缓存，可删除并重建。
 //! - photoUse 与 asset 分离：同一原图可被多次引用，各自拥有 caption。
 
+pub mod app_lock;
 pub mod backup;
+pub use app_lock::{AppLockStatus, AppSettings, SettingsOutcome};
 pub mod base64;
 #[cfg(feature = "fault-injection")]
 pub mod fault;
@@ -22,7 +24,9 @@ pub mod sha256;
 pub mod store;
 pub mod time;
 
-pub use model::{CoreError, PhotoUse, Snapshot};
+pub use model::{CoreError, DraftPatch, Mood, PhotoUse, Snapshot};
+pub mod settings;
+pub use settings::{Settings, ThemePreference};
 pub use store::{CommitOutcome, Store, StoreConfig};
 
 pub mod error_codes;
@@ -48,3 +52,5 @@ pub mod query;
 pub use query::{
     CalendarDay, OnThisDayYear, Order, TimelineFilter, TimelineItem, TimelineMonth, TimelinePage,
 };
+
+pub mod storage;

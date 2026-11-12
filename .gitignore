@@ -4,3 +4,9 @@ node_modules
 dist
 .shiguang-data
 *.log
+evidence/**/.stage*/
+
+# Synthetic Unit-0.10 Task B validation evidence.
+!evidence/unit-0.10/task-b-*.log
+!evidence/unit-0.10/task-c-*.log
+!evidence/unit-0.10/task-d-*.log

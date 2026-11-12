@@ -34,6 +34,7 @@ try {
   await run({ width: 1280, height: 860 }, async (page, shot) => {
     await page.goto(`${base}?demo=1`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("draft-item").first().waitFor();
     await page.getByTestId("timeline-tab").click();
@@ -89,6 +90,7 @@ try {
   await run({ width: 390, height: 844 }, async (page, shot) => {
     await page.goto(`${base}?demo=1`);
     await page.waitForFunction(() => document.body.dataset.appReady === "1");
+    await page.getByTestId("mine-tab").click();
     await page.getByTestId("drafts-tab").click();
     await page.getByTestId("draft-item").first().waitFor();
     await page.getByTestId("timeline-tab").click();

@@ -3,7 +3,10 @@ import * as tl from "../domain/timeline.ts";
 import * as tg from "../domain/tags.ts";
 import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus, BackupCapabilities, BackupCounts, BackupSummary, ExportBackupOptions, ExportBackupResult, MergeCounts, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
-import { isValidDate, isValidTime, validateForCommit } from "../domain/rules.ts";
+import { isValidDate, isValidTime, validateForCommit, validateSnapshotDetails } from "../domain/rules.ts";
+import type { ThemePreference, AppSettings, SettingsResult } from "../domain/types.ts";
+import { backoffMs, newPreviewLock, validPreviewLock, verifyPreviewLock } from "./preview-lock.ts";
+import type { PreviewLock } from "./preview-lock.ts";
 import type { AttachPhotoBytesInput, CreateDraftInput, DiscardResult, SaveDraftInput, SaveResult, ShiguangApi } from "./api.ts";
 import { base64, sha256, sniffMediaType } from "./bytes.ts";
 
@@ -11,7 +14,8 @@ export interface StorageLike { getItem(key: string): string | null; setItem(key:
 interface MemoryAsset { dataUrl: string; sha256: string; bytes: number }
 interface MemoryState {
   version: 1;
-  schemaVersion: 3;
+  schemaVersion: 4;
+  settings: { theme: ThemePreference; appLock: PreviewLock | null };
   seq: number;
   records: RecordRow[];
   assets: Record<string, MemoryAsset>;
@@ -20,7 +24,7 @@ interface MemoryState {
   quarantine: Record<string, MemoryAsset>;
   /** Unit-0.6：被永久删除记录的 createdAt（与删除标记分开存放，供跨备份防复活匹配；不含正文）。 */
   deletedCreatedAt?: Record<string, string>;
-  /** Unit-0.6：合并时撞号改号的来源映射（"来源id\u0000createdAt" → 本机id），保证重复导入幂等。 */
+  /** 合并来源映射：记录用 "来源id\u0000createdAt"，照片使用 JSON 元组；改号后仍保留身份。 */
   mergeOrigins?: Record<string, string>;
   /** Unit-0.7（schema v3）：标签字典、合并别名、删除墓碑。 */
   tags: TagDef[];
@@ -29,13 +33,23 @@ interface MemoryState {
   tagTombstones: TagTombstone[];
 }
 
-/** v2 → v3：每条记录补珍藏/标签字段，顶层补标签字典（与 Rust migrate_v2_to_v3 同语义）。 */
-export function migrateToV3(state: Omit<MemoryState, "schemaVersion" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<MemoryState> & { schemaVersion?: number }): MemoryState {
-  for (const row of state.records) {
-    row.favorite ??= false; row.favoriteRevision ??= 0; row.tagIds ??= []; row.tagRevision ??= 0;
+/** 旧预览状态 → v4：保留 v3 元数据、说明和照片顺序，补快照字段及默认设置。 */
+export function migrateToV4(state: Omit<MemoryState, "schemaVersion" | "settings" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<Omit<MemoryState, "schemaVersion">> & { schemaVersion?: number }): MemoryState {
+  const version = state.schemaVersion ?? 1;
+  if (version > 4) fail("SCHEMA_TOO_NEW", "数据来自更新版本，请升级拾光");
+  if (version < 3) {
+    for (const row of state.records) {
+      row.favorite ??= false; row.favoriteRevision ??= 0; row.tagIds ??= []; row.tagRevision ??= 0;
+    }
+    state.tags ??= []; state.tagDictRevision ??= 0; state.tagAliases ??= []; state.tagTombstones ??= [];
   }
-  state.tags ??= []; state.tagDictRevision ??= 0; state.tagAliases ??= []; state.tagTombstones ??= [];
-  state.schemaVersion = 3;
+  if (version < 4) {
+    for (const snap of state.records.flatMap((r) => [r.formal, r.draft]).concat(state.conflictCopies.map((c) => c.snapshot))) {
+      if (snap) { snap.location = ""; snap.mood = null; snap.coverPhotoUseId = snap.photos[0]?.photoUseId ?? null; }
+    }
+    state.settings = { theme: "system", appLock: null };
+  }
+  state.schemaVersion = 4;
   return state as MemoryState;
 }
 type Operation = keyof ShiguangApi;
@@ -45,13 +59,14 @@ export type PreviewPickKind = "lastExport" | "corrupt" | "truncated" | "schemaTo
 const encoder = new TextEncoder();
 const copy = <T>(value: T): T => structuredClone(value);
 const fail = (code: string, message = code): never => { throw { code, message }; };
-const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, photos: [] });
+const blank = (): Snapshot => ({ title: "", body: "", eventDate: "", eventTime: null, location: "", mood: null, coverPhotoUseId: null, photos: [] });
 const normalizeTime = (value: string | null | undefined) => value?.trim() || null;
+const settingsQueues = new WeakMap<object,Map<string,Promise<void>>>();
 
 /** 仅供浏览器合成数据预览；storage 由调用方注入。 */
 export class MemoryAdapter implements ShiguangApi {
   durabilityMode: Durability = "durable";
-  private state: MemoryState = { version: 1, schemaVersion: 3, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
+  private state: MemoryState = { version: 1, schemaVersion: 4, settings: { theme: "system", appLock: null }, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
     tags: [], tagDictRevision: 0, tagAliases: [], tagTombstones: [] };
   private failures = new Map<Operation, string>();
   private pendingConflicts = new Map<string, { snapshot: Snapshot; baseRevision: number }>();
@@ -67,12 +82,14 @@ export class MemoryAdapter implements ShiguangApi {
   private nextPick: PreviewPickKind = "lastExport";
   private key: string;
   private now: () => string;
+  private lockNowMs: () => number;
 
   constructor(options: { storage?: StorageLike; storageKey?: string; now?: () => string;
-    search?: string; missingAssets?: readonly string[]; corruptAssets?: readonly string[] } = {}) {
+    lockNowMs?: () => number; search?: string; missingAssets?: readonly string[]; corruptAssets?: readonly string[] } = {}) {
     this.storage = options.storage;
     this.key = options.storageKey ?? "shiguang.synthetic.unit02";
     this.now = options.now ?? (() => new Date().toISOString());
+    this.lockNowMs = options.lockNowMs ?? Date.now;
     const params = new URLSearchParams(options.search ?? (typeof window === "undefined" ? "" : window.location.search));
     const code = params.get("fail") === "locked" ? "STORE_LOCKED" : params.get("fail") === "schema" ? "SCHEMA_TOO_NEW" : null;
     if (code) this.startupError = { code, message: describeError({ code }).detail };
@@ -98,7 +115,7 @@ export class MemoryAdapter implements ShiguangApi {
     try {
       const state = JSON.parse(raw) as MemoryState;
       if (state.schemaVersion !== undefined && (!Number.isInteger(state.schemaVersion) || state.schemaVersion < 1)) throw new Error("结构版本无效");
-      if (state.schemaVersion > 3) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
+      if (state.schemaVersion > 4) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
       if (state.version !== 1 || !Number.isSafeInteger(state.seq) || state.seq < 0
         || !Array.isArray(state.records) || !state.assets || typeof state.assets !== "object" || Array.isArray(state.assets)) throw new Error("状态结构无效");
       const legacy = state.schemaVersion === undefined || Number(state.schemaVersion) === 1;
@@ -106,7 +123,7 @@ export class MemoryAdapter implements ShiguangApi {
         state.deletionMarkers = []; state.conflictCopies = [];
         for (const row of state.records) { row.status = "active"; row.trashedAt = null; }
       }
-      migrateToV3(state);
+      migrateToV4(state);
       state.quarantine ??= {};
       if (state.deletedCreatedAt !== undefined && (typeof state.deletedCreatedAt !== "object" || state.deletedCreatedAt === null || Array.isArray(state.deletedCreatedAt))) throw new Error("删除记录信息无效");
       if (!Array.isArray(state.deletionMarkers) || !Array.isArray(state.conflictCopies)
@@ -144,16 +161,19 @@ export class MemoryAdapter implements ShiguangApi {
           if (![p.photoUseId, p.assetId, p.caption, p.mediaType].every((v) => typeof v === "string")
             || !/^[a-f0-9]{64}$/.test(p.sha256) || !Number.isSafeInteger(p.bytes) || p.bytes < 0) throw new Error("照片结构无效");
         }
+        if (validateSnapshotDetails(snap)) throw new Error("快照扩展字段无效");
       }
       for (const asset of [...Object.values(state.assets), ...Object.values(state.quarantine)]) {
         if (!asset || typeof asset.dataUrl !== "string" || !/^[a-f0-9]{64}$/.test(asset.sha256)
           || !Number.isSafeInteger(asset.bytes) || asset.bytes < 0) throw new Error("原图结构无效");
       }
       tg.validateTagState(state);
+      if (!state.settings || !["light", "dark", "system"].includes(state.settings.theme)
+        || (state.settings.appLock !== null && !validPreviewLock(state.settings.appLock))) throw new Error("偏好状态无效");
       return state;
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "SCHEMA_TOO_NEW") throw error;
-      return fail("STATE_CORRUPT", `预览状态无法读取：${String(error)}`);
+      return fail("STATE_CORRUPT", "预览状态无法读取，请保留原数据以便检查");
     }
   }
   private persist(next: MemoryState): void {
@@ -180,6 +200,70 @@ export class MemoryAdapter implements ShiguangApi {
   }
   private result(row: RecordRow): SaveResult { return { row: copy(row), durability: this.durabilityMode }; }
   private id(state: MemoryState, prefix: string): string { return `${prefix}-${String(++state.seq).padStart(6, "0")}`; }
+
+  private settingsView(settings: MemoryState["settings"]): AppSettings {
+    const lock=settings.appLock;
+    return {theme:settings.theme,appLock:{enabled:lock!==null,failedAttempts:lock?.failures??0,retryAfterMs:Math.max(0,(lock?.blockedUntilMs??0)-this.lockNowMs())}};
+  }
+  private settingsQueue<T>(op:()=>Promise<T>):Promise<T> {
+    const owner=this.storage??this;
+    let queues=settingsQueues.get(owner);if(!queues){queues=new Map();settingsQueues.set(owner,queues);}
+    const previous=queues.get(this.key)??Promise.resolve(),result=previous.then(op);
+    queues.set(this.key,result.then(()=>{},()=>{}));return result;
+  }
+  private persistSettings(next:MemoryState):SettingsResult {
+    try {this.persist(next);}catch{return fail("PERSIST_REPLACE_FAILED","应用锁或设置写入失败，请重试");}
+    return {settings:this.settingsView(next.settings),durability:this.durabilityMode};
+  }
+  async storageStats(): Promise<import("../domain/types.ts").StorageStats> {
+    this.check("storageStats");
+    return {media: 2048000, previews: 128000, backups: 4096000, data: 16000, other: 0,
+      total: 6288000, available: null, skippedSymlinks: 0};
+  }
+  async getSettings():Promise<AppSettings> {this.check("getSettings");return this.settingsView(this.reload().settings);}
+  async setTheme(theme:ThemePreference):Promise<SettingsResult> {
+    this.check("setTheme");
+    return this.settingsQueue(async()=>{
+      if(!["light","dark","system"].includes(theme))return fail("THEME_INVALID","主题必须为 light、dark 或 system");
+      const next=this.reload();next.settings.theme=theme;return this.persistSettings(next);
+    });
+  }
+  async setAppLock(passcode:string):Promise<SettingsResult> {
+    this.check("setAppLock");
+    return this.settingsQueue(async()=>{
+      if(this.reload().settings.appLock!==null)return fail("APP_LOCK_ALREADY_SET","应用锁已启用，更改密码需要当前密码");
+      const lock=await newPreviewLock(passcode),next=this.reload();
+      if(next.settings.appLock!==null)return fail("APP_LOCK_ALREADY_SET","应用锁已启用，更改密码需要当前密码");
+      next.settings.appLock=lock;return this.persistSettings(next);
+    });
+  }
+  private authLock(action:"verify"|"change"|"disable",current:string,newPasscode?:string):Promise<SettingsResult> {
+    return this.settingsQueue(async()=>{
+      const before=this.reload().settings.appLock??fail("APP_LOCK_NOT_SET","应用锁尚未启用");
+      if(this.lockNowMs()<before.blockedUntilMs)return fail("APP_LOCK_THROTTLED","尝试次数过多，请等待后再试");
+      const matches=await verifyPreviewLock(current,before);
+      // Crypto yields to the event loop: reload content so concurrent draft saves
+      // cannot be replaced by an older snapshot. Credential CAS fails closed.
+      const next=this.reload(),lock=next.settings.appLock;
+      if(JSON.stringify(lock)!==JSON.stringify(before))return fail("APP_LOCK_CHANGED","应用锁状态已改变，请重试");
+      if(!matches){
+        lock!.failures=Math.min(0xffffffff,lock!.failures+1);const delay=backoffMs(lock!.failures);
+        lock!.blockedUntilMs=delay ? this.lockNowMs()+delay : 0;this.persistSettings(next);
+        return fail("APP_LOCK_WRONG","应用锁密码不正确");
+      }
+      if(action==="change"){
+        const replacement=await newPreviewLock(newPasscode!);
+        const fresh=this.reload();if(JSON.stringify(fresh.settings.appLock)!==JSON.stringify(before))return fail("APP_LOCK_CHANGED","应用锁状态已改变，请重试");
+        fresh.settings.appLock=replacement;return this.persistSettings(fresh);
+      }
+      if(action==="disable")next.settings.appLock=null;
+      else {lock!.failures=0;lock!.blockedUntilMs=0;}
+      return this.persistSettings(next);
+    });
+  }
+  async verifyAppLock(passcode:string):Promise<SettingsResult>{this.check("verifyAppLock");return this.authLock("verify",passcode);}
+  async changeAppLock(currentPasscode:string,newPasscode:string):Promise<SettingsResult>{this.check("changeAppLock");return this.authLock("change",currentPasscode,newPasscode);}
+  async disableAppLock(currentPasscode:string):Promise<SettingsResult>{this.check("disableAppLock");return this.authLock("disable",currentPasscode);}
 
   async storeStatus(): Promise<StoreStatus> {
     if (this.startupError) return { ok: false, ...copy(this.startupError) };
@@ -347,9 +431,10 @@ export class MemoryAdapter implements ShiguangApi {
     } else {
       row = { status: "active", trashedAt: null, recordId: this.id(next, "rec"), contentRevision: 0, baseRevision: 0, createdAt: now, updatedAt: now,
         committedAt: null, formal: null, draft: { ...blank(), title: input.title ?? "", body: input.body ?? "",
-          eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime) },
+          eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime), location: input.location ?? "", mood: input.mood ?? null },
         favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0 };
       next.records.push(row);
+      const issue = validateSnapshotDetails(row.draft!); if (issue) throw issue;
     }
     this.persist(next); return this.result(row);
   }
@@ -363,6 +448,9 @@ export class MemoryAdapter implements ShiguangApi {
       if (input[field] !== undefined) draft[field] = input[field];
     }
     if (input.clearEventTime || input.eventTime !== undefined) draft.eventTime = input.clearEventTime ? null : normalizeTime(input.eventTime);
+    if (input.location !== undefined) draft.location = input.location;
+    if (input.clearMood || input.mood !== undefined) draft.mood = input.clearMood ? null : input.mood!;
+    const issue = validateSnapshotDetails(draft); if (issue) throw issue;
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
   async attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult> {
@@ -379,6 +467,7 @@ export class MemoryAdapter implements ShiguangApi {
     if (existing && existing.sha256 !== hash) fail("ASSET_CONFLICT");
     next.assets[assetId] ??= { dataUrl: `data:${mediaType};base64,${base64(bytes)}`, sha256: hash, bytes: bytes.length };
     draft.photos.push({ photoUseId: this.id(next, "pu"), assetId, caption: input.caption, sha256: hash, bytes: bytes.length, mediaType });
+    draft.coverPhotoUseId ??= draft.photos[0]!.photoUseId;
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
   async removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult> {
@@ -387,7 +476,34 @@ export class MemoryAdapter implements ShiguangApi {
     const index = row.draft?.photos.findIndex((p) => p.photoUseId === photoUseId) ?? -1;
     if (index < 0) fail("PHOTO_USE_NOT_FOUND");
     row.draft!.photos.splice(index, 1); row.updatedAt = this.now();
+    if (row.draft!.coverPhotoUseId === photoUseId) row.draft!.coverPhotoUseId = row.draft!.photos[0]?.photoUseId ?? null;
     this.persist(next); return this.result(row);
+  }
+  private editDraftPhotos(recordId: string, op: (draft: Snapshot) => void): SaveResult {
+    const next = this.reload(), row = this.active(this.row(next, recordId)), draft = this.draft(row);
+    op(draft);
+    const issue = validateSnapshotDetails(draft); if (issue) throw issue;
+    row.updatedAt = this.now(); this.persist(next); return this.result(row);
+  }
+  async setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult> {
+    this.check("setDraftPhotoCaption");
+    return this.editDraftPhotos(recordId, (draft) => {
+      if (typeof caption !== "string") fail("CAPTION_INVALID", "照片说明必须是纯文本");
+      const photo = draft.photos.find((p) => p.photoUseId === photoUseId) ?? fail("PHOTO_USE_NOT_FOUND");
+      photo.caption = caption;
+    });
+  }
+  async setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult> {
+    this.check("setDraftCover");
+    return this.editDraftPhotos(recordId, (draft) => { draft.coverPhotoUseId = photoUseId; });
+  }
+  async reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult> {
+    this.check("reorderDraftPhotos");
+    return this.editDraftPhotos(recordId, (draft) => {
+      const byId = new Map(draft.photos.map((p) => [p.photoUseId, p]));
+      if (photoUseIds.length !== byId.size || new Set(photoUseIds).size !== byId.size || photoUseIds.some((id) => !byId.has(id))) fail("PHOTO_ORDER_INVALID");
+      draft.photos = photoUseIds.map((id) => byId.get(id)!);
+    });
   }
   async discardDraft(recordId: string): Promise<DiscardResult> {
     this.check("discardDraft");
@@ -500,9 +616,9 @@ export class MemoryAdapter implements ShiguangApi {
     const referenced = new Set(this.references(state).map((r) => r.photo.assetId));
     const assets: Record<string, MemoryAsset> = {};
     for (const id of referenced) if (state.assets[id]) assets[id] = state.assets[id]!;
-    const packed = { ...copy(state), assets, quarantine: {} };
+    const packed = { ...copy(state), settings: { ...state.settings, appLock: null }, assets, quarantine: {} };
     const manifest = {
-      format: "shiguang-backup", formatVersion: 1, schemaVersion: 3, appVersion: "preview",
+      format: "shiguang-backup", formatVersion: 1, schemaVersion: 4, appVersion: "preview",
       exportedAt: this.now(), encryption: { mode: "none" }, compression: "none", counts: this.counts(state), ...overrides,
     };
     let body = JSON.stringify({ manifest, state: packed });
@@ -532,13 +648,22 @@ export class MemoryAdapter implements ShiguangApi {
     if (m.format !== "shiguang-backup") fail("BACKUP_INVALID", "这不是拾光备份文件");
     if (Number(m.formatVersion) > 1) fail("BACKUP_FORMAT_TOO_NEW", "备份格式来自更新版本的拾光");
     if (m.encryption?.mode !== "none") fail("BACKUP_ENCRYPTED_UNSUPPORTED", "未知的加密方式");
-    if (Number(m.schemaVersion) > 3) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
+    if (Number(m.schemaVersion) > 4) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
     const summary: BackupSummary = {
       formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
       exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: pkg.lock ? "argon2id-xchacha20poly1305" : "none", counts: m.counts,
     };
-    const state = migrateToV3(parsed.state);
-    try { tg.validateTagState(state); } catch (error) { fail("BACKUP_CORRUPT", `备份中的标签数据无效：${String(error)}`); }
+    let state: MemoryState;
+    try {
+      if (parsed.state.schemaVersion !== m.schemaVersion) fail("BACKUP_CORRUPT");
+      state = migrateToV4(parsed.state);
+      tg.validateTagState(state);
+      for (const snap of state.records.flatMap((r) => [r.formal, r.draft]).concat(state.conflictCopies.map((c) => c.snapshot))) {
+        if (snap && validateSnapshotDetails(snap)) fail("BACKUP_CORRUPT");
+      }
+      if (!state.settings || !["light", "dark", "system"].includes(state.settings.theme)
+        || (state.settings.appLock!==null && !validPreviewLock(state.settings.appLock))) fail("BACKUP_CORRUPT");
+    } catch { return fail("BACKUP_CORRUPT", "备份中的状态数据无效"); }
     return { summary, state };
   }
   async backupCapabilities(): Promise<BackupCapabilities> {
@@ -600,7 +725,7 @@ export class MemoryAdapter implements ShiguangApi {
     // 先留安全副本；写入失败则整体中止，当前数据不变。
     try { this.storage?.setItem(safetyKey, JSON.stringify(current)); }
     catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
-    const next: MemoryState = { ...copy(incoming), quarantine: copy(current.quarantine) };
+    const next: MemoryState = { ...copy(incoming), settings: { ...incoming.settings, appLock: current.settings.appLock }, quarantine: copy(current.quarantine) };
     this.persist(next);
     this.picked.delete(token);
     const mediaReport = await this.mediaReport();
@@ -717,10 +842,24 @@ function xorText(text: string, keyHex: string): string {
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-/** 比较快照内容时忽略 photoUseId（合并撞号时会被改号）。 */
-const sameContent = (a: Snapshot | null, b: Snapshot | null) => sameJson(
-  a && { ...a, photos: a.photos.map(({ photoUseId: _u, ...rest }) => rest) },
-  b && { ...b, photos: b.photos.map(({ photoUseId: _u, ...rest }) => rest) });
+// Compare AFTER stable ID normalization, like Rust. Dropping photoUseId here
+// would erase reorder edits when the same original occurs more than once.
+const sameContent = (a: Snapshot | null, b: Snapshot | null) => sameJson(a, b);
+
+type PhotoOrigin = ["photo", string, string, string, string, string];
+const photoOriginPrefix = '["photo",';
+function photoOrigin(key: string): PhotoOrigin | null {
+  if (!key.startsWith(photoOriginPrefix)) return null;
+  try {
+    const value: unknown = JSON.parse(key);
+    return Array.isArray(value) && value.length === 6 && value.every((v) => typeof v === "string") ? value as PhotoOrigin : null;
+  } catch { return null; }
+}
+function recordOrigin(state: MemoryState, row: RecordRow): string {
+  const suffix = "\u0000" + row.createdAt;
+  const previous = Object.entries(state.mergeOrigins ?? {}).find(([key, id]) => id === row.recordId && !key.startsWith(photoOriginPrefix) && key.endsWith(suffix));
+  return previous ? previous[0].slice(0, -suffix.length) : row.recordId;
+}
 
 /** 与 Rust core merge_states 同语义的预览实现（身份 = recordId + createdAt；时间戳不参与胜负）。 */
 export function mergeStates(local: MemoryState, incoming: MemoryState, now: string): { state: MemoryState; plan: MergePlan } {
@@ -732,28 +871,41 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   const skippedDeleted: string[] = [], deletedInBackup: string[] = [];
   const usedIds = new Set<string>([...next.records.map((r) => r.recordId), ...next.deletionMarkers.map((m) => m.recordId)]);
   const usedConflict = new Set(next.conflictCopies.map((c) => c.conflictId));
-  const usedPhotoUse = new Set<string>();
-  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) usedPhotoUse.add(p.photoUseId);
-  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) usedPhotoUse.add(p.photoUseId);
+  const usedPhotoUse = new Map<string, string>();
+  const owner = (recordId: string, photo: Snapshot["photos"][number]) => JSON.stringify([recordId, photo.assetId, photo.sha256]);
+  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) usedPhotoUse.set(p.photoUseId, owner(r.recordId, p));
+  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) usedPhotoUse.set(p.photoUseId, owner(c.recordId, p));
   const maxSeq = (ids: Iterable<string>) => Math.max(0, ...[...ids].map((id) => Number(/-(\d+)$/.exec(id)?.[1] ?? 0)));
   next.seq = Math.max(next.seq, incoming.seq);
   const alloc = (prefix: string) => `${prefix}-${String(++next.seq).padStart(6, "0")}`;
   const idMap = new Map<string, string>();
-  const remapPhotos = (snap: Snapshot): Snapshot => ({ ...snap, photos: snap.photos.map((p) => {
-    if (!usedPhotoUse.has(p.photoUseId)) { usedPhotoUse.add(p.photoUseId); return p; }
-    const id = alloc("pu"); usedPhotoUse.add(id); return { ...p, photoUseId: id };
-  }) });
+  const remapPhotos = (snap: Snapshot, sourceRecord: RecordRow, targetId: string): Snapshot => {
+    const mapping = new Map<string, string>();
+    const photos = snap.photos.map((p) => {
+      const previous = Object.entries(incoming.mergeOrigins ?? {}).find(([key, id]) => {
+        const source = photoOrigin(key);
+        return id === p.photoUseId && source?.[2] === sourceRecord.createdAt && source[4] === p.assetId && source[5] === p.sha256;
+      });
+      const source: PhotoOrigin = previous ? photoOrigin(previous[0])! : ["photo", recordOrigin(incoming, sourceRecord), sourceRecord.createdAt, p.photoUseId, p.assetId, p.sha256];
+      const key = JSON.stringify(source), wantedOwner = owner(targetId, p);
+      let id = next.mergeOrigins![key] ?? source[3];
+      if (usedPhotoUse.has(id) && usedPhotoUse.get(id) !== wantedOwner) id = alloc("pu");
+      if (id !== source[3]) next.mergeOrigins![key] = id;
+      usedPhotoUse.set(id, wantedOwner); mapping.set(p.photoUseId, id); return { ...p, photoUseId: id };
+    });
+    return { ...snap, photos, coverPhotoUseId: snap.coverPhotoUseId === null ? null : mapping.get(snap.coverPhotoUseId)! };
+  };
   const addCopy = (recordId: string, snapshot: Snapshot, baseRevision: number, reason: string) => {
     const exists = next.conflictCopies.some((c) => c.recordId === recordId && sameContent(c.snapshot, snapshot));
     if (exists) return;
     let conflictId = alloc("cc"); while (usedConflict.has(conflictId)) conflictId = alloc("cc");
     usedConflict.add(conflictId);
-    next.conflictCopies.push({ conflictId, recordId, baseRevision, snapshot: remapPhotos(snapshot), createdAt: now, reason });
+    next.conflictCopies.push({ conflictId, recordId, baseRevision, snapshot: copy(snapshot), createdAt: now, reason });
     counts.conflictCopiesAdded++;
   };
   const markerMatches = (recordId: string, createdAt: string) => next.deletionMarkers.some((m) => m.recordId === recordId
     && (next.deletedCreatedAt?.[recordId] === undefined || next.deletedCreatedAt[recordId] === createdAt));
-  migrateToV3(next); migrateToV3(incoming);
+  migrateToV4(next); migrateToV4(incoming);
   const tagCounts = { tagsAdded: 0, tagsRemapped: 0, tagsSkippedDeleted: 0, tagsDeletedInBackup: 0 };
   const tagMap = tg.mergeTagDictionaries(next, incoming, tagCounts);
   let favoritesUpdated = 0, tagLinksUpdated = 0;
@@ -768,40 +920,45 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
       local.tagIds = mapped; local.tagRevision = r.tagRevision;
     }
   };
-  for (const r of incoming.records) {
-    if (markerMatches(r.recordId, r.createdAt)) { counts.skippedDeleted++; skippedDeleted.push(r.recordId); continue; }
-    const originKey = r.recordId + "\u0000" + r.createdAt;
+  for (const original of incoming.records) {
+    const sourceId = recordOrigin(incoming, original), r = copy(original);
+    if (markerMatches(sourceId, r.createdAt)) { counts.skippedDeleted++; skippedDeleted.push(sourceId); continue; }
+    const originKey = sourceId + "\u0000" + r.createdAt;
     const mapped = next.mergeOrigins[originKey];
-    const local = next.records.find((l) => l.recordId === (mapped ?? r.recordId) && l.createdAt === r.createdAt)
-      ?? next.records.find((l) => l.recordId === r.recordId);
-    if (mapped !== undefined && !local) { counts.skippedDeleted++; skippedDeleted.push(mapped); continue; }
+    const exactLocal = next.records.find((l) => l.recordId === (mapped ?? sourceId) && l.createdAt === r.createdAt);
+    // A removed remapped record cannot fall back to the unrelated record that
+    // originally occupied its source ID, or an old backup could resurrect it.
+    if (mapped !== undefined && !exactLocal) { counts.skippedDeleted++; skippedDeleted.push(mapped); continue; }
+    const local = exactLocal ?? next.records.find((l) => l.recordId === sourceId);
     if (!local || local.createdAt !== r.createdAt) {
-      const row = copy(r);
+      const row = copy(r); row.recordId = sourceId;
       if (usedIds.has(row.recordId)) { row.recordId = alloc("rec"); next.mergeOrigins[originKey] = row.recordId; }
       idMap.set(r.recordId + "\u0000" + r.createdAt, row.recordId);
       usedIds.add(row.recordId);
-      row.formal = row.formal && remapPhotos(row.formal); row.draft = row.draft && remapPhotos(row.draft);
+      row.formal = row.formal && remapPhotos(row.formal, original, row.recordId); row.draft = row.draft && remapPhotos(row.draft, original, row.recordId);
       row.tagIds = tg.mapTagIds(row.tagIds, tagMap);
       next.records.push(row); counts.added++;
       continue;
     }
     idMap.set(r.recordId + "\u0000" + r.createdAt, local.recordId);
+    r.formal = r.formal && remapPhotos(r.formal, original, local.recordId);
+    r.draft = r.draft && remapPhotos(r.draft, original, local.recordId);
     mergeMeta(local, r);
     if (local.status === "trashed" && r.status === "active") counts.keptTrashed++;
     if (local.status === "active" && r.status === "trashed") counts.keptActive++;
     if (r.formal && local.formal && !sameContent(r.formal, local.formal)) {
       if (r.contentRevision > local.contentRevision && local.status === "active") {
         addCopy(local.recordId, local.formal, local.contentRevision, "merge-replaced-local");
-        local.formal = remapPhotos(r.formal); local.contentRevision = r.contentRevision; local.committedAt = r.committedAt; counts.updated++;
+        local.formal = r.formal; local.contentRevision = r.contentRevision; local.committedAt = r.committedAt; counts.updated++;
       } else { addCopy(local.recordId, r.formal, r.contentRevision, "merge-incoming"); counts.conflicts++; }
     } else if (r.formal && !local.formal && local.status === "active") {
-      local.formal = remapPhotos(r.formal); local.contentRevision = Math.max(local.contentRevision, r.contentRevision); counts.updated++;
+      local.formal = r.formal; local.contentRevision = Math.max(local.contentRevision, r.contentRevision); counts.updated++;
     } else {
       local.contentRevision = Math.max(local.contentRevision, r.contentRevision); counts.unchanged++;
     }
     if (r.draft) {
       if (local.draft) { if (!sameContent(local.draft, r.draft)) addCopy(local.recordId, r.draft, r.baseRevision, "merge-incoming-draft"); }
-      else if (local.status === "active" && r.baseRevision >= local.contentRevision) { local.draft = remapPhotos(r.draft); local.baseRevision = local.contentRevision; }
+      else if (local.status === "active" && r.baseRevision >= local.contentRevision) { local.draft = r.draft; local.baseRevision = local.contentRevision; }
       else addCopy(local.recordId, r.draft, r.baseRevision, "merge-incoming-draft");
     }
   }
@@ -817,8 +974,9 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   }
   for (const c of incoming.conflictCopies) {
     const target = [...idMap.entries()].find(([k]) => k.startsWith(c.recordId + "\u0000"))?.[1];
-    if (!target) continue;
-    addCopy(target, c.snapshot, c.baseRevision, c.reason);
+    const source = incoming.records.find((r) => r.recordId === c.recordId);
+    if (!target || !source) continue;
+    addCopy(target, remapPhotos(c.snapshot, source, target), c.baseRevision, c.reason);
   }
   const needed = new Set<string>();
   for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) needed.add(p.assetId);
@@ -828,7 +986,7 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
     if (incoming.assets[id]) { next.assets[id] = copy(incoming.assets[id]!); counts.mediaAdded++; }
     else if (!local.assets[id]) counts.mediaMissing++;
   }
-  next.seq = Math.max(next.seq, maxSeq(usedIds), maxSeq(usedConflict), maxSeq(usedPhotoUse));
+  next.seq = Math.max(next.seq, maxSeq(usedIds), maxSeq(usedConflict), maxSeq(usedPhotoUse.keys()));
   Object.assign(counts, tagCounts, { favoritesUpdated, tagLinksUpdated });
   tg.validateTagState(next);
   return { state: next, plan: { counts, skippedDeleted, deletedInBackup } };
