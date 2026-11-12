@@ -222,3 +222,19 @@ test("M04 failed next page keeps the loaded exhibition and a manual retry withou
     env.byTest("museum-more").fire("click"); await settled(() => env.byTest("museum-list").children.length === 30);
   } finally { env.restore(); }
 });
+
+test("M04 a failed photo sort keeps the current tiles usable; the viewer cannot open over an inert app lock", async () => {
+  const rows = dated(["2024-11-12"]); photos(rows[0], 2); const env = setup(rows);
+  try {
+    await env.ui.enter(); await env.click("museum-enter-photos", "museum-photos");
+    env.api.failNext("DISK_FULL", "museumPhotosPage"); env.byTest("museum-order").fire("click");
+    await settled(() => env.errors.length === 1);
+    assert.match(env.byTest("museum-order").textContent, /从近到远/);
+    const first = env.byTest("museum-list").children[0]; first.fire("click");
+    await settled(() => env.byTest("museum-viewer").open);
+    assert.match(env.byTest("museum-viewer").text(), /使用位 0/);
+    env.byTest("museum-viewer").close();
+    env.shell.inert = true; first.fire("click");
+    await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(env.byTest("museum-viewer").open, false);
+  } finally { env.restore(); }
+});

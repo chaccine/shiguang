@@ -80,12 +80,17 @@ export class MuseumUi {
     window.scrollTo(0, place.window);
   }
   private async go(area: Area, year?: number): Promise<void> {
-    this.history.push(this.capture()); this.place = { area, year, order: "desc", loaded: 24, scroll: 0, window: 0 };
-    await this.render(); this.restore(this.place);
+    const previous = this.capture();
+    this.history.push(previous); this.place = { area, year, order: "desc", loaded: 24, scroll: 0, window: 0 };
+    try { await this.render(); this.restore(this.place); }
+    catch (error) { this.history.pop(); this.place = previous; throw error; }
   }
   private async back(): Promise<void> {
-    this.place = this.history.pop() ?? { area: "home", order: "desc", loaded: 24, scroll: 0, window: 0 };
-    await this.render(true); this.restore(this.place);
+    const previous = this.capture();
+    const target = this.history.pop();
+    this.place = target ?? { area: "home", order: "desc", loaded: 24, scroll: 0, window: 0 };
+    try { await this.render(true); this.restore(this.place); }
+    catch (error) { if (target) this.history.push(target); this.place = previous; throw error; }
   }
   private header(): HTMLElement {
     const header = el("header", "", "museum-header");
@@ -100,8 +105,10 @@ export class MuseumUi {
   }
   private async render(keepFocus = false): Promise<void> {
     const generation = ++this.generation;
+    const previous = { cursor: this.cursor, tiles: this.tiles, buttons: this.tileButtons, years: this.yearSummaries, loaded: this.place.loaded };
     this.observer?.disconnect(); this.observer = null; this.cursor = null; this.busy = false;
     this.tiles = []; this.tileButtons = [];
+    try {
     const stage = el("div"); stage.dataset.testid = `museum-${this.place.area}`;
     stage.append(this.header());
     // Render off-DOM: failed or stale requests never publish a partial exhibition.
@@ -127,6 +134,13 @@ export class MuseumUi {
     this.content.replaceChildren(stage);
     if (!keepFocus && this.host.active()) stage.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
     this.observe();
+    } catch (error) {
+      if (generation === this.generation) {
+        this.cursor = previous.cursor; this.tiles = previous.tiles; this.tileButtons = previous.buttons;
+        this.yearSummaries = previous.years; this.place.loaded = previous.loaded;
+      }
+      throw error;
+    }
   }
   private empty(text: string): HTMLElement {
     const box = el("div", "", "museum-empty-note"); box.dataset.testid = "museum-empty";
@@ -225,8 +239,10 @@ export class MuseumUi {
   private order(stage: HTMLElement): void {
     const bar = el("div", "", "museum-toolbar");
     const toggle = button(this.place.order === "desc" ? "发生日期：从近到远 ↓" : "发生日期：从远到近 ↑", "museum-order", () => this.run(async () => {
+      const previous = { ...this.place };
       this.place.order = this.place.order === "desc" ? "asc" : "desc"; this.place.loaded = 24;
-      await this.render(true); this.content.querySelector<HTMLElement>('[data-testid="museum-order"]')?.focus();
+      try { await this.render(true); this.content.querySelector<HTMLElement>('[data-testid="museum-order"]')?.focus(); }
+      catch (error) { this.place = previous; throw error; }
     })); bar.append(toggle); stage.append(bar);
   }
   private async page(stage: HTMLElement, cursor: string | null, limit: number, first: boolean): Promise<void> {
@@ -309,7 +325,9 @@ export class MuseumUi {
   }
   private async openPhoto(index: number): Promise<void> {
     this.viewerFocus = this.tileButtons[index]; this.viewerIndex = index;
-    await this.paintViewer(); this.dialog.showModal(); this.dialog.querySelector<HTMLElement>("button")?.focus();
+    await this.paintViewer();
+    if (!this.host.active() || document.querySelector<HTMLElement>(".app-shell")?.inert) return;
+    this.dialog.showModal(); this.dialog.querySelector<HTMLElement>("button")?.focus();
   }
   private async movePhoto(step: number): Promise<void> {
     const next = this.viewerIndex + step;
@@ -349,8 +367,8 @@ export class MuseumUi {
     try {
     const position = this.capture(), result = await this.api.setMuseumHidden(id, true);
     this.hiddenId = id;
-    await this.render(true); this.restore(position);
     this.message(result.durability === "uncertain" ? "已暂时不推荐这条，但系统未确认写入磁盘，请保持应用打开并重试检查。" : "已暂时不推荐这条。仍可在时光轴、珍藏展柜和照片展墙找到它。");
+    await this.render(true); this.restore(position);
     this.root.querySelector<HTMLElement>('[data-testid="museum-undo"]')?.focus({ preventScroll: true });
     } finally { this.mutating = false; }
   }
@@ -359,8 +377,9 @@ export class MuseumUi {
     this.mutating = true;
     try {
     const position = this.capture(), result = await this.api.setMuseumHidden(this.hiddenId, false);
-    this.hiddenId = null; await this.render(true); this.restore(position);
+    this.hiddenId = null;
     this.message(result.durability === "uncertain" ? "已撤销，但系统未确认写入磁盘，请保持应用打开并重试检查。" : "已撤销，恢复这条记录的推荐。");
+    await this.render(true); this.restore(position);
     this.content.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
     } finally { this.mutating = false; }
   }

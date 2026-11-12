@@ -24,6 +24,7 @@ try {
       try {
         await context.route("**/*", async route => {
           const url = new URL(route.request().url());
+          if (url.origin === origin && url.pathname === "/favicon.ico") { await route.fulfill({ status: 204 }); return; }
           if (url.origin !== origin && !["data:", "blob:"].includes(url.protocol)) {
             errors.push(`Unexpected external request: ${url.origin}`); await route.abort();
           } else await route.continue();
@@ -99,7 +100,17 @@ try {
           });
           assert.deepEqual(errors, [], `browser errors before ${scene}`);
           const path = join(out, `${layout}-${scene}-${theme}.png`);
-          await page.screenshot({ path, fullPage }); saved.push(path.split(/[\\/]/).at(-1)); console.log(path);
+          // Unfold the independently scrolling desktop main for long-page evidence.
+          // Anchor the mobile nav at the end of that capture, avoiding a fixed bar
+          // painted through its middle. nav-single-plus/viewer retain real viewport geometry.
+          const captureStyle = fullPage ? await page.addStyleTag({ content: `
+            .app-shell { position: relative; height: auto; min-height: 100vh; overflow: visible; }
+            .main { overflow: visible; }
+            @media (max-width: 760px) { .tabs { position: absolute; bottom: 0; } }
+          ` }) : null;
+          try { await page.screenshot({ path, fullPage }); }
+          finally { if (captureStyle) await captureStyle.evaluate(node => node.remove()); }
+          saved.push(path.split(/[\\/]/).at(-1)); console.log(path);
         };
         await home(); assert.equal(await page.locator("html").getAttribute("data-theme"), theme);
         assert.doesNotMatch(await page.getByTestId("museum-home").innerText(), /未提交草稿，不得出展|手工主题展|建设中/);
