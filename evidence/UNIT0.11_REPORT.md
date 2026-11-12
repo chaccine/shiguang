@@ -8,7 +8,7 @@
   四者沿 Task A 同一契约；新 UI 直接调用现有接口。只用合成数据，无网络/云/AI 功能、外部资源或权限变更。
 - `.git` 只读：本代理未 stage/commit/push。工作期间编排侧写入检查点 `bfe5d77`、`8389564`、`7b4ceac`；
   不把这些提交归为本代理执行。未读取或改动 `src-tauri/gen/` 内容，既有未跟踪目录不纳入交付。
-- CI: pending (filled by orchestrator)
+- CI: GitHub Actions run 43291167304（PR #9，60d4a71）**7/7 success**（三端 core+cli+ts、三端 tauri bundle、Android APK）；CI 产物未下载、未安装。
 - Screenshots: **PASS**：编排侧于 2026-11-13 03:3x（UTC+8）在沙箱外用最终脚本重跑，36 张合成截图全部保存，page errors 0（`evidence/unit-0.11/*.png`、`screenshots-result.json`）。仅抽看部分画面，未做设计验收。
 
 ## PASS
