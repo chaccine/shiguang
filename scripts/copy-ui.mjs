@@ -9,7 +9,7 @@ const target = join(root, "dist", "index.html");
 await mkdir(dirname(target), { recursive: true });
 await copyFile(source, target);
 await mkdir(join(root, "dist", "ui"), { recursive: true });
-for (const asset of ["tokens.css", "styles.css"]) {
+for (const asset of ["tokens.css", "styles.css", "museum.css"]) {
   await copyFile(join(root, "src", "ui", asset), join(root, "dist", "ui", asset));
 }
 console.log(`copied ${source} -> ${target}`);

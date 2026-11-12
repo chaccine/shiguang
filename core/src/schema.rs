@@ -1,11 +1,12 @@
 //! 有序迁移链；容器 version 与数据结构 schemaVersion 分开演进。
 use crate::{json::Json, CoreError};
-pub const CURRENT_SCHEMA_VERSION: i64 = 4;
+pub const CURRENT_SCHEMA_VERSION: i64 = 5;
 pub type Migration = fn(Json) -> Result<Json, CoreError>;
 pub const MIGRATIONS: &[(i64, Migration)] = &[
     (1, migrate_v1_to_v2),
     (2, migrate_v2_to_v3),
     (3, migrate_v3_to_v4),
+    (4, migrate_v4_to_v5),
 ];
 
 pub(crate) fn set(value: &mut Json, key: &str, item: Json) -> Result<(), CoreError> {
@@ -166,5 +167,17 @@ pub fn migrate_v3_to_v4(mut value: Json) -> Result<Json, CoreError> {
         crate::settings::Settings::default().to_json(),
     )?;
     set(&mut value, "schemaVersion", Json::Num(4))?;
+    Ok(value)
+}
+
+/// A row-level preference, never a content snapshot or a persisted exhibition.
+pub fn migrate_v4_to_v5(mut value: Json) -> Result<Json, CoreError> {
+    let mut rows = value.get("records").and_then(Json::as_arr)
+        .ok_or_else(|| CoreError::new("STATE_CORRUPT", "records 必须是数组"))?.to_vec();
+    for row in &mut rows {
+        set(row, "museumHidden", Json::Bool(false))?;
+    }
+    set(&mut value, "records", Json::Arr(rows))?;
+    set(&mut value, "schemaVersion", Json::Num(5))?;
     Ok(value)
 }

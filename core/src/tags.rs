@@ -270,7 +270,7 @@ pub(crate) fn dedup(ids: impl IntoIterator<Item = String>) -> Vec<String> {
 impl Store {
     /// Uses the same write lock, reload, validation and atomic replacement as content writes.
     /// No-op metadata operations do not touch the state file or visit write fault points.
-    fn meta_transact<T>(
+    pub(crate) fn meta_transact<T>(
         &mut self,
         op: impl FnOnce(&mut State) -> Result<T, CoreError>,
     ) -> Result<(T, Durability), CoreError> {

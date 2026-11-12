@@ -5,7 +5,7 @@ use serde::Deserialize;
 use shiguang_core::json::Json;
 use shiguang_core::{Order, Store, TagInfo, TimelineFilter};
 
-fn with_store<T>(
+pub(crate) fn with_store<T>(
     state: &tauri::State<'_, AppState>,
     f: impl FnOnce(&mut Store) -> Result<T, shiguang_core::CoreError>,
 ) -> Result<T, CommandError> {

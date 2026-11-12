@@ -1,5 +1,6 @@
 import { renderReading } from "./reading.ts";
 import { PersonalUi } from "./personal.ts";
+import { MuseumUi } from "./museum.ts";
 import type { Mood } from "../domain/types.ts";
 import { DraftSession, recoverLastDraft } from "../domain/draft-session.ts";
 import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
@@ -40,6 +41,7 @@ for (const tab of NAV_TABS) {
   button.className = "tab";
   button.dataset.testid = tab.testId;
   button.dataset.navTab = tab.id;
+  if (tab.id === "create") button.setAttribute("aria-label", "＋记录");
   // Page navigation includes a create action and secondary pages, not an ARIA tab widget.
   button.setAttribute("aria-current", "false");
   const dot = document.createElement("span");
@@ -48,7 +50,7 @@ for (const tab of NAV_TABS) {
   dot.textContent = {timeline: "≡", calendar: "▦", create: "＋", museum: "⌂", mine: "◌"}[tab.id];
   const label = document.createElement("span");
   label.className = "tab-label";
-  label.textContent = tab.label;
+  label.textContent = tab.id === "create" ? "记录" : tab.label;
   if (tab.id === "museum" || tab.id === "mine") {
     const desktop = document.createElement("span"); desktop.className = "desktop-nav-label";
     desktop.textContent = tab.id === "museum" ? "回忆博物馆" : "个人空间";
@@ -2020,7 +2022,10 @@ function activateMainTab(tab: MainTab): void {
     case "timeline": void showTimeline(); break;
     case "calendar": void showCalendar(); break;
     case "create": void startNewDraft(); break;
-    case "museum": case "mine": void flushBeforeLeave().then(ok => { if (ok) setView(tab); }); break;
+    case "museum": void flushBeforeLeave().then(async ok => {
+      if (ok) { setView(tab); if (!blockedDescription) await museum.enter(); }
+    }).catch(showError); break;
+    case "mine": void flushBeforeLeave().then(ok => { if (ok) setView(tab); }); break;
   }
 }
 
@@ -2326,13 +2331,22 @@ async function attachSelectedPhotos(): Promise<void> {
 
 
 const personal = new PersonalUi(api, memory !== null, flushBeforeLeave);
+const museum = new MuseumUi(byId("view-museum"), api, {
+  read: id => openReading(id), write: () => { void startNewDraft(); },
+  active: () => currentView === "museum", error: showError,
+});
 let readingId: string | null = null;
 let readingOrigin: View = "timeline";
-let readingScroll = 0;
+let readingScroll = { main: 0, window: 0 };
+let readingFocus: HTMLElement | null = null;
 async function openReading(id: string, returning = false): Promise<void> {
   if (!(await flushBeforeLeave())) return;
-  const row = await api.getRecord(id); if (!row.formal) return;
-  if (!returning) { readingOrigin = currentView; readingScroll = document.querySelector<HTMLElement>(".main")?.scrollTop || window.scrollY; }
+  const row = await api.getRecord(id); if (!row.formal || row.status !== "active") return;
+  if (!returning) {
+    readingOrigin = currentView;
+    readingScroll = { main: document.querySelector<HTMLElement>(".main")?.scrollTop ?? 0, window: window.scrollY };
+    readingFocus = document.activeElement as HTMLElement | null;
+  }
   readingId = id;
   renderReading(byTestId("reading-content"), row, tagName, (img, photo, holder) => {
     const fallback = (message: string) => {
@@ -2358,11 +2372,14 @@ async function leaveEditor(): Promise<void> {
   await showDrafts();
 }
 byTestId("reading-edit").addEventListener("click", () => { if (readingId) void openModification(readingId); });
-byTestId("reading-back").addEventListener("click", () => {
+byTestId("reading-back").addEventListener("click", () => { void (async () => {
   setView(readingOrigin);
-  const scroller = document.querySelector<HTMLElement>(".main"); if (scroller) scroller.scrollTop = readingScroll;
-  window.scrollTo(0, readingScroll);
-});
+  if (readingOrigin === "museum") await museum.resume();
+  if (currentView !== readingOrigin) return;
+  if (readingFocus?.isConnected) readingFocus.focus({preventScroll: true});
+  const scroller = document.querySelector<HTMLElement>(".main"); if (scroller) scroller.scrollTop = readingScroll.main;
+  window.scrollTo(0, readingScroll.window);
+})().catch(showError); });
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
   const view = button.dataset.go as View;
   if (view === "timeline") void showTimeline(); else if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
@@ -2576,6 +2593,7 @@ async function boot(): Promise<void> {
     setView(start);
     if (start === "calendar") await refreshCalendar();
     if (start === "collect") await refreshCollect();
+    if (start === "museum") await museum.enter();
   } finally {
     // 视觉证据脚本等待这个标记，确保演示数据和初始视图都已就绪。
     document.body.dataset.appReady = "1";

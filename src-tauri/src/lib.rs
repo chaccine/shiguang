@@ -16,6 +16,7 @@ use tauri::Manager;
 mod android_thumb;
 mod backup_cmd;
 mod u010_cmd;
+mod u011_cmd;
 mod u07_cmd;
 
 /// 进程级共享状态：在注册命令前就交给 Tauri 管理（热修复：不再只在 setup 里 manage）。
@@ -865,7 +866,17 @@ pub fn run() {
             u07_cmd::timeline_months,
             u07_cmd::calendar_month,
             u07_cmd::day_entries,
-            u07_cmd::on_this_day
+            u07_cmd::on_this_day,
+            u011_cmd::museum_reunion_preview,
+            u011_cmd::museum_reunion_page,
+            u011_cmd::museum_favorites_page,
+            u011_cmd::museum_photos_page,
+            u011_cmd::museum_years,
+            u011_cmd::museum_year_room,
+            u011_cmd::museum_reshuffle,
+            u011_cmd::museum_home_summary,
+            u011_cmd::set_museum_hidden,
+            u011_cmd::reset_museum_hidden
         ])
         .run(tauri::generate_context!())
         .expect("启动拾光桌面壳失败");
