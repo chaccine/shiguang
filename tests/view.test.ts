@@ -20,7 +20,7 @@ function row(partial: Partial<RecordRow> = {}): RecordRow {
     baseRevision: 0,
     formal: null,
     draft: null,
-    favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0, // Unit-0.7 新字段（仅构造方式调整）
+    museumHidden: false, favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0, // Unit-0.7 新字段（仅构造方式调整）
     ...partial,
   };
 }

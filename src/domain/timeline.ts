@@ -5,8 +5,9 @@
  * 有时刻组按时刻（同方向）；同时刻/无时刻按 createdAt（同方向），最后 recordId（同方向）。
  */
 import type { CalendarDay, MonthCount, OnThisDayGroup, RecordRow, Snapshot, SortOrder, TimelineFilter, TimelineItem, TimelinePage } from "./types.ts";
+import { isValidDate } from "./rules.ts";
 
-type FormalRow = RecordRow & { formal: Snapshot };
+export type FormalRow = RecordRow & { formal: Snapshot };
 
 export function isFormalActive(row: RecordRow): row is FormalRow {
   return row.status === "active" && row.formal !== null;
@@ -14,7 +15,7 @@ export function isFormalActive(row: RecordRow): row is FormalRow {
 
 interface SortKey { date: string; hasTime: boolean; time: string; createdAt: string; id: string }
 
-function keyOf(row: FormalRow): SortKey {
+export function keyOf(row: FormalRow): SortKey {
   const time = row.formal.eventTime?.trim() ?? "";
   return { date: row.formal.eventDate, hasTime: time.length > 0, time, createdAt: row.createdAt, id: row.recordId };
 }
@@ -87,9 +88,13 @@ export function decodeCursor(cursor: string): SortKey {
 }
 
 export function timelinePage(rows: readonly RecordRow[], filter: TimelineFilter, cursor: string | null, limit: number, today: string): TimelinePage {
+  return pageRows(sortedFormal(rows, filter), filter.order ?? "desc", cursor, limit, today);
+}
+
+/** Complete M02 key, shared by museum projections without copying State. */
+export function pageRows(all: readonly FormalRow[], order: SortOrder, cursor: string | null, limit: number, today: string,
+  project: (row: FormalRow, today: string) => TimelineItem = toItem): TimelinePage {
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw { code: "INVALID_LIMIT", message: "每页条数需在 1–500 之间" };
-  const order = filter.order ?? "desc";
-  const all = sortedFormal(rows, filter);
   let start = 0;
   if (cursor) {
     const after = decodeCursor(cursor);
@@ -104,7 +109,7 @@ export function timelinePage(rows: readonly RecordRow[], filter: TimelineFilter,
   const slice = all.slice(start, start + limit);
   const last = slice[slice.length - 1];
   const nextCursor = last && start + limit < all.length ? encodeCursor(keyOf(last)) : null;
-  return { items: slice.map((r) => toItem(r, today)), nextCursor, total: all.length };
+  return { items: slice.map((r) => project(r, today)), nextCursor, total: all.length };
 }
 
 export function timelineMonths(rows: readonly RecordRow[], filter: TimelineFilter = {}): MonthCount[] {
@@ -143,17 +148,25 @@ export function dayEntries(rows: readonly RecordRow[], date: string, order: Sort
 
 /** 往年同月同日；2-29 只匹配闰年 2-29（不挪到 2-28）。按年倒序。 */
 export function onThisDay(rows: readonly RecordRow[], month: number, day: number, today: string): OnThisDayGroup[] {
-  const md = `-${pad(month)}-${pad(day)}`;
-  const thisYear = Number(today.slice(0, 4));
   const groups = new Map<number, TimelineItem[]>();
-  for (const r of sortedFormal(rows, { order: "desc" })) {
+  for (const r of reunionRows(rows, month, day, today)) {
     const y = Number(r.formal.eventDate.slice(0, 4));
-    if (!r.formal.eventDate.endsWith(md) || y >= thisYear) continue;
     const list = groups.get(y) ?? [];
-    list.push(toItem(r, today));
-    groups.set(y, list);
+    list.push(toItem(r, today)); groups.set(y, list);
   }
   return [...groups.entries()].sort((a, b) => b[0] - a[0]).map(([year, items]) => ({ year, items }));
+}
+
+/** Shared eligibility for M03's light list and M04's exact-date reunion. */
+export function reunionRows(rows: readonly RecordRow[], month: number, day: number, today: string): FormalRow[] {
+  if (!isValidDate(today) || !Number.isInteger(month) || !Number.isInteger(day)
+    || !isValidDate(`2000-${pad(month)}-${pad(day)}`)) throw { code: "INVALID_EVENT_DATE", message: "日期无效" };
+  const md = `-${pad(month)}-${pad(day)}`;
+  const thisYear = Number(today.slice(0, 4));
+  return rows.filter(isFormalActive).filter((r) => {
+    const y = Number(r.formal.eventDate.slice(0, 4));
+    return !r.museumHidden && r.formal.eventDate.endsWith(md) && y < thisYear;
+  }).sort((a,b) => compareRows(a,b,"desc"));
 }
 
 // ---- 纯 UI 辅助 ----
