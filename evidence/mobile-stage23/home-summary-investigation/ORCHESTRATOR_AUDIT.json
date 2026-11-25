@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-26T00:50:26.521709+08:00",
+  "singleObservedExit": 0,
+  "measurementChecks": {
+    "all28Files": true,
+    "kernelChildPidsMatchWorkerExits": true,
+    "workerExitCodesZero": true,
+    "workerLifetimesBounded": true,
+    "allNativeMuseumTimings": true,
+    "thresholds": true,
+    "fileLevelTotals": true,
+    "inputMatches": true,
+    "outputMatches": true,
+    "storageMatches": true,
+    "rawHashes": true
+  },
+  "rawAndSourceHashesVerified": true,
+  "candidatePreimagesVerified": 9,
+  "oraclePreimagesVerified": 10,
+  "frozenFixturesComparedToGit": 15,
+  "javascriptSourceAndTestsEqualC9eff05": true,
+  "noNewDefaultAcceptance": true,
+  "candidateFix": "NONE",
+  "gate": "BLOCKED",
+  "verdict": "INCONCLUSIVE"
+}

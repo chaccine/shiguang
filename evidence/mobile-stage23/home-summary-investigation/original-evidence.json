@@ -1,0 +1,407 @@
+{
+  "collected": "2026-11-26T00:42:39.436006+08:00",
+  "zone": "Asia/Shanghai",
+  "directory": "/workspace/sg-stage23/migration-safety/independent",
+  "independent": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "started": "2026-11-26T00:34:29.509302+08:00",
+      "elapsedSeconds": 40.121,
+      "exit": 0,
+      "derivedEnd": "2026-11-26T00:35:09.630302+08:00"
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "started": "2026-11-26T00:35:09.630628+08:00",
+      "elapsedSeconds": 45.449,
+      "exit": 0,
+      "derivedEnd": "2026-11-26T00:35:55.079628+08:00"
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "started": "2026-11-26T00:35:55.080346+08:00",
+      "elapsedSeconds": 3.237,
+      "exit": 1,
+      "derivedEnd": "2026-11-26T00:35:58.317346+08:00"
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "started": "2026-11-26T00:36:51.955440+08:00",
+      "elapsedSeconds": 2.247,
+      "exit": 0,
+      "derivedEnd": "2026-11-26T00:36:54.202440+08:00"
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "started": "2026-11-26T00:36:54.202811+08:00",
+      "elapsedSeconds": 1.608,
+      "exit": 0,
+      "derivedEnd": "2026-11-26T00:36:55.810811+08:00"
+    }
+  ],
+  "commandTimesPrecision": "end derived from start + elapsed rounded to milliseconds",
+  "files": [
+    {
+      "file": "build.log",
+      "bytes": 179,
+      "sha256": "b661158e90d0d81a8aeb7d7b13f6f51f66f48ce8a7a6ba6ad3d3c25c617acf0c",
+      "birthMtime": "2026-11-26 00:36:54.200133521 +0800 | 2026-11-26 00:36:55.800112871 +0800",
+      "archivedOriginalMatches": true
+    },
+    {
+      "file": "cargo.log",
+      "bytes": 26689,
+      "sha256": "3792b328fab90bea589b583df5c94f6f691ae7c52ef36da1afdca472b4e419ae",
+      "birthMtime": "2026-11-26 00:34:29.510000776 +0800 | 2026-11-26 00:35:09.617483213 +0800",
+      "archivedOriginalMatches": true
+    },
+    {
+      "file": "fault.log",
+      "bytes": 29509,
+      "sha256": "97b56172d964a854e45e19e97e0a76389692b65b5159afc03541d9a3c73e8600",
+      "birthMtime": "2026-11-26 00:35:09.625483110 +0800 | 2026-11-26 00:35:55.068896659 +0800",
+      "archivedOriginalMatches": true
+    },
+    {
+      "file": "npm.log",
+      "bytes": 28991,
+      "sha256": "5672954294795466d69d0b3e9aa81f2411b8348170aa94d614914d57610724a5",
+      "birthMtime": "2026-11-26 00:35:55.076896556 +0800 | 2026-11-26 00:35:58.296855001 +0800",
+      "archivedOriginalMatches": true
+    },
+    {
+      "file": "results.json",
+      "bytes": 1089,
+      "sha256": "e7e48190f4515ca03e6afaab5b9d711efa36b76fa9bee82b6820b1c5cba5c217",
+      "birthMtime": "2026-11-26 00:35:09.625483110 +0800 | 2026-11-26 00:36:55.808112768 +0800",
+      "archivedOriginalMatches": true
+    },
+    {
+      "file": "typecheck.log",
+      "bytes": 57,
+      "sha256": "6796dcec13529efbd4cf20466baf395cbb9bea0ba34b2d509da16409f49dc4b4",
+      "birthMtime": "2026-11-26 00:36:51.952162534 +0800 | 2026-11-26 00:36:52.044161347 +0800",
+      "archivedOriginalMatches": true
+    }
+  ],
+  "earlierCandidateCommands": [
+    {
+      "run": "01-candidate-default",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "01-candidate-default.log.gz",
+      "uncompressed_sha256": "584869bf9b30f950b9c13bae10487c9dda83a2f42349a2ef13208a053c0e3478",
+      "startedLocal": "2026-11-26T00:14:53.497190+08:00",
+      "endedLocal": "2026-11-26T00:14:57.114549+08:00"
+    },
+    {
+      "run": "02-candidate-fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "02-candidate-fault.log.gz",
+      "uncompressed_sha256": "68fb35c94e78d541ab1dfc30e6fed90c1967b8749597ae513ab6d5b9b31164c9",
+      "startedLocal": "2026-11-26T00:15:52.102537+08:00",
+      "endedLocal": "2026-11-26T00:15:55.826721+08:00"
+    },
+    {
+      "run": "03-candidate-default",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "03-candidate-default.log.gz",
+      "uncompressed_sha256": "2d5b6fd43d7d58501a39b07804e50c2582c161afeda7bbf8eb377bc0715b0001",
+      "startedLocal": "2026-11-26T00:24:27.518557+08:00",
+      "endedLocal": "2026-11-26T00:24:29.655792+08:00"
+    },
+    {
+      "run": "04-candidate-fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "04-candidate-fault.log.gz",
+      "uncompressed_sha256": "ea32cb19d1c733871115fa8bbc16c1f1c1ac9f8cdffa09f40c2bc5e72025eb69",
+      "startedLocal": "2026-11-26T00:24:37.587834+08:00",
+      "endedLocal": "2026-11-26T00:24:39.770868+08:00"
+    },
+    {
+      "run": "05-native-oracle",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--test",
+        "v5_oracle"
+      ],
+      "exit": 0,
+      "log": "05-native-oracle.log.gz",
+      "uncompressed_sha256": "95f6c24afee43189550034ae684872b44bdd6c6c6fd5aa4bfa8671a41f93945f",
+      "startedLocal": "2026-11-26T00:24:55.434686+08:00",
+      "endedLocal": "2026-11-26T00:25:00.333450+08:00"
+    },
+    {
+      "run": "06-legacy-migration",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection",
+        "--test",
+        "unit010_faults",
+        "v3_migration_interrupted_at_each_safe_write_stage_leaves_original_reopenable",
+        "--",
+        "--exact"
+      ],
+      "exit": 0,
+      "log": "06-legacy-migration.log.gz",
+      "uncompressed_sha256": "f8991751c1c918c5aba0f17cfc86f70e1990b380ac8a5a9f388969e6a5bccfc4",
+      "startedLocal": "2026-11-26T00:26:40.187545+08:00",
+      "endedLocal": "2026-11-26T00:26:41.925367+08:00"
+    },
+    {
+      "run": "07-final-default",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "07-final-default.log.gz",
+      "uncompressed_sha256": "5772784f089a26da4898311d460ce85b0da38ae29832fb7b3fd58e4c821d28ea",
+      "startedLocal": "2026-11-26T00:29:35.997940+08:00",
+      "endedLocal": "2026-11-26T00:29:36.634570+08:00"
+    },
+    {
+      "run": "08-final-fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection",
+        "--lib",
+        "migration::tests",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "log": "08-final-fault.log.gz",
+      "uncompressed_sha256": "47a5985a5db0e0857f7360699bca404d48db4b9be430c065e3f043ebff2149d0",
+      "startedLocal": "2026-11-26T00:29:39.705885+08:00",
+      "endedLocal": "2026-11-26T00:29:41.210748+08:00"
+    }
+  ],
+  "priorInvestigationHomeWallOnly": [
+    {
+      "name": "run-01-P",
+      "domainMs": 2.8802650000000085,
+      "adapterMs": 39.472522000000026
+    },
+    {
+      "name": "run-02-I",
+      "domainMs": 2.5930020000000127,
+      "adapterMs": 29.520996999999966
+    },
+    {
+      "name": "run-03-I",
+      "domainMs": 2.573975999999959,
+      "adapterMs": 34.48881699999998
+    },
+    {
+      "name": "run-04-P",
+      "domainMs": 2.7237519999999904,
+      "adapterMs": 49.802280999999994
+    },
+    {
+      "name": "run-05-P",
+      "domainMs": 3.869244999999978,
+      "adapterMs": 36.213900000000024
+    },
+    {
+      "name": "run-06-I",
+      "domainMs": 2.6969040000000177,
+      "adapterMs": 27.782170000000008
+    },
+    {
+      "name": "run-07-I",
+      "domainMs": 2.6037039999999934,
+      "adapterMs": 32.71273699999995
+    },
+    {
+      "name": "run-08-P",
+      "domainMs": 2.0969949999999926,
+      "adapterMs": 30.50549699999999
+    },
+    {
+      "name": "run-09-P",
+      "domainMs": 2.5967279999999846,
+      "adapterMs": 33.800723000000005
+    },
+    {
+      "name": "run-10-I",
+      "domainMs": 2.089427999999998,
+      "adapterMs": 27.520887000000016
+    }
+  ],
+  "originalFailureCount": 1,
+  "originalAdapterMs": 313.05,
+  "caseMs": 786.313605,
+  "historicalCounterFilesInIndependentDir": [],
+  "systemRecorderPaths": {
+    "/var/log/journal": "visible and empty",
+    "/run/log/journal": "absent",
+    "/var/log/sysstat": "absent",
+    "/var/log/sa": "absent",
+    "/var/log/atop": "absent",
+    "/var/log/pacct": "absent",
+    "/var/account": "absent",
+    "/var/log/account": "absent"
+  },
+  "originalBase": "c9eff0546b3167cebc36cb61fb9401b2c6750bb4",
+  "archivalHead": "fb8cbcea82fd304e3c69e73c34aeed3abafee7fa",
+  "originalNpmReporter": {
+    "unit": "case",
+    "total": 285,
+    "pass": 284,
+    "fail": 1,
+    "durationMs": 2752.001618,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "targetAbsoluteTime": null,
+    "homeDomainNumericWall": null,
+    "homeEqualityReached": true,
+    "homeDomainBudgetPassed": true,
+    "laterQueriesReached": false,
+    "separateUiHomeRenderWallMs": 758.0,
+    "separateUiHomeWholeCaseMs": 1238.226336
+  },
+  "originalResourceSources": {
+    "ownCommandRecords": "Independent results and raw log birth/mtime. Eight earlier candidate jobs in commands.jsonl.",
+    "npmConsole": "case wall durations, aggregate and assertion; no worker timestamp or CPU attribution",
+    "originalCounterCoverage": "no original per-thread/process CPU, runnable wait, worker PIDs, host load/quota/throttle/pressure, GC/heap, faults, phase trace, input digest or full counts printed",
+    "priorInvestigation": "worker lifetime, schedstat, cgroup, CPU samples centered on a different query in earlier processes; home wall timings only",
+    "liveProcfs": "post-run task counters; unable to reconstruct the exited original worker",
+    "nameOnlyProcessSnapshot": {
+      "atApprox": "2026-11-26T00:39:50+08:00",
+      "commandNames": [
+        "codex",
+        "bash",
+        "ps",
+        "head"
+      ],
+      "startsAfterOriginal": true,
+      "source": "visible command namespace, comm/lstart/time/pcpu only. No evidence of the historical CPU schedule."
+    }
+  },
+  "earlierUninstrumentedHomeWallMs": [
+    {
+      "source": "../perf-investigation/historical/baseline-npm.log",
+      "domain": 2.125,
+      "adapter": 25.35
+    },
+    {
+      "source": "../perf-investigation/historical/core-types-npm.log",
+      "domain": 5.456,
+      "adapter": 35.512
+    },
+    {
+      "source": "../acceptance-200/npm.log.gz",
+      "domain": 6.499,
+      "adapter": 61.363
+    }
+  ]
+}
