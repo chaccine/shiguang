@@ -22,6 +22,7 @@ pub mod preview;
 pub mod session;
 pub mod sha256;
 pub mod store;
+pub mod story;
 pub mod time;
 
 pub use model::{CoreError, DraftPatch, Mood, PhotoUse, Snapshot};

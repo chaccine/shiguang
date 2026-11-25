@@ -88,8 +88,7 @@ impl PhotoUse {
         ])
     }
 
-    pub fn from_json(value: &Json) -> Result<Self, String> {
-        let sha256 = req_str(value, "sha256")?;
+    pub(crate) fn validate_sha256(sha256: &str) -> Result<(), String> {
         if sha256.len() != 64
             || !sha256
                 .bytes()
@@ -97,6 +96,12 @@ impl PhotoUse {
         {
             return Err(format!("字段 sha256 必须是 64 位小写十六进制：{sha256}"));
         }
+        Ok(())
+    }
+
+    pub fn from_json(value: &Json) -> Result<Self, String> {
+        let sha256 = req_str(value, "sha256")?;
+        Self::validate_sha256(&sha256)?;
         Ok(PhotoUse {
             photo_use_id: req_str(value, "photoUseId")?,
             asset_id: req_str(value, "assetId")?,
@@ -327,7 +332,7 @@ pub(crate) fn req_u64(value: &Json, key: &str) -> Result<u64, String> {
     Ok(n as u64)
 }
 
-fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
+pub(crate) fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
     match value.get(key) {
         None => Err(format!("字段 {key} 缺失")),
         Some(Json::Null) => Ok(None),
