@@ -1,0 +1,194 @@
+{
+  "settings": {
+    "theme": "dark",
+    "appLock": null
+  },
+  "tags": [
+    {
+      "tagId": "tag-000001",
+      "name": "合成·样片",
+      "normName": "合成·样片",
+      "createdAt": "2026-11-24T09:30:00Z"
+    }
+  ],
+  "tagDictRevision": 1,
+  "tagAliases": [],
+  "tagTombstones": [],
+  "version": 1,
+  "mergeOrigins": [],
+  "schemaVersion": 5,
+  "deletionMarkers": [],
+  "conflictCopies": [
+    {
+      "conflictId": "conflict-000007",
+      "recordId": "rec-000005",
+      "baseRevision": 1,
+      "snapshot": {
+        "title": "合成共享",
+        "body": "可恢复的合成副本",
+        "location": "",
+        "mood": null,
+        "coverPhotoUseId": "pu-000006",
+        "eventDate": "2024-03-01",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000006",
+            "assetId": "ast-5be0e93dd09a92cb",
+            "caption": "副本中的茶",
+            "sha256": "5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076",
+            "bytes": 297,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "createdAt": "2026-11-24T09:30:00Z",
+      "reason": "resolve_keep_formal"
+    }
+  ],
+  "seed": "synthetic-v5-oracle",
+  "seq": 9,
+  "records": [
+    {
+      "museumHidden": false,
+      "favorite": true,
+      "favoriteRevision": 1,
+      "tagIds": [
+        "tag-000001"
+      ],
+      "tagRevision": 1,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000002",
+      "contentRevision": 1,
+      "createdAt": "2026-11-24T09:30:00Z",
+      "updatedAt": "2026-11-24T09:30:00Z",
+      "committedAt": "2026-11-24T09:30:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成展台",
+        "body": " \t合成正文 é 🪁\r\n第二行　 ",
+        "location": "合成展厅",
+        "mood": "平静",
+        "coverPhotoUseId": "pu-000004",
+        "eventDate": "2024-02-29",
+        "eventTime": "07:05",
+        "photos": [
+          {
+            "photoUseId": "pu-000003",
+            "assetId": "ast-5be0e93dd09a92cb",
+            "caption": "茶色条纹",
+            "sha256": "5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076",
+            "bytes": 297,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000004",
+            "assetId": "ast-336cf1dd4efe5ef1",
+            "caption": "窗边\n第二张是封面",
+            "sha256": "336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8",
+            "bytes": 295,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": {
+        "title": "合成展台",
+        "body": "  草稿 👩‍🚀\r\n未发布 é\t ",
+        "location": "合成走廊",
+        "mood": "感动",
+        "coverPhotoUseId": "pu-000003",
+        "eventDate": "2024-02-29",
+        "eventTime": "07:05",
+        "photos": [
+          {
+            "photoUseId": "pu-000004",
+            "assetId": "ast-336cf1dd4efe5ef1",
+            "caption": "窗边\n第二张是封面",
+            "sha256": "336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8",
+            "bytes": 295,
+            "mediaType": "image/png"
+          },
+          {
+            "photoUseId": "pu-000003",
+            "assetId": "ast-5be0e93dd09a92cb",
+            "caption": "仅在草稿中的茶",
+            "sha256": "5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076",
+            "bytes": 297,
+            "mediaType": "image/png"
+          }
+        ]
+      }
+    },
+    {
+      "museumHidden": true,
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "status": "active",
+      "trashedAt": null,
+      "recordId": "rec-000005",
+      "contentRevision": 1,
+      "createdAt": "2026-11-24T09:30:00Z",
+      "updatedAt": "2026-11-24T09:30:00Z",
+      "committedAt": "2026-11-24T09:30:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成共享",
+        "body": "另一条正式正文",
+        "location": "",
+        "mood": null,
+        "coverPhotoUseId": "pu-000006",
+        "eventDate": "2024-03-01",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000006",
+            "assetId": "ast-5be0e93dd09a92cb",
+            "caption": "另一条记录的茶",
+            "sha256": "5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076",
+            "bytes": 297,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": null
+    },
+    {
+      "museumHidden": false,
+      "favorite": false,
+      "favoriteRevision": 0,
+      "tagIds": [],
+      "tagRevision": 0,
+      "status": "trashed",
+      "trashedAt": "2026-11-24T09:30:00Z",
+      "recordId": "rec-000008",
+      "contentRevision": 1,
+      "createdAt": "2026-11-24T09:30:00Z",
+      "updatedAt": "2026-11-24T09:30:00Z",
+      "committedAt": "2026-11-24T09:30:00Z",
+      "baseRevision": 1,
+      "formal": {
+        "title": "合成回收",
+        "body": "",
+        "location": "",
+        "mood": null,
+        "coverPhotoUseId": "pu-000009",
+        "eventDate": "2024-03-02",
+        "eventTime": null,
+        "photos": [
+          {
+            "photoUseId": "pu-000009",
+            "assetId": "ast-336cf1dd4efe5ef1",
+            "caption": "回收站中的窗",
+            "sha256": "336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8",
+            "bytes": 295,
+            "mediaType": "image/png"
+          }
+        ]
+      },
+      "draft": null
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# The native backup payload includes the exact on-disk state bytes.
+v3/state.json -text
+v5/state.json -text
