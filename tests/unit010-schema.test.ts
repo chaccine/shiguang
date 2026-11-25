@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { MemoryAdapter, migrateToV4 } from "../src/platform/memory-adapter.ts";
+import { MemoryAdapter, migrateToV5 } from "../src/platform/memory-adapter.ts";
 import type { PreviewBackup } from "../src/platform/memory-adapter.ts";
 import { createTauriApi } from "../src/platform/tauri-adapter.ts";
 import { sha256 } from "../src/platform/bytes.ts";
@@ -28,8 +28,8 @@ test("U010 v3 frozen content migrates defaults and preserves caption/order, draf
   // the frozen record snapshots directly; Rust tests verify real .sgbak bytes.
   const original = JSON.parse(readFileSync(new URL("../core/tests/fixtures/v3/state.json",import.meta.url),"utf8"));
   const incoming = { ...structuredClone(original), assets: {}, quarantine: {} };
-  const migrated = migrateToV4(incoming);
-  assert.equal(migrated.schemaVersion,4); assert.deepEqual(migrated.settings,{ theme: "system", appLock: null });
+  const migrated = migrateToV5(incoming);
+  assert.equal(migrated.schemaVersion,5); assert.deepEqual(migrated.settings,{ theme: "system", appLock: null });
   for (let i=0;i<migrated.records.length;i++) {
     const row = migrated.records[i]!;
     for (const slot of ["formal","draft"] as const) {
@@ -43,7 +43,7 @@ test("U010 v3 frozen content migrates defaults and preserves caption/order, draf
   }
   const conflict: Snapshot = structuredClone(migrated.records[0]!.formal!);
   const legacy = { ...structuredClone(migrated), schemaVersion: 3, conflictCopies: [{ conflictId: "conflict-000099", recordId: migrated.records[0]!.recordId, snapshot: conflict, baseRevision: 1, reason: "synthetic", createdAt: "synthetic" }] };
-  assert.equal(migrateToV4(legacy).conflictCopies[0]!.snapshot.coverPhotoUseId,conflict.photos[0]!.photoUseId);
+  assert.equal(migrateToV5(legacy).conflictCopies[0]!.snapshot.coverPhotoUseId,conflict.photos[0]!.photoUseId);
 });
 
 test("U010 all content fields stay in draft until commit, discard leaves formal unchanged", async () => {
@@ -98,7 +98,7 @@ test("U010 v4 preview backup roundtrip preserves formal and pending draft detail
   await a.api.setDraftCover(id,photos[2]!.photoUseId); await a.api.reorderDraftPhotos(id,photos.map((p)=>p.photoUseId).reverse());
   await a.api.setDraftPhotoCaption(id,photos[0]!.photoUseId,"合成新说明"); await a.api.saveDraft({ recordId: id, location: "合成地点", mood: "想念" });
   await a.api.commitRecord(id,1); await a.api.saveDraft({ recordId: id, location: "待提交地点", mood: "平静" });
-  const exp=await a.api.exportBackup(); assert.equal(exp.cancelled,false); if(exp.cancelled) return; assert.equal(exp.summary.schemaVersion,4);
+  const exp=await a.api.exportBackup(); assert.equal(exp.cancelled,false); if(exp.cancelled) return; assert.equal(exp.summary.schemaVersion,5);
   await b.api.restoreBackup(await pick(b.api,a.api.lastExportedPackage()!)); assert.deepEqual(await b.api.getRecord(id),await a.api.getRecord(id));
 });
 
@@ -109,7 +109,7 @@ test("U010 v3 preview backup restores and merges into v4 with default content fi
   const text=JSON.stringify(body), bytes=new TextEncoder().encode(text), pkg: PreviewBackup={magic:"SGBAK-PREVIEW",body:text,bytes:bytes.length,sha256:sha256(bytes)};
   for(const merge of [false,true]) {
     const b=device(),token=await pick(b.api,pkg); if(merge) await b.api.mergeBackup(token); else await b.api.restoreBackup(token);
-    assert.deepEqual((await b.api.getRecord(id)).formal,(await a.api.getRecord(id)).formal); assert.equal(JSON.parse(b.saved.getItem(key)!).schemaVersion,4);
+    assert.deepEqual((await b.api.getRecord(id)).formal,(await a.api.getRecord(id)).formal); assert.equal(JSON.parse(b.saved.getItem(key)!).schemaVersion,5);
   }
 });
 

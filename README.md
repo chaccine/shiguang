@@ -2,12 +2,13 @@
 
 本地离线的个人回忆记录应用（Tauri v2：Android / macOS / Windows）。只用合成数据开发与测试；无云同步、无 AI、无网络权限。
 
-**当前版本：0.1.10**（Android versionCode 1010）· 分支开发、PR 合并由 Cine 决定。
+**当前版本：0.1.11**（Android versionCode 1011，由版本推导，安装包未实测）· 分支开发、PR 合并由 Cine 决定。
 
-## 进度（Unit-0.10 Task A + B + C / 0.1.10）
+## 进度（Unit-0.11 Task A / 0.1.11）
 
 | 单元 | 内容 | 状态 |
 |---|---|---|
+| Unit-0.11 Task A | M04 四区只读投影、规则随机浏览、schema v5 暂时不看偏好及备份/合并；M03 共用精确月日规则 | 数据层与两 adapter 已实现，见 [SPEC](evidence/unit-0.11/SPEC.md)；博物馆展区 UI 未交付 |
 | Unit-0.10 Task A + B | schema v4 迁移及备份兼容；M01 说明/封面/顺序/地点/心情的数据与命令；主题与应用锁 UI；规范五入口导航、正式阅读页、编辑器新字段及只读存储统计 | 本地实现；设备/视觉验证边界，验证见 [SPEC](evidence/unit-0.10/SPEC.md) 和 [记录](evidence/unit-0.10/REPORT.md) |
 | Unit-0.10 Task C | A 暖纸本与独立“灯下展馆”夜间样式、语义 token、首屏主题/字号缓存、实时跟随系统、外观预览、焦点/名称/触控约束及对比度自动检查 | 本地实现；浏览器截图 BLOCKED，200% 实际布局/读屏/真机 NOT_RUN；见 [设计系统](evidence/unit-0.10/DESIGN_SYSTEM.md) |
 | Unit-0.10 Task D | 手机/桌面合成截图脚本及整体验证报告 | 截图脚本仅语法检查，须由编排侧在沙箱外运行 `npm run screenshots:u10`；实际状态见 [报告](evidence/UNIT0.10_REPORT.md) |
@@ -28,7 +29,7 @@ CI 通过 ≠ 真机通过：真机行为以各单元 `evidence/UNIT*_REPORT.md`
 
 明文包单文件、无压缩：
 `magic "SGBAK\0\0\x01"` + `u64 LE manifest 长度` + manifest JSON + 原始条目（`state.json` 与被引用的 `media/*` 原图）+ 48 字节尾部（`SGBAKEND` + 之前全部字节的 SHA-256 + 长度）。
-新包 schemaVersion=4，旧 v1–v3 包读取时迁移；manifest 含 formatVersion、schemaVersion、appVersion、exportedAt、encryption（目前只有 `none`）、各类计数、缺失原图列表、每个条目的大小与 SHA-256。
+新包 schemaVersion=5（含 `museumHidden` 偏好），旧 v1–v4 包读取时迁移；manifest 含 formatVersion、schemaVersion、appVersion、exportedAt、encryption（目前只有 `none`）、各类计数、缺失原图列表、每个条目的大小与 SHA-256。
 `previews/`（可重建缓存）、`backups/`、隔离区、锁文件不进包。详见 `evidence/unit-0.5/SPEC.md`。
 
 **加密包（SGBAKENC v1，Unit-0.6，可选）**：magic `SGBAKENC\0\x01` + 头部（KDF 参数、盐、nonce 前缀；头部整体作为 AAD）+ 1 MiB 分块的 XChaCha20-Poly1305 STREAM（nonce = 19 字节前缀 ‖ u32 计数 ‖ 末块标志），内层就是上面的明文包。口令经 Argon2id（默认 m=64 MiB、t=3、p=1，解密时参数有上限）派生密钥；口令不保存、不进日志，丢失无法找回。

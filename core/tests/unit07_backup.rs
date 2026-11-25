@@ -39,7 +39,7 @@ fn v3_roundtrip_tags_favorites_aliases_tombs_and_counts() {
     s.delete_tag(&z.tag_id).unwrap();
     let path = b.0.join("v3.sgbak");
     let report = s.export_backup(&path, "synthetic").unwrap();
-    assert_eq!(report.manifest.schema_version, 4);
+    assert_eq!(report.manifest.schema_version, 5);
     assert_eq!(report.manifest.counts.tags, 1);
     assert_eq!(report.manifest.counts.favorites, 1);
     let mut dest = Store::open_exclusive(b.0.join("dest")).unwrap();
@@ -83,7 +83,7 @@ fn actual_v2_package_without_new_fields_verifies_restores_and_merges() {
     assert_eq!(verify_backup(&path).unwrap().counts.tags, 0);
     let mut d = Store::open_exclusive(b.0.join("restore")).unwrap();
     d.restore_backup_overwrite(&path).unwrap();
-    assert_eq!(d.state_json().get("schemaVersion"), Some(&Json::Num(4)));
+    assert_eq!(d.state_json().get("schemaVersion"), Some(&Json::Num(5)));
     let mut e = Store::open_exclusive(b.0.join("merge")).unwrap();
     assert_eq!(e.merge_backup(&path).unwrap().plan.added, 1);
 }

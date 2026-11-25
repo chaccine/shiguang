@@ -54,3 +54,4 @@ pub use query::{
 };
 
 pub mod storage;
+pub mod museum;

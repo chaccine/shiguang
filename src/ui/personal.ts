@@ -37,6 +37,7 @@ export class PersonalUi {
     node("lock-disable").addEventListener("click", () => { void this.change(true); });
     node("lock-now").addEventListener("click", () => { this.lifecycle.lock(); this.mask(true); });
     node("storage-refresh").addEventListener("click", () => { void this.renderStorage().catch(e => { node("storage-space").textContent = describeError(e).detail; }); });
+    node("museum-hidden-reset").addEventListener("click", () => { void this.resetMuseumHidden(); });
     const tauriWindow = (window as unknown as { __TAURI__?: { window?: { getCurrentWindow?: () => {
       onFocusChanged: (handler: (event: {payload: boolean}) => void) => Promise<() => void>;
     } } } }).__TAURI__?.window?.getCurrentWindow?.();
@@ -161,5 +162,17 @@ export class PersonalUi {
     }));
     node("storage-space").textContent = stats.available === null ? "设备可用空间未知，请在系统设置中检查剩余空间。"
       : stats.available < 512 * 1024 * 1024 ? "设备空间不足 512 MB，请及时备份并在系统设置中释放空间。" : "设备剩余空间充足。";
+  }
+  private async resetMuseumHidden(): Promise<void> {
+    const button=node<HTMLButtonElement>("museum-hidden-reset"), feedback=node("museum-hidden-feedback");
+    if(button.disabled)return;
+    button.disabled=true;
+    try {
+      const result=await this.api.resetMuseumHidden();
+      feedback.textContent=result.durability==="uncertain"
+        ? "偏好已恢复，但系统未确认写入磁盘，请保持应用打开并重试检查。"
+        : `已恢复 ${result.affectedRecords} 条记录的推荐偏好。`;
+    } catch(error) {feedback.textContent=describeError(error).detail;}
+    finally {button.disabled=false;}
   }
 }

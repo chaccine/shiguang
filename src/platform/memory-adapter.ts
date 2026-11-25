@@ -1,5 +1,7 @@
 import type { TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import * as tl from "../domain/timeline.ts";
+import * as museum from "../domain/museum.ts";
+import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
 import * as tg from "../domain/tags.ts";
 import type { CommitResult, DeletionMarker, Durability, RecordRow, Snapshot, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, QuarantinedMedia, StoreStatus, BackupCapabilities, BackupCounts, BackupSummary, ExportBackupOptions, ExportBackupResult, MergeCounts, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
@@ -14,7 +16,7 @@ export interface StorageLike { getItem(key: string): string | null; setItem(key:
 interface MemoryAsset { dataUrl: string; sha256: string; bytes: number }
 interface MemoryState {
   version: 1;
-  schemaVersion: 4;
+  schemaVersion: 5;
   settings: { theme: ThemePreference; appLock: PreviewLock | null };
   seq: number;
   records: RecordRow[];
@@ -33,10 +35,10 @@ interface MemoryState {
   tagTombstones: TagTombstone[];
 }
 
-/** 旧预览状态 → v4：保留 v3 元数据、说明和照片顺序，补快照字段及默认设置。 */
-export function migrateToV4(state: Omit<MemoryState, "schemaVersion" | "settings" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<Omit<MemoryState, "schemaVersion">> & { schemaVersion?: number }): MemoryState {
+/** 旧预览状态 → v5：保留 v3 元数据、说明和照片顺序，补快照字段及默认设置。 */
+export function migrateToV5(state: Omit<MemoryState, "schemaVersion" | "settings" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<Omit<MemoryState, "schemaVersion">> & { schemaVersion?: number }): MemoryState {
   const version = state.schemaVersion ?? 1;
-  if (version > 4) fail("SCHEMA_TOO_NEW", "数据来自更新版本，请升级拾光");
+  if (version > 5) fail("SCHEMA_TOO_NEW", "数据来自更新版本，请升级拾光");
   if (version < 3) {
     for (const row of state.records) {
       row.favorite ??= false; row.favoriteRevision ??= 0; row.tagIds ??= []; row.tagRevision ??= 0;
@@ -49,7 +51,10 @@ export function migrateToV4(state: Omit<MemoryState, "schemaVersion" | "settings
     }
     state.settings = { theme: "system", appLock: null };
   }
-  state.schemaVersion = 4;
+  if (version < 5) {
+    for (const row of state.records) row.museumHidden = false;
+  }
+  state.schemaVersion = 5;
   return state as MemoryState;
 }
 type Operation = keyof ShiguangApi;
@@ -66,7 +71,7 @@ const settingsQueues = new WeakMap<object,Map<string,Promise<void>>>();
 /** 仅供浏览器合成数据预览；storage 由调用方注入。 */
 export class MemoryAdapter implements ShiguangApi {
   durabilityMode: Durability = "durable";
-  private state: MemoryState = { version: 1, schemaVersion: 4, settings: { theme: "system", appLock: null }, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
+  private state: MemoryState = { version: 1, schemaVersion: 5, settings: { theme: "system", appLock: null }, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
     tags: [], tagDictRevision: 0, tagAliases: [], tagTombstones: [] };
   private failures = new Map<Operation, string>();
   private pendingConflicts = new Map<string, { snapshot: Snapshot; baseRevision: number }>();
@@ -115,7 +120,7 @@ export class MemoryAdapter implements ShiguangApi {
     try {
       const state = JSON.parse(raw) as MemoryState;
       if (state.schemaVersion !== undefined && (!Number.isInteger(state.schemaVersion) || state.schemaVersion < 1)) throw new Error("结构版本无效");
-      if (state.schemaVersion > 4) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
+      if (state.schemaVersion > 5) return fail("SCHEMA_TOO_NEW", describeError({ code: "SCHEMA_TOO_NEW" }).detail);
       if (state.version !== 1 || !Number.isSafeInteger(state.seq) || state.seq < 0
         || !Array.isArray(state.records) || !state.assets || typeof state.assets !== "object" || Array.isArray(state.assets)) throw new Error("状态结构无效");
       const legacy = state.schemaVersion === undefined || Number(state.schemaVersion) === 1;
@@ -123,7 +128,7 @@ export class MemoryAdapter implements ShiguangApi {
         state.deletionMarkers = []; state.conflictCopies = [];
         for (const row of state.records) { row.status = "active"; row.trashedAt = null; }
       }
-      migrateToV4(state);
+      migrateToV5(state);
       state.quarantine ??= {};
       if (state.deletedCreatedAt !== undefined && (typeof state.deletedCreatedAt !== "object" || state.deletedCreatedAt === null || Array.isArray(state.deletedCreatedAt))) throw new Error("删除记录信息无效");
       if (!Array.isArray(state.deletionMarkers) || !Array.isArray(state.conflictCopies)
@@ -136,7 +141,7 @@ export class MemoryAdapter implements ShiguangApi {
         ids.add(marker.recordId);
       }
       for (const row of state.records) {
-        if (typeof row.recordId !== "string" || !Number.isInteger(row.contentRevision) || row.contentRevision < 0
+        if (typeof row.museumHidden !== "boolean" || typeof row.recordId !== "string" || !Number.isInteger(row.contentRevision) || row.contentRevision < 0
           || !Number.isInteger(row.baseRevision) || row.baseRevision < 0
           || typeof row.createdAt !== "string" || typeof row.updatedAt !== "string"
           || !(row.committedAt === null || typeof row.committedAt === "string")
@@ -432,7 +437,7 @@ export class MemoryAdapter implements ShiguangApi {
       row = { status: "active", trashedAt: null, recordId: this.id(next, "rec"), contentRevision: 0, baseRevision: 0, createdAt: now, updatedAt: now,
         committedAt: null, formal: null, draft: { ...blank(), title: input.title ?? "", body: input.body ?? "",
           eventDate: input.eventDate ?? "", eventTime: normalizeTime(input.eventTime), location: input.location ?? "", mood: input.mood ?? null },
-        favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0 };
+        museumHidden: false, favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0 };
       next.records.push(row);
       const issue = validateSnapshotDetails(row.draft!); if (issue) throw issue;
     }
@@ -618,7 +623,7 @@ export class MemoryAdapter implements ShiguangApi {
     for (const id of referenced) if (state.assets[id]) assets[id] = state.assets[id]!;
     const packed = { ...copy(state), settings: { ...state.settings, appLock: null }, assets, quarantine: {} };
     const manifest = {
-      format: "shiguang-backup", formatVersion: 1, schemaVersion: 4, appVersion: "preview",
+      format: "shiguang-backup", formatVersion: 1, schemaVersion: 5, appVersion: "preview",
       exportedAt: this.now(), encryption: { mode: "none" }, compression: "none", counts: this.counts(state), ...overrides,
     };
     let body = JSON.stringify({ manifest, state: packed });
@@ -648,7 +653,7 @@ export class MemoryAdapter implements ShiguangApi {
     if (m.format !== "shiguang-backup") fail("BACKUP_INVALID", "这不是拾光备份文件");
     if (Number(m.formatVersion) > 1) fail("BACKUP_FORMAT_TOO_NEW", "备份格式来自更新版本的拾光");
     if (m.encryption?.mode !== "none") fail("BACKUP_ENCRYPTED_UNSUPPORTED", "未知的加密方式");
-    if (Number(m.schemaVersion) > 4) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
+    if (Number(m.schemaVersion) > 5) fail("BACKUP_SCHEMA_TOO_NEW", "备份来自更新版本的拾光，请先升级");
     const summary: BackupSummary = {
       formatVersion: Number(m.formatVersion), schemaVersion: Number(m.schemaVersion), appVersion: String(m.appVersion),
       exportedAt: String(m.exportedAt), bytes: pkg.bytes, encryption: pkg.lock ? "argon2id-xchacha20poly1305" : "none", counts: m.counts,
@@ -656,8 +661,9 @@ export class MemoryAdapter implements ShiguangApi {
     let state: MemoryState;
     try {
       if (parsed.state.schemaVersion !== m.schemaVersion) fail("BACKUP_CORRUPT");
-      state = migrateToV4(parsed.state);
+      state = migrateToV5(parsed.state);
       tg.validateTagState(state);
+      if (state.records.some((r) => typeof r.museumHidden !== "boolean")) fail("BACKUP_CORRUPT");
       for (const snap of state.records.flatMap((r) => [r.formal, r.draft]).concat(state.conflictCopies.map((c) => c.snapshot))) {
         if (snap && validateSnapshotDetails(snap)) fail("BACKUP_CORRUPT");
       }
@@ -832,6 +838,39 @@ export class MemoryAdapter implements ShiguangApi {
   async onThisDay(month: number, day: number, today?: string): Promise<OnThisDayGroup[]> {
     this.check("onThisDay"); return tl.onThisDay(this.reload().records, month, day, today ?? this.today());
   }
+  async museumReunionPreview(today = this.today()): Promise<MuseumReunionPage> {
+    this.check("museumReunionPreview"); return museum.museumReunionPage(this.reload().records,null,museum.MUSEUM_PREVIEW_LIMIT,today);
+  }
+  async museumReunionPage(cursor: string | null, limit: number, today = this.today()): Promise<MuseumReunionPage> {
+    this.check("museumReunionPage"); return museum.museumReunionPage(this.reload().records,cursor,limit,today);
+  }
+  async museumFavoritesPage(cursor: string | null, limit: number, order: SortOrder = "desc", today = this.today()): Promise<TimelinePage> {
+    this.check("museumFavoritesPage"); return museum.museumFavoritesPage(this.reload().records,order,cursor,limit,today);
+  }
+  async museumPhotosPage(cursor: string | null, limit: number, order: SortOrder = "desc", today = this.today()): Promise<MuseumPhotoPage> {
+    this.check("museumPhotosPage"); return museum.museumPhotosPage(this.reload().records,order,cursor,limit,today);
+  }
+  async museumYears(): Promise<MuseumYear[]> { this.check("museumYears"); return museum.museumYears(this.reload().records); }
+  async museumYearRoom(year: number, cursor: string | null, limit: number, order: SortOrder = "desc", today = this.today()): Promise<MuseumYearRoom> {
+    this.check("museumYearRoom"); return museum.museumYearRoom(this.reload().records,year,order,cursor,limit,today);
+  }
+  async museumReshuffle(seed: number, previousIds: string[], limit: number, today = this.today()): Promise<MuseumShuffle> {
+    this.check("museumReshuffle"); return museum.museumReshuffle(this.reload().records,seed,previousIds,limit,today);
+  }
+  async museumHomeSummary(today = this.today()): Promise<MuseumSummary> {
+    this.check("museumHomeSummary"); return museum.museumHomeSummary(this.reload().records,today);
+  }
+  async setMuseumHidden(recordId: string, hidden: boolean): Promise<MuseumHiddenResult> {
+    this.check("setMuseumHidden"); const next=this.reload(),row=this.metaRow(next,recordId);
+    if(row.museumHidden!==hidden){row.museumHidden=hidden;this.persist(next);}
+    return {recordId,museumHidden:hidden,durability:this.durabilityMode};
+  }
+  async resetMuseumHidden(): Promise<MuseumResetResult> {
+    this.check("resetMuseumHidden");const next=this.reload();let affectedRecords=0;
+    for(const row of next.records){if(row.museumHidden){row.museumHidden=false;affectedRecords++;}}
+    if(affectedRecords>0)this.persist(next);
+    return {affectedRecords,durability:this.durabilityMode};
+  }
 }
 
 function xorText(text: string, keyHex: string): string {
@@ -905,11 +944,12 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   };
   const markerMatches = (recordId: string, createdAt: string) => next.deletionMarkers.some((m) => m.recordId === recordId
     && (next.deletedCreatedAt?.[recordId] === undefined || next.deletedCreatedAt[recordId] === createdAt));
-  migrateToV4(next); migrateToV4(incoming);
+  migrateToV5(next); migrateToV5(incoming);
   const tagCounts = { tagsAdded: 0, tagsRemapped: 0, tagsSkippedDeleted: 0, tagsDeletedInBackup: 0 };
   const tagMap = tg.mergeTagDictionaries(next, incoming, tagCounts);
-  let favoritesUpdated = 0, tagLinksUpdated = 0;
+  let favoritesUpdated = 0, tagLinksUpdated = 0, museumHiddenUpdated = 0;
   const mergeMeta = (local: RecordRow, r: RecordRow) => {
+    if (r.museumHidden && !local.museumHidden) { local.museumHidden = true; museumHiddenUpdated++; }
     if (r.favoriteRevision > local.favoriteRevision) {
       if (r.favorite !== local.favorite) favoritesUpdated++;
       local.favorite = r.favorite; local.favoriteRevision = r.favoriteRevision;
@@ -987,7 +1027,7 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
     else if (!local.assets[id]) counts.mediaMissing++;
   }
   next.seq = Math.max(next.seq, maxSeq(usedIds), maxSeq(usedConflict), maxSeq(usedPhotoUse.keys()));
-  Object.assign(counts, tagCounts, { favoritesUpdated, tagLinksUpdated });
+  Object.assign(counts, tagCounts, { favoritesUpdated, tagLinksUpdated, museumHiddenUpdated });
   tg.validateTagState(next);
   return { state: next, plan: { counts, skippedDeleted, deletedInBackup } };
 }

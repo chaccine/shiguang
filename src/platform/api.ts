@@ -1,6 +1,7 @@
 import type { TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupOptions, ExportBackupResult, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult, BackupSummary } from "../domain/types.ts";
 import type { Mood, AppSettings, SettingsResult, ThemePreference } from "../domain/types.ts";
+import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
 
 export interface DraftFields {
   title?: string;
@@ -99,4 +100,17 @@ export interface ShiguangApi {
   dayEntries(date: string, order?: SortOrder): Promise<TimelineItem[]>;
   /** 往年同月同日；today 缺省为设备本地日期。 */
   onThisDay(month: number, day: number, today?: string): Promise<OnThisDayGroup[]>;
+  // M04: today defaults to DEVICE LOCAL calendar date; explicit dates are testable.
+  museumReunionPreview(today?: string): Promise<MuseumReunionPage>;
+  museumReunionPage(cursor: string | null, limit: number, today?: string): Promise<MuseumReunionPage>;
+  museumFavoritesPage(cursor: string | null, limit: number, order?: SortOrder, today?: string): Promise<TimelinePage>;
+  museumPhotosPage(cursor: string | null, limit: number, order?: SortOrder, today?: string): Promise<MuseumPhotoPage>;
+  museumYears(): Promise<MuseumYear[]>;
+  museumYearRoom(year: number, cursor: string | null, limit: number, order?: SortOrder, today?: string): Promise<MuseumYearRoom>;
+  /** uint32 seed; consumes unseen IDs before unavoidable repeats. */
+  museumReshuffle(seed: number, previousIds: string[], limit: number, today?: string): Promise<MuseumShuffle>;
+  museumHomeSummary(today?: string): Promise<MuseumSummary>;
+  setMuseumHidden(recordId: string, hidden: boolean): Promise<MuseumHiddenResult>;
+  /** 恢复所有暂时不看, including preferences in trash; never restores content. */
+  resetMuseumHidden(): Promise<MuseumResetResult>;
 }

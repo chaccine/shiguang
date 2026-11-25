@@ -73,6 +73,16 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     calendarMonth: (year, month, filter) => invoke("calendar_month", { year, month, filter: wireFilter(filter ?? {}) }),
     dayEntries: (date, order) => invoke("day_entries", { date, order: order ?? "desc", today: localToday() }),
     onThisDay: (month, day, today) => invoke("on_this_day", { month, day, today: today ?? localToday() }),
+    museumReunionPreview: (today) => invoke("museum_reunion_preview", { today: today ?? localToday() }),
+    museumReunionPage: (cursor, limit, today) => invoke("museum_reunion_page", { cursor, limit, today: today ?? localToday() }),
+    museumFavoritesPage: (cursor, limit, order, today) => invoke("museum_favorites_page", { cursor, limit, order: order ?? "desc", today: today ?? localToday() }),
+    museumPhotosPage: (cursor, limit, order, today) => invoke("museum_photos_page", { cursor, limit, order: order ?? "desc", today: today ?? localToday() }),
+    museumYears: () => invoke("museum_years"),
+    museumYearRoom: (year, cursor, limit, order, today) => invoke("museum_year_room", { year, cursor, limit, order: order ?? "desc", today: today ?? localToday() }),
+    museumReshuffle: (seed, previousIds, limit, today) => invoke("museum_reshuffle", { seed, previousIds, limit, today: today ?? localToday() }),
+    museumHomeSummary: (today) => invoke("museum_home_summary", { today: today ?? localToday() }),
+    setMuseumHidden: (recordId, hidden) => invoke("set_museum_hidden", { recordId, hidden }),
+    resetMuseumHidden: () => invoke("reset_museum_hidden"),
   };
 }
 

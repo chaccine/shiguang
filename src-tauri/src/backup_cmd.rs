@@ -541,6 +541,7 @@ fn plan_value(plan: &MergePlan) -> serde_json::Value {
             "tagsSkippedDeleted": plan.tags_skipped_deleted,
             "tagsDeletedInBackup": plan.tags_deleted_in_backup,
             "favoritesUpdated": plan.favorites_updated, "tagLinksUpdated": plan.tag_links_updated,
+            "museumHiddenUpdated": plan.museum_hidden_updated,
         },
         "skippedDeleted": identities(&plan.skipped_deleted),
         "deletedInBackup": identities(&plan.deleted_in_backup),

@@ -31,6 +31,8 @@ export interface Snapshot {
 }
 
 export interface RecordRow {
+  /** Recommendation preference; never publishes or changes content. */
+  museumHidden: boolean;
   status: "active" | "trashed";
   trashedAt: string | null;
   recordId: string;
@@ -120,6 +122,7 @@ export interface MergeCounts {
   /** Unit-0.7：标签与珍藏的合并统计（旧版本缺省 0）。 */
   tagsAdded?: number; tagsRemapped?: number; tagsSkippedDeleted?: number; tagsDeletedInBackup?: number;
   favoritesUpdated?: number; tagLinksUpdated?: number;
+  museumHiddenUpdated?: number;
 }
 /** 合并计划：只读预演；skippedDeleted = 本机已永久删除、旧备份里仍有的记录（不复活）。 */
 export interface MergePlan { counts: MergeCounts; skippedDeleted: string[]; deletedInBackup: string[] }
@@ -153,6 +156,25 @@ export interface TimelinePage { items: TimelineItem[]; nextCursor: string | null
 export interface MonthCount { year: number; month: number; count: number }
 export interface CalendarDay { date: string; count: number; photoCount: number; hasFavorite: boolean }
 export interface OnThisDayGroup { year: number; items: TimelineItem[] }
+
+// ---- Unit-0.11 M04: disposable projections, never persisted exhibition copies ----
+export interface MuseumReunionGroup extends OnThisDayGroup { yearsAgo: number; label: string }
+export interface MuseumReunionPage { groups: MuseumReunionGroup[]; nextCursor: string | null; total: number }
+export interface MuseumPhotoTile {
+  recordId: string; title: string | null; eventDate: string; eventTime: string | null; isFuture: boolean;
+  photoIndex: number; photoUseId: string; assetId: string; caption: string; thumbnailKey: string;
+}
+export interface MuseumPhotoPage { items: MuseumPhotoTile[]; nextCursor: string | null; total: number }
+/** months = twelve record counts, January through December. */
+export interface MuseumYear { year: number; recordCount: number; photoCount: number; months: number[] }
+export interface MuseumYearRoom { summary: MuseumYear | null; page: TimelinePage; featured: TimelineItem[] }
+export interface MuseumShuffle { items: TimelineItem[]; eligibleTotal: number }
+export interface MuseumSummary {
+  recordCount: number; reunionCount: number; favoriteCount: number; photoCount: number;
+  yearCount: number; eligibleCount: number; hiddenCount: number;
+}
+export interface MuseumHiddenResult { recordId: string; museumHidden: boolean; durability: Durability }
+export interface MuseumResetResult { affectedRecords: number; durability: Durability }
 
 export interface StorageStats {
   media: number; previews: number; backups: number; data: number; other: number; total: number;

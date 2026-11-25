@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "shiguang-desktop"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "jni",
  "serde",
@@ -3107,7 +3107,7 @@ dependencies = [
 
 [[package]]
 name = "shiguang_core"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -3118,7 +3118,7 @@ dependencies = [
 
 [[package]]
 name = "shiguang_thumbnails"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "image",
 ]

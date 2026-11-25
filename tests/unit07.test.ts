@@ -1,7 +1,7 @@
 // Unit-0.7：时光轴 / 日历 / 珍藏（G01）/ 标签事务（G06）——MemoryAdapter 与纯函数，同 Rust core 语义。全部为合成数据。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MemoryAdapter, migrateToV4 } from "../src/platform/memory-adapter.ts";
+import { MemoryAdapter, migrateToV5 } from "../src/platform/memory-adapter.ts";
 import * as tl from "../src/domain/timeline.ts";
 import { normalizeTagName } from "../src/domain/tags.ts";
 import type { RecordRow, Snapshot } from "../src/domain/types.ts";
@@ -35,7 +35,7 @@ const snap = (eventDate: string, eventTime: string | null = null, photos = 0): S
 function row(id: string, createdAt: string, formal: Snapshot | null, extra: Partial<RecordRow> = {}): RecordRow {
   return { status: "active", trashedAt: null, recordId: id, contentRevision: formal ? 1 : 0, createdAt, updatedAt: createdAt,
     committedAt: formal ? createdAt : null, baseRevision: formal ? 1 : 0, formal, draft: null,
-    favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0, ...extra };
+    museumHidden: false, favorite: false, favoriteRevision: 0, tagIds: [], tagRevision: 0, ...extra };
 }
 
 test("U07 B02：同日有时刻组在前、无时刻组在后（两个方向）；同时刻/无时刻按 createdAt，再按 id", () => {
@@ -261,14 +261,14 @@ test("U07 备份往返：标签、珍藏、别名、墓碑完整；覆盖恢复�
   const exp = await A.api.exportBackup();
   assert.equal(exp.cancelled, false);
   if (exp.cancelled) return;
-  assert.equal(exp.summary.schemaVersion, 4);
+  assert.equal(exp.summary.schemaVersion, 5);
   assert.equal(exp.summary.counts.tags, 1); assert.equal(exp.summary.counts.favorites, 1);
   B.api.setNextPickedPackage(A.api.lastExportedPackage()!);
   const picked = await B.api.pickBackup();
   if (picked.cancelled) throw new Error("x");
   await B.api.restoreBackup(picked.token);
   const s = JSON.parse(B.saved.getItem(KEY)!);
-  assert.equal(s.schemaVersion, 4);
+  assert.equal(s.schemaVersion, 5);
   assert.equal(s.tags.length, 1); assert.equal(s.tagAliases.length, 1); assert.equal(s.tagTombstones.length, 1);
   const row = await B.api.getRecord(r);
   assert.equal(row.favorite, true); assert.deepEqual(row.tagIds, [t1.tagId]);
@@ -320,9 +320,9 @@ test("U07 迁移：v2 预览状态 → v4 默认值；v5 拒绝", async () => {
   const r = await api.getRecord("rec-000001");
   assert.equal(r.favorite, false); assert.deepEqual(r.tagIds, []); assert.equal(r.tagRevision, 0);
   assert.deepEqual(await api.listTags(), []);
-  const s2 = storage(); s2.data.set(KEY, JSON.stringify({ version: 1, schemaVersion: 5, seq: 0, records: [], assets: {} }));
+  const s2 = storage(); s2.data.set(KEY, JSON.stringify({ version: 1, schemaVersion: 6, seq: 0, records: [], assets: {} }));
   assert.throws(() => new MemoryAdapter({ storage: s2, search: "" }), hasCode("SCHEMA_TOO_NEW"));
-  assert.equal(migrateToV4({ version: 1, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {} }).schemaVersion, 4);
+  assert.equal(migrateToV5({ version: 1, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {} }).schemaVersion, 5);
 });
 
 test("U07 严格校验：悬空标签引用 → STATE_CORRUPT（预览状态不被静默修复）", async () => {

@@ -85,3 +85,26 @@ test("app-lock UI enables/confirms, clears every password input, gates restart, 
     await restarted.renderStorage();assert.match(get("storage-space").textContent,/不足 512 MB/);
   } finally {Object.assign(globalThis,{window:originalWindow,document:originalDocument});}
 });
+
+test("Mine privacy museum reset entry restores hidden preferences with honest failure feedback", async () => {
+  const original = { window: globalThis.window, document: globalThis.document };
+  const controls = new Map<string, Control>();
+  const get = (id: string) => { let n = controls.get(id); if (!n) { n = new Control(); controls.set(id, n); } return n; };
+  Object.assign(globalThis, {
+    window: { localStorage: { getItem: () => null, setItem() {} }, setInterval: () => 0, addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }) },
+    document: { documentElement: get("root"), querySelector: (s: string) => s === ".app-shell" ? get("shell") : get(s.match(/data-testid="([^"]+)"/)![1]),
+      querySelectorAll: () => [], addEventListener() {} },
+  });
+  try {
+    const api = new MemoryAdapter({ search: "" });
+    const id = (await api.createDraft({ body: "合成记录", eventDate: "2024-11-12" })).row.recordId;
+    await api.commitRecord(id, 0); await api.setMuseumHidden(id, true);
+    new PersonalUi(api, true, async () => true);
+    api.failNext("DISK_FULL", "resetMuseumHidden"); get("museum-hidden-reset").fire("click");
+    await until(() => !get("museum-hidden-reset").disabled);
+    assert.equal((await api.getRecord(id)).museumHidden, true); assert.ok(get("museum-hidden-feedback").textContent);
+    get("museum-hidden-reset").fire("click"); await until(() => !get("museum-hidden-reset").disabled);
+    assert.match(get("museum-hidden-feedback").textContent, /已恢复 1 条记录/);
+    assert.equal((await api.getRecord(id)).museumHidden, false);
+  } finally { Object.assign(globalThis, original); }
+});

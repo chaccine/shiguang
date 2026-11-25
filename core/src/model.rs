@@ -339,6 +339,8 @@ fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, String> {
 /// 记录的持久化形态：正式快照与草稿分字段保存。
 #[derive(Clone, Debug, Default)]
 pub struct RecordRow {
+    /// Recommendation preference only; independent of content and draft revisions.
+    pub museum_hidden: bool,
     pub favorite: bool,
     pub favorite_revision: u32,
     pub tag_ids: Vec<String>,
@@ -363,6 +365,7 @@ impl RecordRow {
 
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
+            ("museumHidden", Json::Bool(self.museum_hidden)),
             ("favorite", Json::Bool(self.favorite)),
             ("favoriteRevision", Json::Num(self.favorite_revision as i64)),
             (
@@ -421,6 +424,10 @@ impl RecordRow {
             Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
         };
         Ok(RecordRow {
+            museum_hidden: match value.get("museumHidden") {
+                Some(Json::Bool(v)) => *v,
+                _ => return Err("字段 museumHidden 必须是布尔值".into()),
+            },
             favorite: match value.get("favorite") {
                 Some(Json::Bool(v)) => *v,
                 _ => return Err("字段 favorite 必须是布尔值".into()),

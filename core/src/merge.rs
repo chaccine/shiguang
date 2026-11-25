@@ -27,6 +27,7 @@ pub struct MergePlan {
     pub tags_deleted_in_backup: u64,
     pub favorites_updated: u64,
     pub tag_links_updated: u64,
+    pub museum_hidden_updated: u64,
 
     pub added: u64,
     pub updated: u64,
@@ -58,6 +59,7 @@ impl MergePlan {
             ),
             ("favoritesUpdated", Json::Num(self.favorites_updated as i64)),
             ("tagLinksUpdated", Json::Num(self.tag_links_updated as i64)),
+            ("museumHiddenUpdated", Json::Num(self.museum_hidden_updated as i64)),
             ("added", Json::Num(self.added as i64)),
             ("updated", Json::Num(self.updated as i64)),
             ("unchanged", Json::Num(self.unchanged as i64)),
@@ -425,6 +427,12 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
             continue;
         };
         let mut l = s.records[index].clone();
+        // Conservative preference union, AFTER identity/deletion checks. Never
+        // import a story merely to recover a hidden recommendation preference.
+        if r.museum_hidden && !l.museum_hidden {
+            l.museum_hidden = true;
+            p.museum_hidden_updated += 1;
+        }
         if r.favorite_revision > l.favorite_revision {
             l.favorite = r.favorite;
             l.favorite_revision = r.favorite_revision;

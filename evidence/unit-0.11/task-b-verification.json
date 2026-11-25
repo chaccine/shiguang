@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-13",
+  "task": "Unit-0.11 Task B",
+  "rust": "1.90.0",
+  "node": "v24.22.1",
+  "environment": {
+    "PATH": "$HOME/.cargo/bin:$PATH",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --workspace",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-cargo.log",
+      "bytes": 23443,
+      "sha256": "2457201b23df59f0f8256ba5a708987cc2161e54eb9ec204300e8c6841769774",
+      "counts": {
+        "passed": 231,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "command": "cargo test --locked -p shiguang_core --features fault-injection",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-fault-injection.log",
+      "bytes": 25377,
+      "sha256": "2d3f47eb10304100260656fd4191098836ec0b2b18e048d911f2fa54773f1ea3",
+      "counts": {
+        "passed": 280,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "command": "npm test",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-npm.log",
+      "bytes": 1199,
+      "sha256": "523d17c6e8997fc19dd72aa7bdb964429cee52b664e8192db30768b0dd68c9fd",
+      "counts": {
+        "tests": 23,
+        "pass": 23,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "command": "node --test --test-isolation=none tests/*.test.ts",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-npm-cases.log",
+      "bytes": 20126,
+      "sha256": "a92ea602ded42a0715937540b32d0b5d533de630b85b13ac585d7b28216736cd",
+      "counts": {
+        "tests": 204,
+        "pass": 204,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-typecheck.log",
+      "bytes": 57,
+      "sha256": "fc25f3b0cdc31a878edb529258ee1b7f4015d9036e24268933b92f10ff714eb2"
+    },
+    {
+      "command": "npm run build",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-build.log",
+      "bytes": 179,
+      "sha256": "88708d9d9e98189627b61b92ef2434e893e1ab1b478bd89525ef60a526ea6758"
+    },
+    {
+      "command": "node --check scripts/screenshots-u11.mjs",
+      "status": "PASS",
+      "log": "/tmp/unit011-b-syntax.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "museumHome5000": {
+    "elapsedMs": 220.6,
+    "budgetMs": 1000,
+    "thumbnailRequests": 7,
+    "scope": "MemoryAdapter plus event DOM construction; no layout, rendering or image decoding"
+  },
+  "screenshots": "pending (orchestrator); final script syntax checked only by this agent",
+  "ci": "pending (filled by orchestrator)"
+}
