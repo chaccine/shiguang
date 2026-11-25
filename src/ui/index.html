@@ -26,7 +26,24 @@
     <link rel="stylesheet" href="./ui/search.css" />
   </head>
   <body>
-    <div class="app-shell" id="app-shell" inert>
+    <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="拾光" tabindex="-1">
+      <p data-testid="startup-cover" role="status">拾光</p>
+      <div data-testid="startup-error" class="data-card" hidden>
+        <p data-testid="startup-message" role="alert"></p>
+        <button type="button" class="button" data-testid="startup-retry">重试</button>
+      </div>
+      <form data-testid="unlock-form" class="data-card" hidden>
+        <div class="lock-emblem" aria-hidden="true">⌑</div>
+        <p class="eyebrow">这一间展馆，只属于你</p><h1>拾光 · 私人时光</h1>
+        <p data-testid="unlock-hint" role="status"></p>
+        <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+        <button type="submit" class="button" data-testid="app-unlock">解锁</button>
+        <button type="button" class="button ghost" data-testid="unlock-cancel" hidden>取消验证</button>
+        <p data-testid="unlock-feedback" role="status"></p>
+      </form>
+    </div>
+
+    <div class="app-shell" id="app-shell" hidden inert>
       <a class="skip-link" href="#main-content">跳到内容</a>
       <aside class="sidebar">
         <div class="brand">
@@ -407,11 +424,6 @@
       </div>
     </dialog>
 
-    <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="应用锁">
-      <form data-testid="unlock-form" class="data-card"><div class="lock-emblem" aria-hidden="true">⌑</div><p class="eyebrow">这一间展馆，只属于你</p><h1>拾光 · 私人时光</h1><p data-testid="unlock-hint">正在检查应用锁…</p>
-      <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
-      <button class="button" data-testid="app-unlock">解锁</button><p data-testid="unlock-feedback" role="status"></p></form>
-    </div>
     <script type="module" src="./ui/main.js"></script>
   </body>
 </html>

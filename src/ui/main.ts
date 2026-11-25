@@ -168,14 +168,8 @@ const invoke = tauriInvokeFromWindow();
 const searchDemo = searchDemoMode(params, invoke !== null);
 const demo = invoke === null && searchDemo === null && params.get("demo") === "1";
 
-if (demo) {
-  window.localStorage.removeItem(PREVIEW_STORAGE_KEY);
-  window.localStorage.removeItem(LAST_DRAFT_KEY);
-}
-if (searchDemo !== null) window.localStorage.removeItem(SEARCH_DEMO_STORAGE_KEY);
-
 const memory = invoke === null
-  ? new MemoryAdapter({ storage: window.localStorage, storageKey: searchDemo !== null ? SEARCH_DEMO_STORAGE_KEY : PREVIEW_STORAGE_KEY,
+  ? new MemoryAdapter({ storage: window.localStorage, deferOpen: true, storageKey: searchDemo !== null ? SEARCH_DEMO_STORAGE_KEY : PREVIEW_STORAGE_KEY,
     ...(searchDemo !== null ? { now: searchDemoClock(), search: "" } : {}) })
   : null;
 let search: SearchUi;
@@ -393,10 +387,7 @@ confirmDialog.addEventListener("close", () => {
   settle?.(false);
 });
 
-/**
- * 数据打不开时：保留全部导航，页签仍可切换；每个页签显示同一条错误提示，不做任何写操作。
- * 不再整屏遮挡，避免用户被困在错误页里看不到入口。
- */
+/** 数据目录不可用时保留错误，直到启动重试成功。 */
 let blockedDescription: ErrorDescription | null = null;
 let blockedTitle = "";
 
@@ -407,15 +398,22 @@ function showStoreBlocked(code: string, error: unknown): void {
     ? "拾光已在别处打开"
     : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : code === "STORE_STARTING" ? "拾光还在打开数据" : "数据暂时无法打开";
   showErrorDescription({ ...description, title: blockedTitle });
-  showAppNotice(`${blockedTitle}：${description.detail} 页签仍可切换，但暂时不能读取或写入数据。`, "warn");
 }
 
-async function gateStore(): Promise<boolean> {
+async function waitForStore(): Promise<void> {
   // 数据仍在打开（STORE_STARTING）或宿主刚重建时短暂重试，不把等待误报为“无法打开”。
-  const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
-  if (outcome.ok) return true;
-  showStoreBlocked(outcome.code, outcome.error);
-  return false;
+  for (;;) {
+    const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
+    if (outcome.ok) {
+      if (blockedDescription !== null) { blockedDescription = null; blockedTitle = ""; clearErrorBox(); }
+      return;
+    }
+    showStoreBlocked(outcome.code, outcome.error);
+    const advice = outcome.code === "STORE_LOCKED" ? "请关闭另一个拾光窗口，再重试或重新打开应用。"
+      : outcome.code === "SCHEMA_TOO_NEW" ? "请使用支持这份数据的新版拾光。"
+      : "请重试。若仍无法打开，请保留本机数据并重新打开拾光。";
+    await personal.waitForStoreRetry(`${blockedTitle}。${advice}`);
+  }
 }
 
 /** 数据打不开时不允许进入写流程；提示已有的错误，不做无用的写入尝试。 */
@@ -2586,34 +2584,25 @@ window.addEventListener("pagehide", () => {
 });
 
 async function boot(): Promise<void> {
+  await waitForStore();
+  await personal.start();
+  const start = initialTab({ param: params.get("view") });
+  setView(start);
   try {
     if (memory !== null) {
       showPreviewNotice();
-      if (searchDemo !== null) await seedSearchDemo(memory, searchDemo);
-      if (demo) await seedDemo(memory);
+      if ((demo || searchDemo !== null) && memory.resetUnlockedDemo()) {
+        if (searchDemo !== null) await seedSearchDemo(memory, searchDemo);
+        else { window.localStorage.removeItem(LAST_DRAFT_KEY); await seedDemo(memory); }
+      }
       if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
       if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
     }
-    // 启动默认落在时光轴（显式 ?view= 仅用于预览），不再自动跳进草稿编辑器。
-    const start = initialTab({
-      param: params.get("view"),
-      lastTab: window.localStorage.getItem(LAST_TAB_KEY),
-    });
-    // 启动先确认数据目录可用（第二个实例 STORE_LOCKED / 数据版本过新 SCHEMA_TOO_NEW），不可用时不做任何写操作。
-    if (!(await gateStore())) {
-      byTestId("unlock-hint").textContent = "数据暂时无法打开，请关闭其他实例后重启；数据保持原样。";
-      byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
-      // 数据打不开也不能没有入口：导航照常，每个页签显示同一条错误提示。
-      setView(start);
-      renderBlockedState();
-      return;
-    }
-    await personal.start();
     await reportMedia();
     await refreshDrafts();
     await reloadTimeline();
     await prepareUnfinishedDraft();
-    setView(start);
+    if (currentView !== start) return;
     if (start === "calendar") await refreshCalendar();
     if (start === "collect") await refreshCollect();
     if (start === "museum") await museum.enter();
@@ -2624,9 +2613,4 @@ async function boot(): Promise<void> {
   }
 }
 
-void boot().catch((error: unknown) => {
-  byTestId("unlock-hint").textContent = "无法检查本机数据或应用锁，请重启后重试。为保护隐私，界面保持关闭。";
-  byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
-  showError(error);
-  setView("timeline");
-});
+void boot().catch(showError);

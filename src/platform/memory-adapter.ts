@@ -36,6 +36,12 @@ interface MemoryState {
   tagTombstones: TagTombstone[];
 }
 
+function emptyState(): MemoryState {
+  return { version: 1, schemaVersion: 5, settings: { theme: "system", appLock: null },
+    seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
+    tags: [], tagDictRevision: 0, tagAliases: [], tagTombstones: [] };
+}
+
 /** 旧预览状态 → v5：保留 v3 元数据、说明和照片顺序，补快照字段及默认设置。 */
 export function migrateToV5(state: Omit<MemoryState, "schemaVersion" | "settings" | "tags" | "tagDictRevision" | "tagAliases" | "tagTombstones"> & Partial<Omit<MemoryState, "schemaVersion">> & { schemaVersion?: number }): MemoryState {
   const version = state.schemaVersion ?? 1;
@@ -72,8 +78,7 @@ const settingsQueues = new WeakMap<object,Map<string,Promise<void>>>();
 /** 仅供浏览器合成数据预览；storage 由调用方注入。 */
 export class MemoryAdapter implements ShiguangApi {
   durabilityMode: Durability = "durable";
-  private state: MemoryState = { version: 1, schemaVersion: 5, settings: { theme: "system", appLock: null }, seq: 0, records: [], assets: {}, deletionMarkers: [], conflictCopies: [], quarantine: {},
-    tags: [], tagDictRevision: 0, tagAliases: [], tagTombstones: [] };
+  private state = emptyState();
   private failures = new Map<Operation, string>();
   private pendingConflicts = new Map<string, { snapshot: Snapshot; baseRevision: number }>();
   private simulatedPhotos = new Map<string, PhotoStatus>();
@@ -91,7 +96,8 @@ export class MemoryAdapter implements ShiguangApi {
   private lockNowMs: () => number;
 
   constructor(options: { storage?: StorageLike; storageKey?: string; now?: () => string;
-    lockNowMs?: () => number; search?: string; missingAssets?: readonly string[]; corruptAssets?: readonly string[] } = {}) {
+    lockNowMs?: () => number; search?: string; missingAssets?: readonly string[]; corruptAssets?: readonly string[];
+    deferOpen?: boolean } = {}) {
     this.storage = options.storage;
     this.key = options.storageKey ?? "shiguang.synthetic.unit02";
     this.now = options.now ?? (() => new Date().toISOString());
@@ -105,7 +111,14 @@ export class MemoryAdapter implements ShiguangApi {
     if (pick && ["corrupt", "truncated", "schemaTooNew", "encrypted", "notBackup"].includes(pick)) this.nextPick = pick as PreviewPickKind;
     for (const id of options.missingAssets ?? []) this.simulatedPhotos.set(id, "missing");
     for (const id of options.corruptAssets ?? []) this.simulatedPhotos.set(id, "corrupt");
-    if (!this.startupError) this.state = this.reload();
+    if (!this.startupError && !options.deferOpen) this.state = this.reload();
+  }
+  /** Called only for an explicit preview fixture. A locked preview keeps its entire store. */
+  resetUnlockedDemo(): boolean {
+    const { settings } = this.reload();
+    if (settings.appLock !== null) return false;
+    this.persist({ ...emptyState(), settings });
+    return true;
   }
   failNext(code: string, op: Operation): void { this.failures.set(op, code); }
   private check(op: Operation): void {
@@ -274,10 +287,13 @@ export class MemoryAdapter implements ShiguangApi {
   async storeStatus(): Promise<StoreStatus> {
     if (this.startupError) return { ok: false, ...copy(this.startupError) };
     this.check("storeStatus");
-    try { this.reload(); return { ok: true }; }
+    try { this.state = this.reload(); return { ok: true }; }
     catch (error) {
-      const value = error as { code: string; message: string };
-      return { ok: false, code: value.code, message: value.message };
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          && "message" in error && typeof error.message === "string") {
+        return { ok: false, code: error.code, message: error.message };
+      }
+      return { ok: false, code: "IO_ERROR", message: "暂时无法读取本机数据。" };
     }
   }
   async trashRecord(recordId: string): Promise<SaveResult> {

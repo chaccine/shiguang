@@ -1,0 +1,72 @@
+{
+  "time": "2026-11-25T20:31:00.293300+08:00",
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0
+    }
+  ],
+  "base": "77a06375825b5e39045e447b0b7e42cc7b0d88bb",
+  "counts": {
+    "cargo": 241,
+    "fault": 291,
+    "npm": 268,
+    "historicalGeneratorIgnoredPerCargoSuite": 1
+  }
+}

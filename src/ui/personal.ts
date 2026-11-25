@@ -5,16 +5,25 @@ import { LockLifecycle, storageRows } from "../domain/personal.ts";
 import { AppearanceUi } from "./appearance.ts";
 const node = <T extends HTMLElement = HTMLElement>(id: string): T => document.querySelector<T>(`[data-testid="${id}"]`)!;
 
+type LockScreen =
+  | { kind: "starting" | "checking" | "open" | "unlock" | "submitting" }
+  | { kind: "covered"; resume: "check" | "session" }
+  | { kind: "check-error"; message: string; retry: () => void }
+  | { kind: "unlock-error"; message: string };
+
 /** UI credentials live only in input nodes and the current asynchronous call. */
 export class PersonalUi {
   private settings: AppSettings | null = null;
   private gate = node("app-lock-screen");
   private shell = document.querySelector<HTMLElement>(".app-shell")!;
   private lifecycle = new LockLifecycle();
+  // Each IPC completion belongs to its screen object. Cancel or blur replaces that object synchronously.
+  private screen: LockScreen = { kind: "starting" };
+  private settingsGeneration = 0;
   private unlocked: (() => void) | null = null;
   private busy = false;
   private away = false;
-  private returnFocus: HTMLElement | null = null;
+  private returnFocus: Element | null = null;
   private retryUntil = 0;
   private appearance: AppearanceUi;
   private api: ShiguangApi;
@@ -22,25 +31,40 @@ export class PersonalUi {
   private flush: () => Promise<boolean>;
   constructor(api: ShiguangApi, preview: boolean, flush: () => Promise<boolean>) {
     this.api = api; this.preview = preview; this.flush = flush;
-    this.appearance = new AppearanceUi(api, settings => { this.settings = settings; this.paint(); });
+    this.appearance = new AppearanceUi(api, ({ theme }) => {
+      if (this.settings) {
+        this.settingsGeneration++;
+        this.settings = { ...this.settings, theme };
+      }
+    });
     this.shell.inert = true;
     this.gate.addEventListener("keydown", event => {
       if (event.key !== "Tab") return;
-      const controls = [...this.gate.querySelectorAll<HTMLElement>("input:not([hidden]):not(:disabled), button:not([hidden]):not(:disabled)")];
+      const controls = [...this.gate.querySelectorAll<HTMLElement>(":is(input, button):enabled:not([hidden], [hidden] *)")];
       const first = controls[0], last = controls.at(-1);
       if (!first || !last) return;
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
     node("unlock-form").addEventListener("submit", e => { e.preventDefault(); void this.unlock(); });
+    node("unlock-cancel").addEventListener("click", () => {
+      if (this.screen.kind === "submitting") this.show({ kind: "unlock" });
+    });
+    node("startup-retry").addEventListener("click", () => {
+      if (this.screen.kind !== "check-error") return;
+      const { retry } = this.screen;
+      this.show({ kind: "starting" });
+      retry();
+    });
     node("lock-settings-form").addEventListener("submit", e => { e.preventDefault(); void this.change(false); });
     node("lock-disable").addEventListener("click", () => { void this.change(true); });
-    node("lock-now").addEventListener("click", () => { this.lifecycle.lock(); this.mask(true); });
+    node("lock-now").addEventListener("click", () => {
+      if (this.screen.kind !== "open" || !this.settings?.appLock.enabled) return;
+      this.lifecycle.lock(); this.show({ kind: "unlock" });
+    });
     node("storage-refresh").addEventListener("click", () => { void this.renderStorage().catch(e => { node("storage-space").textContent = describeError(e).detail; }); });
     node("museum-hidden-reset").addEventListener("click", () => { void this.resetMuseumHidden(); });
-    const tauriWindow = (window as unknown as { __TAURI__?: { window?: { getCurrentWindow?: () => {
-      onFocusChanged: (handler: (event: {payload: boolean}) => void) => Promise<() => void>;
-    } } } }).__TAURI__?.window?.getCurrentWindow?.();
+    const tauriWindow = window.__TAURI__?.window?.getCurrentWindow?.();
     if (tauriWindow) void tauriWindow.onFocusChanged(({payload}) => {
       if (payload) this.foreground(); else this.background();
     }).catch(() => { node("lock-status").textContent = "原生窗口焦点监听未连接；仍使用页面焦点和可见性保护。"; });
@@ -49,51 +73,101 @@ export class PersonalUi {
     document.addEventListener("visibilitychange", () => { if (document.hidden) this.background(); else this.foreground(); });
     window.setInterval(() => this.paintRetry(), 250);
   }
-  async refresh(): Promise<void> { this.settings = await this.api.getSettings(); this.paint(); }
-  async start(): Promise<void> {
-    await this.refresh();
-    if (!this.settings!.appLock.enabled) { this.lifecycle.unlock(); this.mask(false); return; }
-    this.lifecycle.lock(); this.mask(true);
-    await new Promise<void>(resolve => { this.unlocked = resolve; });
+  async refresh(): Promise<void> {
+    const read = ++this.settingsGeneration;
+    const settings = await this.api.getSettings();
+    if (this.settingsGeneration === read) this.applySettings(settings);
   }
-  private mask(locked: boolean): void {
-    const wasLocked = this.shell.inert;
-    if (locked && !wasLocked) {
-      const focused = document.activeElement;
-      this.returnFocus = focused && "focus" in focused ? focused as HTMLElement : null;
+  waitForStoreRetry(message: string): Promise<void> {
+    return new Promise(resolve => this.show({ kind: "check-error", message, retry: resolve }));
+  }
+  start(): Promise<void> {
+    return new Promise(resolve => {
+      this.unlocked = resolve;
+      if (this.away || document.hidden) this.show({ kind: "covered", resume: "check" });
+      else void this.checkLock();
+    });
+  }
+  private async checkLock(): Promise<void> {
+    const checking: LockScreen = { kind: "checking" };
+    this.show(checking);
+    try {
+      const settings = await this.api.getSettings();
+      if (this.screen !== checking) return;
+      if (typeof settings?.appLock?.enabled !== "boolean") { this.checkError(); return; }
+      this.applySettings(settings);
+      if (!settings.appLock.enabled) { this.open(); return; }
+      this.lifecycle.lock();
+      if (this.away || document.hidden) this.show({ kind: "covered", resume: "session" });
+      else this.show({ kind: "unlock" });
+    } catch {
+      if (this.screen === checking) this.checkError();
     }
-    this.gate.hidden = !locked; this.shell.inert = locked;
-    if (locked) {
+  }
+  private checkError(): void {
+    this.show({ kind: "check-error", message: "无法读取本机应用锁设置，请重试。", retry: () => { void this.checkLock(); } });
+  }
+  private open(): void {
+    this.lifecycle.unlock();
+    this.show({ kind: "open" });
+    this.unlocked?.(); this.unlocked = null;
+  }
+  private show(screen: LockScreen): void {
+    const wasCovered = this.shell.inert;
+    const covered = screen.kind !== "open";
+    const prompt = screen.kind === "unlock" || screen.kind === "unlock-error";
+    const submitting = screen.kind === "submitting";
+    if (covered && !wasCovered) this.returnFocus = document.activeElement;
+    this.screen = screen;
+    this.shell.inert = covered; this.shell.hidden = covered;
+    this.gate.hidden = !covered;
+    node("startup-cover").hidden = screen.kind !== "starting" && screen.kind !== "checking" && screen.kind !== "covered";
+    node("startup-error").hidden = screen.kind !== "check-error";
+    node("startup-message").textContent = screen.kind === "check-error" ? screen.message : "";
+    node("unlock-form").hidden = !prompt && !submitting;
+    node<HTMLInputElement>("app-passcode").disabled = !prompt;
+    node("unlock-cancel").hidden = !submitting;
+    node("unlock-hint").textContent = submitting ? "正在验证口令…" : prompt ? "输入口令，打开你的时光。" : "";
+    node("unlock-feedback").textContent = screen.kind === "unlock-error" ? screen.message : "";
+    this.paintRetry();
+    if (covered) {
       for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog[open]")) dialog.close();
-      node("unlock-hint").textContent = this.lifecycle.locked ? "输入口令，打开你的时光。" : "界面已遮挡，回到窗口后继续。";
-      node<HTMLInputElement>("app-passcode").hidden = !this.lifecycle.locked;
-      node("app-unlock").hidden = !this.lifecycle.locked;
-      if (this.lifecycle.locked) node<HTMLInputElement>("app-passcode").focus();
-    } else if (wasLocked) {
-      if (this.returnFocus?.isConnected) this.returnFocus.focus();
+      if (this.away || document.hidden) return;
+      if (prompt) node("app-passcode").focus();
+      else if (submitting) node("unlock-cancel").focus();
+      else if (screen.kind === "check-error") node("startup-retry").focus();
+      else this.gate.focus();
+    } else if (wasCovered) {
+      const target = this.returnFocus;
+      if (target?.isConnected && "focus" in target && typeof target.focus === "function") target.focus();
       else node("timeline-tab")?.focus();
       this.returnFocus = null;
     }
   }
   private background(): void {
-    if (!this.settings?.appLock.enabled) return;
     this.away = true;
+    if (this.screen.kind === "checking") { this.show({ kind: "covered", resume: "check" }); return; }
+    if (this.screen.kind === "covered" || this.screen.kind === "check-error") return;
+    if (!this.settings?.appLock.enabled) return;
     this.lifecycle.background(Date.now());
-    this.clearCodes(); this.mask(true);
+    this.clearCodes(); this.show({ kind: "covered", resume: "session" });
     void this.flush();
   }
   private foreground(): void {
-    if (!this.settings?.appLock.enabled) return;
     if (document.hidden) return;
     this.away = false;
-    this.mask(this.lifecycle.resume(Date.now()));
+    if (this.screen.kind !== "covered") return;
+    if (this.screen.resume === "check") { void this.checkLock(); return; }
+    if (this.lifecycle.resume(Date.now())) this.show({ kind: "unlock" });
+    else this.open();
   }
   private clearCodes(): void {
     for (const id of ["app-passcode", "lock-current", "lock-new", "lock-confirm"]) node<HTMLInputElement>(id).value = "";
   }
-  private paint(): void {
-    if (!this.settings) return;
-    const {theme, appLock} = this.settings;
+  private applySettings(settings: AppSettings): void {
+    this.settingsGeneration++;
+    this.settings = settings;
+    const {theme, appLock} = settings;
     this.appearance.sync(theme);
     node("lock-status").textContent = appLock.enabled ? "应用锁已启用" : "应用锁未启用";
     node("lock-current-label").hidden = !appLock.enabled;
@@ -104,7 +178,7 @@ export class PersonalUi {
   }
   private paintRetry(): void {
     const seconds = Math.ceil(Math.max(0, this.retryUntil - Date.now()) / 1000);
-    node<HTMLButtonElement>("app-unlock").disabled = this.busy || seconds > 0;
+    node<HTMLButtonElement>("app-unlock").disabled = this.screen.kind === "submitting" || this.busy || seconds > 0;
     node<HTMLButtonElement>("lock-enable").disabled = this.busy || seconds > 0;
     node<HTMLButtonElement>("lock-disable").disabled = this.busy || seconds > 0;
     if (seconds) {
@@ -117,22 +191,33 @@ export class PersonalUi {
     }
   }
   private async unlock(): Promise<void> {
-    if (this.busy || Date.now() < this.retryUntil) return;
-    this.busy = true; this.paintRetry();
+    if (this.screen.kind !== "unlock" && this.screen.kind !== "unlock-error") return;
+    if (this.busy || this.away || document.hidden || Date.now() < this.retryUntil) return;
+    const attempt: LockScreen = { kind: "submitting" };
     let code = node<HTMLInputElement>("app-passcode").value; this.clearCodes();
+    this.show(attempt);
     try {
-      const result = await this.api.verifyAppLock(code); this.settings = result.settings;
-      this.lifecycle.unlock();
-      if (this.away || document.hidden) { this.lifecycle.background(Date.now()); this.mask(true); } else this.mask(false);
-      node("unlock-feedback").textContent = "";
-      this.unlocked?.(); this.unlocked = null;
-    } catch {
-      node("unlock-feedback").textContent = "口令不正确或暂时无法验证，请重试。";
-      await this.refresh().catch(() => {});
-    } finally { code = ""; this.clearCodes(); this.busy = false; this.paintRetry(); }
+      const result = await this.api.verifyAppLock(code);
+      if (this.screen !== attempt) return;
+      if (result.settings?.appLock?.enabled !== true) { this.checkError(); return; }
+      if (this.away || document.hidden) { this.background(); return; }
+      this.applySettings(result.settings); this.open();
+    } catch (error) {
+      if (this.screen !== attempt) return;
+      try {
+        const settings = await this.api.getSettings();
+        if (this.screen !== attempt) return;
+        if (settings?.appLock?.enabled !== true) { this.checkError(); return; }
+        this.applySettings(settings);
+        const wrong = error && typeof error === "object" && "code" in error && error.code === "APP_LOCK_WRONG";
+        this.show({ kind: "unlock-error", message: wrong ? "口令不正确，请重试。" : "暂时无法验证口令，请重试。" });
+      } catch {
+        if (this.screen === attempt) this.checkError();
+      }
+    } finally { code = ""; }
   }
   private async change(disable: boolean): Promise<void> {
-    if (this.busy || Date.now() < this.retryUntil) return;
+    if (this.screen.kind !== "open" || this.busy || Date.now() < this.retryUntil) return;
     let current = node<HTMLInputElement>("lock-current").value;
     let next = node<HTMLInputElement>("lock-new").value;
     let confirmation = node<HTMLInputElement>("lock-confirm").value;
@@ -144,8 +229,9 @@ export class PersonalUi {
       }
       const result = disable ? await this.api.disableAppLock(current) : this.settings?.appLock.enabled
         ? await this.api.changeAppLock(current, next) : await this.api.setAppLock(next);
-      this.settings = result.settings; this.lifecycle.unlock(); this.paint();
-      if (!disable && (document.hidden || this.away)) this.background();
+      this.applySettings(result.settings);
+      if (disable) this.open();
+      else if (document.hidden || this.away) this.background();
       node("lock-feedback").textContent = result.durability === "uncertain" ? "设置已生效，但系统未确认写入磁盘，请保持应用打开并重试检查。" : disable ? "已关闭应用锁。" : "口令已设置。";
     } catch {
       node("lock-feedback").textContent = "操作未完成，请检查当前口令后重试。";

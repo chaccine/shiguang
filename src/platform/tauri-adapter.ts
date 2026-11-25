@@ -5,6 +5,17 @@ export type { ShiguangApi, SaveResult } from "./api.ts";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
+declare global {
+  interface Window {
+    __TAURI__?: {
+      core?: { invoke?: InvokeFn };
+      window?: { getCurrentWindow?: () => {
+        onFocusChanged(handler: (event: { payload: boolean }) => void): Promise<() => void>;
+      } };
+    };
+  }
+}
+
 /** 保留已有路径附加命令；浏览器预览只支持字节通道。 */
 export interface TauriApi extends ShiguangApi {
   attachPhoto(input: {
@@ -93,6 +104,5 @@ function wireFilter(f: TimelineFilter): Required<Omit<TimelineFilter, "from" | "
 }
 
 export function tauriInvokeFromWindow(): InvokeFn | null {
-  const w = window as unknown as { __TAURI__?: { core?: { invoke?: InvokeFn } } };
-  return w.__TAURI__?.core?.invoke ?? null;
+  return window.__TAURI__?.core?.invoke ?? null;
 }
