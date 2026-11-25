@@ -151,7 +151,7 @@ pub(crate) fn date(v: &str) -> Result<(), CoreError> {
         Ok(())
     }
 }
-fn validate_filter(f: &TimelineFilter) -> Result<(), CoreError> {
+pub(crate) fn validate_filter(f: &TimelineFilter) -> Result<(), CoreError> {
     for d in [&f.from, &f.to].into_iter().flatten() {
         date(d)?;
     }
