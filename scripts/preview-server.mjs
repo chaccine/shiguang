@@ -8,8 +8,8 @@ const root = join(fileURLToPath(new URL("..", import.meta.url)), "dist");
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 const port = Number(process.env.PORT ?? 1420);
 
-export function startPreviewServer(listenPort = port) {
-  const server = createServer(async (req, res) => {
+export function createPreviewServer() {
+  return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const rel = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "") || "index.html";
     if (rel.startsWith("..")) { res.writeHead(403).end(); return; }
@@ -20,6 +20,10 @@ export function startPreviewServer(listenPort = port) {
       res.writeHead(404).end("not found");
     }
   });
+}
+
+export function startPreviewServer(listenPort = port) {
+  const server = createPreviewServer();
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(listenPort, "127.0.0.1", () => resolve(server));

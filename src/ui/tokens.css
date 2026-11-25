@@ -1,5 +1,4 @@
-/* M06 candidates, not frozen brand values. Contrast is calculated in tests.
-   Preview swatches share the same palettes as the real application. */
+/* Shared material, type and interaction tokens. Appearance previews use the same palettes. */
 :root {
   --font-body: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-display: "Songti SC", "STSong", "SimSun", serif;
@@ -27,24 +26,24 @@
 
 :root, [data-preview-theme="light"] {
   color-scheme: light;
-  --surface-canvas: #f7f0e7;
-  --surface-raised: #fffaf4;
-  --surface-inset: #eee2d3;
-  --surface-input: #fffcf8;
-  --surface-hover: #f0e3d3;
-  --surface-nav: #eee0cf;
-  --surface-accent: #f1e2cc;
-  --text-primary: #3c332d;
-  --text-secondary: #5f4e41;
-  --text-muted: #685544;
-  --text-placeholder: #76614f;
-  --primary: #805132;
-  --primary-hover: #694027;
+  --surface-canvas: #f8f1e4;
+  --surface-raised: #fcf7ed;
+  --surface-inset: #eee5d5;
+  --surface-input: #fffbf3;
+  --surface-hover: #f0e6d5;
+  --surface-nav: #f6efe2;
+  --surface-accent: #f1e5cd;
+  --text-primary: #28251e;
+  --text-secondary: #50493d;
+  --text-muted: #615541;
+  --text-placeholder: #71624d;
+  --primary: #76551c;
+  --primary-hover: #624411;
   --on-primary: #fffaf4;
-  --accent: #a47548;
-  --border-subtle: #d9c8b3;
-  --border-control: #91755a;
-  --border-frame: #bfa68a;
+  --accent: #a98747;
+  --border-subtle: #d5c5a7;
+  --border-control: #897349;
+  --border-frame: #ad9153;
   --success: #45623d;
   --surface-success: #edf3e7;
   --warning: #79501d;
@@ -54,18 +53,18 @@
   --danger-fill: #a5432e;
   --danger-hover: #873321;
   --on-danger: #fffaf4;
-  --focus: #745027;
+  --focus: #72501c;
   --focus-inner: #fffaf4;
   --media-control: #47382e;
   --media-control-hover: #2e241d;
   --on-media: #fffaf4;
-  --timeline-line: #c4ac8e;
-  --timeline-dot: #896341;
+  --photo-frame: #b49250;
+  --photo-shadow: 0 3px 8px #65461c1c;
   --selection: #e3c9a3;
-  --texture: repeating-linear-gradient(0deg, #89634103 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, #89634103 0 1px, transparent 1px 5px);
-  --canvas-wash: radial-gradient(ellipse at 20% 0%, #fffaf4 0%, #f7f0e7 58%, #efe3d4 100%);
-  --nav-wash: linear-gradient(180deg, #f0e4d5, #e9dac6);
-  --warm-wash: linear-gradient(120deg, #fff6e6, #f4e6cd);
+  --texture: url("./paper-grain.png"), repeating-linear-gradient(113deg, #896a3904 0 1px, transparent 1px 7px);
+  --canvas-wash: radial-gradient(ellipse at 38% 0%, #fcf6eb, #f8f1e4 65%, #f5ebdb);
+  --nav-wash: linear-gradient(145deg, #faf3e7, #f3eadb);
+  --warm-wash: linear-gradient(120deg, #fcf6e9, #f4e8d3);
   --lamp-wash: radial-gradient(ellipse at 50% 15%, #e7c99b18, transparent 70%);
   --exhibit-wash: linear-gradient(135deg, #f3e7d6, #fffaf4);
   --backdrop: #34291f80;
@@ -95,24 +94,24 @@
 
 :root[data-theme="dark"], [data-preview-theme="dark"] {
   color-scheme: dark;
-  --surface-canvas: #211c18;
-  --surface-raised: #2d251f;
-  --surface-inset: #251f1a;
-  --surface-input: #352b23;
-  --surface-hover: #403327;
-  --surface-nav: #282019;
-  --surface-accent: #433321;
-  --text-primary: #f2e5d2;
-  --text-secondary: #d1bfa5;
-  --text-muted: #cbb99f;
+  --surface-canvas: #171410;
+  --surface-raised: #28221b;
+  --surface-inset: #211b15;
+  --surface-input: #302820;
+  --surface-hover: #382e24;
+  --surface-nav: #211b15;
+  --surface-accent: #3a2f21;
+  --text-primary: #f0e5d3;
+  --text-secondary: #d2c3ad;
+  --text-muted: #cbbb9f;
   --text-placeholder: #c5ae90;
-  --primary: #e5b87d;
-  --primary-hover: #f1cb98;
+  --primary: #e2bd84;
+  --primary-hover: #f0cf9b;
   --on-primary: #2b1e10;
-  --accent: #d4a66d;
-  --border-subtle: #554436;
-  --border-control: #9d8164;
-  --border-frame: #a47d50;
+  --accent: #b39768;
+  --border-subtle: #514232;
+  --border-control: #b39871;
+  --border-frame: #8c7049;
   --success: #bed2ad;
   --surface-success: #293225;
   --warning: #edcb91;
@@ -127,22 +126,22 @@
   --media-control: #38271b;
   --media-control-hover: #4c3522;
   --on-media: #fff0db;
-  --timeline-line: #796044;
-  --timeline-dot: #deb67f;
+  --photo-frame: #806644;
+  --photo-shadow: 0 5px 24px #d6995321, 0 1px 5px #0e0a0880;
   --selection: #705233;
-  --texture: repeating-linear-gradient(0deg, #ebbd8204 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, #ebbd8203 0 1px, transparent 1px 5px);
-  --canvas-wash: radial-gradient(ellipse at 65% 0%, #382a1b 0%, #211c18 55%, #211c18 100%);
-  --nav-wash: linear-gradient(170deg, #30251b, #251e19 75%);
+  --texture: url("./gallery-weave.png"), repeating-linear-gradient(0deg, #e3b87d06 0 1px, transparent 1px 4px);
+  --canvas-wash: radial-gradient(ellipse 31rem 32rem at 56% 9rem, #382a1d, #211b15 57%, #171410 100%);
+  --nav-wash: linear-gradient(155deg, #2d2319, #211b15 74%);
   --warm-wash: linear-gradient(110deg, #3a2c1c, #2d251f);
-  --lamp-wash: radial-gradient(ellipse at 50% 15%, #e8b36d14, transparent 70%);
+  --lamp-wash: radial-gradient(ellipse at 58% 0%, #e7ad6815, transparent 75%);
   --exhibit-wash: linear-gradient(140deg, #3b2e21, #251f1a 85%);
   --backdrop: #130e0bd9;
-  --elevation-card: inset 0 1px 0 #efc68e12, inset 0 0 0 5px #211c1826, 0 0 28px #d6a56a04;
+  --elevation-card: inset 0 1px 0 #efc68e10, 0 5px 18px #120f0c26;
   --elevation-small: inset 0 1px 0 #efc68e12;
   --elevation-hover: inset 0 1px 0 #efc68e26, 0 0 24px #e4b06e0a;
   --elevation-action: inset 0 1px 0 #fff0db33;
   --elevation-dialog: inset 0 1px 0 #efc68e26, 0 0 80px #e4b06e0a;
-  --elevation-nav: inset 0 1px 0 #efc68e12;
+  --elevation-nav: inset 0 1px 0 #edc48c0c;
   --focus-halo: 0 0 0 3px #edbe7e26;
   --exhibit-glow: inset 0 0 0 5px #251f1a, inset 0 0 0 6px #9d794a, 0 0 32px #e6b36d12;
   --weight-heading: 600;
@@ -155,8 +154,8 @@
   --museum-bar: #e5b87d;
   --museum-light: radial-gradient(ellipse at 50% 0%, #e8b36d14, transparent 65%);
   --museum-shadow: inset 0 1px 0 #efc68e26, 0 10px 30px #130e0b33;
-  --weight-body: 450;
-  --tracking-body: 0.018em;
+  --weight-body: 400;
+  --tracking-body: 0.012em;
   --tracking-heading: 0.09em;
   --reading-leading: 2;
 }

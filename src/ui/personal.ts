@@ -2,7 +2,7 @@ import type { ShiguangApi } from "../platform/api.ts";
 import type { AppSettings } from "../domain/types.ts";
 import { describeError } from "../domain/errors.ts";
 import { LockLifecycle, storageRows } from "../domain/personal.ts";
-import { AppearanceUi } from "./appearance.ts";
+import { AppearanceUi, type UiPreferences } from "./appearance.ts";
 const node = <T extends HTMLElement = HTMLElement>(id: string): T => document.querySelector<T>(`[data-testid="${id}"]`)!;
 
 type LockScreen =
@@ -29,14 +29,14 @@ export class PersonalUi {
   private api: ShiguangApi;
   private preview: boolean;
   private flush: () => Promise<boolean>;
-  constructor(api: ShiguangApi, preview: boolean, flush: () => Promise<boolean>) {
+  constructor(api: ShiguangApi, preview: boolean, flush: () => Promise<boolean>, preferences?: UiPreferences) {
     this.api = api; this.preview = preview; this.flush = flush;
     this.appearance = new AppearanceUi(api, ({ theme }) => {
       if (this.settings) {
         this.settingsGeneration++;
         this.settings = { ...this.settings, theme };
       }
-    });
+    }, preferences);
     this.shell.inert = true;
     this.gate.addEventListener("keydown", event => {
       if (event.key !== "Tab") return;
@@ -117,7 +117,13 @@ export class PersonalUi {
     const covered = screen.kind !== "open";
     const prompt = screen.kind === "unlock" || screen.kind === "unlock-error";
     const submitting = screen.kind === "submitting";
-    if (covered && !wasCovered) this.returnFocus = document.activeElement;
+    if (covered && !wasCovered) {
+      const active = document.activeElement;
+      const dialogs = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
+      const opener = Array.from(dialogs, dialog => this.shell.querySelector<HTMLElement>(`[aria-controls="${dialog.id}"]`))
+        .find(control => control && !control.closest("dialog"));
+      this.returnFocus = opener ?? (active?.closest?.("dialog") ? node("timeline-tab") : active);
+    }
     this.screen = screen;
     this.shell.inert = covered; this.shell.hidden = covered;
     this.gate.hidden = !covered;

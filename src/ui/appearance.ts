@@ -3,9 +3,11 @@ import { durabilityLabel } from "../domain/format.ts";
 import type { AppSettings, ThemePreference } from "../domain/types.ts";
 import type { ShiguangApi } from "../platform/api.ts";
 
+export type UiPreferences = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
 export const THEME_CACHE_KEY = "shiguang.theme";
 export const FONT_SCALE_KEY = "shiguang.fontScale";
-export const FONT_SCALES = ["1", "1.15", "1.3"] as const;
+export const FONT_SCALES = ["1", "1.15", "1.3", "2"] as const;
 
 export function themePreference(value: string | null | undefined): ThemePreference {
   return value === "light" || value === "dark" ? value : "system";
@@ -13,18 +15,13 @@ export function themePreference(value: string | null | undefined): ThemePreferen
 export function resolvedTheme(preference: ThemePreference, systemDark: boolean): "light" | "dark" {
   return preference === "system" ? (systemDark ? "dark" : "light") : preference;
 }
-function cached(key: string): string | null {
-  try { return window.localStorage.getItem(key); } catch { return null; }
-}
-function cache(key: string, value: string): boolean {
-  try { window.localStorage.setItem(key, value); return true; } catch { return false; }
-}
 const node = <T extends HTMLElement = HTMLElement>(id: string): T => document.querySelector<T>(`[data-testid="${id}"]`)!;
 
 /** The cache is only for paint, never a replacement for native/preview settings.
  * Font scale is a device UI preference; no new domain field or backup schema. */
 export class AppearanceUi {
-  private preference = themePreference(cached(THEME_CACHE_KEY));
+  private preference: ThemePreference;
+  private preferences?: UiPreferences;
   private media = window.matchMedia("(prefers-color-scheme: dark)");
   private selector = node<HTMLSelectElement>("theme-select");
   private font = node<HTMLSelectElement>("font-scale");
@@ -33,15 +30,17 @@ export class AppearanceUi {
   private api: ShiguangApi;
   private changed: (settings: AppSettings) => void;
 
-  constructor(api: ShiguangApi, changed: (settings: AppSettings) => void) {
+  constructor(api: ShiguangApi, changed: (settings: AppSettings) => void, preferences?: UiPreferences) {
     this.api = api; this.changed = changed;
-    this.font.value = cached(FONT_SCALE_KEY) ?? "1";
+    this.preferences = preferences;
+    this.preference = themePreference(this.cached(THEME_CACHE_KEY));
+    this.font.value = this.cached(FONT_SCALE_KEY) ?? "1";
     if (!FONT_SCALES.some(value => value === this.font.value)) this.font.value = "1";
     this.applyFont();
     this.font.addEventListener("change", () => {
       if (!FONT_SCALES.some(value => value === this.font.value)) this.font.value = "1";
       this.applyFont();
-      node("appearance-feedback").textContent = cache(FONT_SCALE_KEY, this.font.value)
+      node("appearance-feedback").textContent = this.cache(FONT_SCALE_KEY, this.font.value)
         ? "字号已保存在本机。" : "字号已应用，本机界面偏好暂时无法保存。";
     });
     this.selector.addEventListener("change", () => { void this.choose(themePreference(this.selector.value)); });
@@ -50,9 +49,15 @@ export class AppearanceUi {
     this.paint();
   }
 
+  private cached(key: string): string | null {
+    try { return (this.preferences ?? window.localStorage).getItem(key); } catch { return null; }
+  }
+  private cache(key: string, value: string): boolean {
+    try { (this.preferences ?? window.localStorage).setItem(key, value); return true; } catch { return false; }
+  }
   sync(preference: ThemePreference): void {
     this.preference = preference;
-    cache(THEME_CACHE_KEY, preference);
+    this.cache(THEME_CACHE_KEY, preference);
     this.paint();
   }
   private applyFont(): void {
@@ -63,6 +68,8 @@ export class AppearanceUi {
     const resolved = resolvedTheme(this.preference, this.media.matches);
     document.documentElement.dataset.themePreference = this.preference;
     document.documentElement.dataset.theme = resolved;
+    // Optional host paint. Admission and persisted settings never wait on system chrome.
+    void window.__TAURI__?.event?.emit("shiguang-bar-theme", resolved === "dark").catch(() => {});
     this.selector.value = this.preference;
     for (const choice of this.choices) choice.setAttribute("aria-pressed", String(choice.dataset.themeChoice === this.preference));
     node("appearance-current").textContent = `${this.preference === "system" ? "跟随系统 · " : "当前外观 · "}${resolved === "dark" ? "灯下展馆" : "暖纸本"}`;

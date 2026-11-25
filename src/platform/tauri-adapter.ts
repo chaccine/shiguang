@@ -9,6 +9,7 @@ declare global {
   interface Window {
     __TAURI__?: {
       core?: { invoke?: InvokeFn };
+      event?: { emit(name: string, payload: boolean): Promise<void> };
       window?: { getCurrentWindow?: () => {
         onFocusChanged(handler: (event: { payload: boolean }) => void): Promise<() => void>;
       } };

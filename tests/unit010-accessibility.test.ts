@@ -171,3 +171,33 @@ test("museum text, placards and month bars meet AA in both palettes including sp
     assert.ok(contrast(rgb(palette["museum-bar"]), rgb(palette["museum-track"])) >= 3);
   }
 });
+
+test("timeline ink and controls retain contrast through the actual tiled paper and gallery pigments", () => {
+  for (const palette of palettes) {
+    const filename = palette.texture.match(/url\("\.\/([\w-]+\.png)"\)/)![1];
+    const png = readFileSync(new URL(filename, ui));
+    assert.equal(png.readUInt32BE(16), 128);
+    assert.equal(png.readUInt32BE(20), 128);
+    assert.equal(png[25], 3, "indexed PNG with pigment and coverage tables");
+    const chunks = new Map<string, Buffer>();
+    for (let offset = 8; offset < png.length;) {
+      const size = png.readUInt32BE(offset);
+      chunks.set(png.toString("ascii", offset + 4, offset + 8), png.subarray(offset + 8, offset + 8 + size));
+      offset += size + 12;
+    }
+    const colors = chunks.get("PLTE")!, coverage = chunks.get("tRNS")!;
+    assert.equal(colors.length, coverage.length * 3);
+    // Check every possible tile pixel, at the darkest and lightest stops of the painted surfaces.
+    const surfaces = [palette["surface-raised"], ...["canvas-wash", "nav-wash"].flatMap(key => palette[key].match(/#[a-f\d]{6}\b/gi)!)];
+    for (const base of surfaces) {
+      const washes = [palette.texture, palette["lamp-wash"]].flatMap(wash => wash.match(/#[a-f\d]{8}/gi) ?? []);
+      const lit = washes.reduce((bg, paint) => composite(paint, bg), rgb(base));
+      for (const [index, alpha] of coverage.entries()) {
+        const pigment = "#" + colors.subarray(index * 3, index * 3 + 3).toString("hex") + alpha.toString(16).padStart(2, "0");
+        const bg = composite(pigment, lit);
+        for (const ink of ["text-primary", "text-secondary", "text-muted", "primary"]) assert.ok(contrast(rgb(palette[ink]), bg) >= 4.5, ink);
+        for (const edge of ["focus", "border-control"]) assert.ok(contrast(rgb(palette[edge]), bg) >= 3, edge);
+      }
+    }
+  }
+});

@@ -1,0 +1,116 @@
+{
+  "time": "2026-11-25T21:04:04.769023+08:00",
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0
+    }
+  ],
+  "counts": {
+    "cargo": 241,
+    "fault": 291,
+    "npm": 285
+  },
+  "liveHttp": {
+    "time": "2026-11-25T21:04:50.435556+08:00",
+    "checks": [
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=light",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=dark",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=empty&theme=light",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=empty&theme=dark",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=dark&filters=active&panel=open",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=dark&lock=enabled",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=dark&lock=slow",
+        "status": 200,
+        "bytes": 31557
+      },
+      {
+        "url": "http://127.0.0.1:1420/?stage01=timeline&theme=dark&lock=error",
+        "status": 200,
+        "bytes": 31557
+      }
+    ],
+    "scope": "static HTTP and built asset bytes only; not browser execution or layout"
+  }
+}
