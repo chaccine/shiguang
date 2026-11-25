@@ -157,3 +157,12 @@ The preview bind restriction is an environment blocker, not a claim that any bro
 ## Orchestrator verification supplement
 
 2026-11-25 UTC+8: full shared test suites rerun on box after UI completion: cargo 241, fault-injection 291, npm 254; typecheck and frontend build exit 0. Release benchmark rerun and raw JSON refreshed: cold open+first 266.930 ms, warm first 76.827–77.560 ms, later pages 76.697–78.211 ms. Synthetic Linux only; phone performance remains NOT_RUN.
+
+## Final CI and parent browser evidence (2026-11-25 UTC+8)
+
+- **CI PASS 7/7**: run [45596206197](https://github.com/chaccine/shiguang/actions/runs/45596206197), head `c898fde13eb8b01efd684a52160396a26a6a4703`; final job completed 2026-11-25 18:42:01 UTC+8. All 7 jobs succeeded. Existing generic CI includes platform bundles; no artifacts were downloaded, installed or sent, and generic build success is not phone/desktop device acceptance.
+- Shared suites: cargo **241**, fault-injection **291**, npm **254**; typecheck/frontend build PASS.
+- Parent computerUse **PARTIAL**: core functional observations passed at actual reported viewport **1920×1072**, DPR unknown. Light mixed, dark combined 2/2, safe literal highlight, reading/back, favorite/museum linkage, 24→31 paging, no-match and empty state. See [actual observations](unit-0.12/manual/RESULTS.md).
+- **Phone 390/360 narrow viewport and native Android acceptance remain NOT_RUN**. Wide captures are not phone screenshots. Dedicated desktop specialization/acceptance/screenshots remain DEFERRED; these pre-existing wide functional captures are retained with accurate names.
+- Non-blocking favicon.ico 404 observed; not changed. Preview/source/build assets were not modified during browser acceptance.
+- Actual PNG artifacts and hashes: `unit-0.12/manual/ARTIFACTS.json`. No screenshots fabricated/resized to imply a viewport.
