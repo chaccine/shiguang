@@ -166,3 +166,7 @@ The preview bind restriction is an environment blocker, not a claim that any bro
 - **Phone 390/360 narrow viewport and native Android acceptance remain NOT_RUN**. Wide captures are not phone screenshots. Dedicated desktop specialization/acceptance/screenshots remain DEFERRED; these pre-existing wide functional captures are retained with accurate names.
 - Non-blocking favicon.ico 404 observed; not changed. Preview/source/build assets were not modified during browser acceptance.
 - Actual PNG artifacts and hashes: `unit-0.12/manual/ARTIFACTS.json`. No screenshots fabricated/resized to imply a viewport.
+
+## Bounded viewport follow-up
+
+Read-only research completed within 3 searches/lookups and 2 page reads. Official Chrome Device Toolbar GUI is a legitimate conditional option for parent computerUse, but its availability on this managed browser is unverified. No browser operation performed. See [VIEWPORT_RESEARCH.md](unit-0.12/VIEWPORT_RESEARCH.md); phone 390/360 remains NOT_RUN.
