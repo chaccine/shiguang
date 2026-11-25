@@ -1,0 +1,5 @@
+
+> shiguang-app@0.1.12 build
+> tsc -p tsconfig.build.json && node scripts/copy-ui.mjs
+
+sh: 1: tsc: not found

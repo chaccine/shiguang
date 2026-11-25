@@ -1,0 +1,113 @@
+{
+  "runtime": "v24.22.1",
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "logicalCpus": 8,
+    "totalMemoryBytes": 16779689984
+  },
+  "records": 5000,
+  "photoUses": 6250,
+  "tags": 2,
+  "stateBytes": 16795302,
+  "fieldUtf8Bytes": {
+    "title": {
+      "min": 31,
+      "max": 34
+    },
+    "body": {
+      "min": 2440,
+      "max": 2459
+    },
+    "location": {
+      "min": 30,
+      "max": 30
+    },
+    "caption": {
+      "min": 132,
+      "max": 132
+    },
+    "tagName": {
+      "min": 12,
+      "max": 19
+    }
+  },
+  "perCallRegressionBudgetMs": 10000,
+  "timings": [
+    {
+      "name": "domainFirstCall",
+      "ms": 397.682,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "domainWarmFirst1",
+      "ms": 340.532,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "domainWarmFirst2",
+      "ms": 337.09,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "domainWarmFirst3",
+      "ms": 362.34,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterColdOpenAndFirst",
+      "ms": 371.209,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterWarmFirst1",
+      "ms": 345.303,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterWarmFirst2",
+      "ms": 366.586,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterWarmFirst3",
+      "ms": 360.449,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterPage2",
+      "ms": 369.568,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterPage3",
+      "ms": 361.999,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterPage4",
+      "ms": 340.504,
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "adapterCombinedFirst",
+      "ms": 320.296,
+      "returned": 50,
+      "total": 250
+    }
+  ],
+  "distinctAcrossFourPages": 200,
+  "scope": "Synthetic Node/Linux only. Cold = new adapter plus storage parse/validation and first query; OS caches not flushed. No images decoded, no IPC or device PASS."
+}

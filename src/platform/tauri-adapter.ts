@@ -68,6 +68,7 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     mergeTags: (fromTagId, intoTagId) => invoke("merge_tags", { fromTagId, intoTagId }),
     deleteTag: (tagId) => invoke("delete_tag", { tagId }),
     tagImpact: (tagId) => invoke("tag_impact", { tagId }),
+    searchPage: (filter, cursor, limit, today) => invoke("search_page", { filter: { ...wireFilter(filter), keyword: filter.keyword ?? "" }, cursor, limit, today: today ?? localToday() }),
     timelinePage: (filter, cursor, limit) => invoke("timeline_page", { filter: wireFilter(filter), cursor, limit, today: localToday() }),
     timelineMonths: (filter) => invoke("timeline_months", { filter: wireFilter(filter) }),
     calendarMonth: (year, month, filter) => invoke("calendar_month", { year, month, filter: wireFilter(filter ?? {}) }),
