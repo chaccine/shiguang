@@ -1,0 +1,76 @@
+{
+  "transforms": {
+    "tests/unit011-museum.test.ts": {
+      "original": "6ad48c0461545c248b31a9fa97afebbcf1712609a06b7dbd2856ef8884e2c542",
+      "observed": "5e8f46934f67d410c8f167670920a4ce4b63dce35825ddc99a69a21d28b9b24c"
+    },
+    "src/platform/memory-adapter.ts": {
+      "original": "6ea1c368c26de5fd61929f9b09cfec3c83807376da775d66610adffeafc7b5da",
+      "observed": "f8c88c4274a853eab3aeb9553bce82c5db4a09dd768129ec066a12a3c506b33e"
+    },
+    "src/domain/tags.ts": {
+      "original": "a7ff4c978be1cc10e1abc31dc399f712f6607d780a32c86794bb3e4486c20b63",
+      "observed": "541753b1dcfe25443d67b84cee4e7870aa7ba6819dcb26a8ae03de238fc0e086"
+    },
+    "src/domain/timeline.ts": {
+      "original": "531b8980085123814b0f7c6b9f65e63aede95d62ed685a3d093185e56bb0de59",
+      "observed": "1055f22a6f6ebda34ec093df5c1f51972b6327f622aa5f551f041b1731b51018"
+    },
+    "src/domain/museum.ts": {
+      "original": "455bab400759211c65a33c422d726c3aea6a06de60ec964e406119fb2c322db1",
+      "observed": "5cda5003082e24f3d6af45bb13ec946e7a429867367d8d5323d68ca72f98b8b1"
+    }
+  },
+  "calibration": {
+    "bareUs": {
+      "min": 0.07499999998117346,
+      "median": 0.11999999999545707,
+      "max": 3.5929999999950724
+    },
+    "outsideSetupUs": {
+      "min": 33.255,
+      "median": 43.1825,
+      "max": 589.901
+    },
+    "outsideTeardownUs": {
+      "min": 33.098,
+      "median": 43.722,
+      "max": 2840.624
+    },
+    "nearClockSlackUs": {
+      "min": 0.19200000000172984,
+      "median": 0.2655000000172395,
+      "max": 19.475000000003817
+    },
+    "counterEnvelopeSlackUs": {
+      "min": 8.464000000008728,
+      "median": 10.970000000013993,
+      "max": 571.3530000000094
+    }
+  },
+  "emptyPairs": 256,
+  "monotonicNs": 15365908594724,
+  "node": "v24.22.1",
+  "v8": "13.6.233.17-node.58",
+  "os": "Linux",
+  "kernel": "6.12.113+",
+  "arch": "x64",
+  "cpuModel": "Intel(R) Xeon(R) Processor",
+  "context": {
+    "atNs": 15365908865781,
+    "availableParallelism": 8,
+    "affinity": "0-7",
+    "cgroup": "/sys/fs/cgroup/agent",
+    "quotaAndPeriod": "max 100000",
+    "effectiveCpuset": "0-7",
+    "periods": 0,
+    "throttled": 0,
+    "throttledUsec": 0,
+    "load": [
+      0.43,
+      0.57,
+      0.76
+    ],
+    "runnableAndTotal": "3/1611"
+  }
+}

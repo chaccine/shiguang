@@ -1,0 +1,18 @@
+{
+  "utf8Bytes": 6847994,
+  "sha256": "4414a194cd52718f3412ebfbffe97bcec5ae29ea905a8a8b66ed9148e37494e9",
+  "version": 1,
+  "schema": 5,
+  "rows": 5000,
+  "active": 5000,
+  "formal": 5000,
+  "drafts": 0,
+  "photoUses": 5000,
+  "referencedAssetIds": 1,
+  "assetEntries": 0,
+  "favorites": 1000,
+  "hidden": 136,
+  "anniversary2024": 50,
+  "hiddenAnniversary": 2,
+  "eligibleIdSetSha256": "fdedab4a93ad2a0cd984d736adf751eb34c84d5f8bf85747f7112bfdf9d097a8"
+}

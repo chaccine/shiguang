@@ -1,0 +1,73 @@
+{
+  "totals": {
+    "tests": 28,
+    "suites": 0,
+    "pass": 28,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "reportUnit": "files",
+  "sourceCaseCount": 285,
+  "workerCount": 28,
+  "workerExitCodes": {
+    "0": 28
+  },
+  "reached": 18,
+  "unreached": [],
+  "breaches": {},
+  "observedPage": {
+    "total": 48,
+    "items": 48,
+    "years": [
+      2024
+    ],
+    "nextCursor": null,
+    "eligibleIdSetSha256": "fdedab4a93ad2a0cd984d736adf751eb34c84d5f8bf85747f7112bfdf9d097a8",
+    "pageSha256": "58d72befe592209c4ff5bae3a4e1c1753c24281f73391a1ef01487216845f335"
+  },
+  "target": {
+    "wallMs": 29.198800999999946,
+    "procMs": 34.001,
+    "threadMs": 25.377,
+    "schedCpuMs": 25.37597,
+    "runnableWaitMs": 4.11024,
+    "slices": 5,
+    "outerClockSlackMs": 0.07871000000005424,
+    "counterEnvelopeSlackMs": 1.019505000000052,
+    "externalSetupMs": 1.332583,
+    "externalTeardownMs": 0.286646,
+    "cgroupDelta": {
+      "periods": 0,
+      "throttled": 0,
+      "throttledUsec": 0
+    },
+    "livePeers": [
+      "tests/mobile-visual.test.ts",
+      "tests/unit010-lock-ui.test.ts",
+      "tests/unit011-museum-ui.test.ts",
+      "tests/unit012-search-demo.test.ts",
+      "tests/unit012-search-ui.test.ts",
+      "tests/unit012-search.test.ts"
+    ],
+    "possiblePeers": [
+      "tests/mobile-visual.test.ts",
+      "tests/unit010-lock-ui.test.ts",
+      "tests/unit011-museum-ui.test.ts",
+      "tests/unit012-search-demo.test.ts",
+      "tests/unit012-search-ui.test.ts",
+      "tests/unit012-search.test.ts"
+    ],
+    "peerCpuObservedMs": {
+      "tests/unit012-search-demo.test.ts": 15.752624,
+      "tests/mobile-visual.test.ts": 18.709849,
+      "tests/unit011-museum-ui.test.ts": 17.304812,
+      "tests/unit012-search.test.ts": 14.194969,
+      "tests/unit010-lock-ui.test.ts": 0.251694,
+      "tests/unit012-search-ui.test.ts": 10.346223
+    },
+    "targetPolls": 3
+  },
+  "issues": []
+}

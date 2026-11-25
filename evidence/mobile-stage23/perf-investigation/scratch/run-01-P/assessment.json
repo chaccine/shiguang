@@ -1,0 +1,22 @@
+{
+  "totals": {
+    "tests": 28,
+    "suites": 0,
+    "pass": 28,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "caseNamesMatched": false,
+  "breaches": {},
+  "target": null,
+  "fidelityOrCorrectness": [
+    "Original case census differs or unavailable",
+    "Original case counts incomplete",
+    "Missing worker registry"
+  ],
+  "reached": 18,
+  "unreached": [],
+  "pageSha256": "58d72befe592209c4ff5bae3a4e1c1753c24281f73391a1ef01487216845f335"
+}

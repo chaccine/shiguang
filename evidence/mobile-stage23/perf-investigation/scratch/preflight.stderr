@@ -1,0 +1,15 @@
+file:///workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/hooks.mjs:8
+  if (source.split(anchor).length !== 2) throw Error("Non-unique or missing observer anchor: " + anchor);
+                                               ^
+
+Error: Non-unique or missing observer anchor:   assert.equal(saved.getItem(KEY), before); assert.equal(saved.writes, writes);
+
+    at once (file:///workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/hooks.mjs:8:48)
+    at insertAfter (file:///workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/hooks.mjs:15:14)
+    at instrumentTest (file:///workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/hooks.mjs:28:3)
+    at file:///workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/preflight.mjs:12:39
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.22.1

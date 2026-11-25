@@ -1,0 +1,52 @@
+{
+  "totals": {
+    "tests": 1,
+    "suites": 0,
+    "pass": 1,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "reportUnit": "files",
+  "sourceCaseCount": 19,
+  "workerCount": 1,
+  "workerExitCodes": {
+    "0": 1
+  },
+  "reached": 18,
+  "unreached": [],
+  "breaches": {},
+  "observedPage": {
+    "total": 48,
+    "items": 48,
+    "years": [
+      2024
+    ],
+    "nextCursor": null,
+    "eligibleIdSetSha256": "fdedab4a93ad2a0cd984d736adf751eb34c84d5f8bf85747f7112bfdf9d097a8",
+    "pageSha256": "58d72befe592209c4ff5bae3a4e1c1753c24281f73391a1ef01487216845f335"
+  },
+  "target": {
+    "wallMs": 22.812080000000037,
+    "procMs": 34.551,
+    "threadMs": 22.803,
+    "schedCpuMs": 22.803271,
+    "runnableWaitMs": 0.0,
+    "slices": 3,
+    "outerClockSlackMs": 0.08899199999996199,
+    "counterEnvelopeSlackMs": 0.35994099999996365,
+    "externalSetupMs": 0.689136,
+    "externalTeardownMs": 0.343447,
+    "cgroupDelta": {
+      "periods": 0,
+      "throttled": 0,
+      "throttledUsec": 0
+    },
+    "livePeers": [],
+    "possiblePeers": [],
+    "peerCpuObservedMs": {},
+    "targetPolls": 4
+  },
+  "issues": []
+}
