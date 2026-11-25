@@ -1,6 +1,6 @@
 # Android-first timeline acceptance
 
-**Status — NOT_RUN.** The parent owns the browser and device observations. Record the actual viewport, zoom or font setting, theme, result and any screenshot filename for each pass. The automated results are in [VISUAL.md](VISUAL.md).
+**Status — bounded PARTIAL manual pass.** The parent owns the browser and device observations. Record the actual viewport, zoom or font setting, theme, result and any screenshot filename for each pass. The automated results are in [VISUAL.md](VISUAL.md).
 
 ## Local preview
 
@@ -52,3 +52,7 @@ Run the light, dark and empty views at **360 × 800** and **390 × 844** CSS pix
 ## Orchestrator live handoff
 
 The loopback service is now running outside the implementation sandbox at `http://127.0.0.1:1420/`; all eight exact URLs and required assets independently returned200 with matching built bytes. It is the static built app, not an installed Android APK. Save genuine screenshots and observations under `evidence/mobile-stage01/manual/`; report actual CSS viewport/DPR only if observed. If390/360 cannot be set through the approved GUI, retain those itemsNOT_RUN and label wider images with their real size. Do not crop, zoom or rescale screenshots to claim a phone viewport. Do not access ordinary user storage or private photos: use only these RAM-only synthetic fixture URLs.
+
+## Completed bounded manual pass
+
+See [actual observations](manual/RESULTS.md) and [capture manifest](manual/ARTIFACTS.json). Observed: light/dark first screens, exact five labels/one plus, true empty light, filter open/Done,薄荷1/1 search and reading return, slow secure cover, settings-error Retry and0042 unlock. These observations do not promote all criteria in the detailed matrix above toPASS.200% only received partial navigation/text observations. GUI390×844 and360×800 were used with selected matching page readings, but a later390×844 GUI versus390×800 page disagreement remains a limitation; DPR unknown. Wrong-code rejection,60-second return, exhaustive filter/keyboard/focus/IME/native/system-bar/upgrade tests remainNOT_RUN. No further browser run requested for this stage.

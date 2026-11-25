@@ -1,30 +1,33 @@
-# Android阶段0 / 阶段1交付记录
+# Android阶段0 / 阶段1 — 有界交付
 
-更新：2026-11-25T21:05:48.165406+08:00（Asia/Shanghai）。PR11： https://github.com/chaccine/shiguang/pull/11 。**Stacked base为未合并PR10/unit-0.12的77a0637；不是直接基于main。PR10保持未合并且未改状态。** 本轮仍为0.1.12开发代码，没有交付新安装包。
+PR11：https://github.com/chaccine/shiguang/pull/11 。Stacked base为未合并PR10的`unit-0.12`，依赖基线77a0637；PR10/11均未合并main。应用仍0.1.12，本轮未手动生成或交付新安装包。
 
-## PASS
+## 已实现
 
-- 阶段0复现基线cargo241/fault291/npm254，typecheck/build通过。启动锁修复0fa4e6a独立回归241/291/268通过，CI45614570495为7/7。
-- 阶段1代码8f86b47：浅色纸纹哑金、深色灯下织物展馆；时光轴内容前置，现有年月/排序/珍藏/标签收进筛选面板，独立可撤销条件片。统一五导航标签和轮廓图标、阅读/编辑/搜索返回上下文。照片保留原始色彩，无深色全图滤镜；空库不注入合成内容。此项为实现与自动测试，不冒称人工视觉验收。
-- 启动状态分离：初始中性不透明封面；确认关闭锁后直入，启用后才显示口令表单，错误/取消/慢响应/过期结果不越过锁。保留既有4–8位数字规则及前导零，不改成固定6位；原Argon2id、60秒重锁、备份锁规则/schema v5/G01–G06不变。
-- 最终独立全回归：Rust1.90.0 cargo241/fault291（各1个既有历史fixture生成器ignored）、npm285，typecheck/build/diff-check全部exit0。原始日志`/workspace/sg-visual-01/visual/`；[机器记录](mobile-stage01/VISUAL_VERIFICATION.json)。
-- 自动覆盖面板/单项条件移除/分页/阅读编辑返回/空库/安全启动，材质色阶对比度与原图字节一致性。Android系统栏主题事件与现有原生insets对接已实现，未声明硬件效果通过。
-- 实际loopback服务8条场景URL与关键构建资产HTTP200且字节一致，仅静态服务证据，不是浏览器布局PASS。预览`http://127.0.0.1:1420/?stage01=timeline&theme=light`；[验收清单](mobile-stage01/BROWSER_CHECKLIST.md)。
+- 启动锁修复0fa4e6a：根因是初始HTML同时显示检查文案与口令表单。现为中性不透明封面，确认关闭锁后直入；启用后才露解锁控件，检查/验证/错误状态分离，取消/慢响应/过期结果保持安全。保留既有4–8位数字与前导零，不强制6位；Argon2id、60秒重锁、备份锁规则、schema v5及G01–G06未改。
+- 视觉代码8f86b47：浅色纸纹哑金、深色灯下织物；时光轴内容前置，搜索入口、筛选面板与独立可撤销条件片、统一五导航轮廓图标，阅读/编辑/搜索返回上下文。纯文字记录有独立排印，照片不随主题压暗，生产空库不注入样稿内容。Android系统栏主题/insets已对接，硬件效果未验收。
+
+## PASS — 自动与有界实际观察分别记载
+
+- 独立全回归Rust1.90.0：cargo241 / fault291 / npm285；typecheck、build、diff-check全部exit0。两项cargo各保留1个既有历史fixture生成器ignored。日志`/workspace/sg-visual-01/visual/`，[自动记录](mobile-stage01/VISUAL_VERIFICATION.json)。自动回归包含旧备份/合并/故障路径和锁规则；不冒称真机恢复。
+- **最终代码CI45619961661 SUCCESS7/7**，准确head为`8f86b47479e89241efeb4a5b9a27e80cba626759`。[CI记录](mobile-stage01/FINAL_CI.json)。后续提交仅证据/文档；CI包含Android构建，不能当真机UI通过。启动块CI45614570495亦7/7。
+- **浏览器总体为PARTIAL**：只在合成RAM夹具观察浅深首屏、准确五导航/单加号、浅色真实空库、筛选打开/完成关闭、薄荷1/1搜索与阅读返回、慢锁封面、检查错误重试及0042解锁。200%仅部分文字变大/导航换行观察，非完整排版验收。
+- GUI曾设390×844及360×800，空库/慢锁场景有匹配页面读数；后来一次390×844工具栏与390×800页面读数不一致。DPR未知。7张原始未裁图实际截图见[目录](mobile-stage01/manual/README.md)与[校验清单](mobile-stage01/manual/ARTIFACTS.json)，不会将整桌面截图或其文件尺寸冒充手机/DPR。
 
 ## NOT_RUN
 
-- 实际360×800/390×844手机viewport、200%真实重排、触控/焦点/读屏、Android IME/原生Back/系统栏/首帧，以及本轮真实UI截图：待parent computerUse或真机验收，不把宽屏截图、Node DOM或CI当手机通过。
-- 原生升级历史数据与照片保留：现有0.1.12反馈仅能证明浅深启动；没有读取用户私图、库或日志，未为等待此反馈中断可逆开发。
-- 最终代码CI：run 45619961661 当前in_progress / conclusion=；将记录真实完成状态，不沿用启动块绿灯冒充最终head。
+- 真机升级后历史记录/照片保留：旧0.1.12反馈只证明浅深能启动；未读取私人截图、数据库或日志，没有自动宣称保留验证完成。
+- Android真实安装、系统栏/IME/原生返回/安全区/首帧、实际触控与读屏。
+- 手动错误口令拒绝、后台返回60秒重锁、详细组合筛选、完整200%重排矩阵、日历及编辑保存/草稿流程、逐记录标签/回收站、全套焦点/减弱动效/44px目标检查。自动用例通过不替代这些实际观察。
 
 ## BLOCKED
 
-- 代码实现及本地回归无已知阻塞。真实浏览器操作必须由parent派computerUse；没有自行使用Shell驱动浏览器/CDP/Playwright或生成伪运行截图。
+- 无代码/CI阻塞；本轮有界浏览器验收已结束，不为未覆盖项擅自重开浏览器或扩项。保留viewport读数不一致与DPR未知的证据限制。
 
-## DEFERRED / 风险
+## DEFERRED / 风险及后续
 
-- macOS/Windows专项适配、桌面截图及专项验收暂缓，已有支持未删除。编辑器/照片结构、清理、主题展、最近任务遮挡（阶段4）未扩项。
-- 原生系统栏初始随Android配置，随后按应用解析主题更新；首次原生帧、旧系统导航模式与IME必须真机确认，不能由源代码或CI推断。
-- 合成预览仅显式stage01查询启用，RAM独立设备，绝不读取生产存储或用样稿咖啡/海景伪造记录。无新收费、公开部署、AI/云同步；固定debug签名配置及schema未改。现有CI自动构建与产物不等于手机验收，本轮未手动生成或分发安装包。
+- macOS/Windows专项UI、构建验收与桌面截图暂缓，已有支持保留。编辑器/照片结构、清理、主题展及最近任务遮挡未混入阶段0/1。后续新授权工作应独立分支识别。
+- 原生栏初始跟随Android配置、之后应用解析主题；其首次帧和导航模式需用户真机确认，不由CI推断。仍待用户的实际手机试用与视觉意见，未生成新APK来诱导未经请求的安装。
+- 无schema/签名改动、私人数据访问、新收费、公开部署、AI/云同步；src-tauri/gen保持不跟踪。既有CI自动产物不等于本轮安装包交付。
 
-详细：[启动](mobile-stage01/STARTUP.md) · [视觉实现](mobile-stage01/VISUAL.md) · [真实浏览器证据目录](mobile-stage01/manual/README.md)
+详细：[启动](mobile-stage01/STARTUP.md) · [视觉](mobile-stage01/VISUAL.md) · [完整清单与未测项](mobile-stage01/BROWSER_CHECKLIST.md) · [实际观察](mobile-stage01/manual/RESULTS.md)

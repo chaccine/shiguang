@@ -1,0 +1,36 @@
+{
+  "run": 45619961661,
+  "headSha": "8f86b47479e89241efeb4a5b9a27e80cba626759",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "tauri bundle (windows-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "core+cli+ts (windows-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "core+cli+ts (macos-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "core+cli+ts (ubuntu-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "tauri bundle (macos-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "tauri bundle (ubuntu-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "tauri android apk (ubuntu-latest)",
+      "conclusion": "success"
+    }
+  ]
+}
