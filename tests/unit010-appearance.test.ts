@@ -129,3 +129,19 @@ test("appearance consumes the unchanged Tauri settings contract and follows rest
     assert.equal(resolvedTheme("system", true), "dark");
   } finally { env.restore(); }
 });
+
+test("optional native bar paint follows the resolved theme, including live system changes and unavailable chrome", () => {
+  const env = environment();
+  try {
+    const paint: boolean[] = [];
+    window.__TAURI__ = { event: { async emit(name, dark) {
+      assert.equal(name, "shiguang-bar-theme"); paint.push(dark);
+      throw new Error("synthetic unavailable host paint");
+    } } };
+    const ui = new AppearanceUi(new MemoryAdapter({ search: "" }), () => {});
+    ui.sync("system"); env.system(true);
+    assert.equal(paint.at(-1), true);
+    ui.sync("light"); assert.equal(paint.at(-1), false);
+    assert.equal(env.root.dataset.theme, "light");
+  } finally { env.restore(); }
+});

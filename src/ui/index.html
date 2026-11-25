@@ -2,17 +2,22 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>拾光</title>
     <script>
       // Paint-only cache. Rust/MemoryAdapter settings remain authoritative after startup.
       (() => {
         let theme = "system", scale = "1";
         try {
-          const cached = localStorage.getItem("shiguang.theme");
-          if (["light", "dark", "system"].includes(cached)) theme = cached;
-          const font = localStorage.getItem("shiguang.fontScale");
-          if (["1", "1.15", "1.3"].includes(font)) scale = font;
+          const params = globalThis.location && !globalThis.__TAURI__?.core?.invoke ? new URLSearchParams(location.search) : null;
+          if (["timeline", "empty"].includes(params?.get("stage01"))) {
+            theme = params.get("theme") === "dark" ? "dark" : "light";
+          } else {
+            const cached = localStorage.getItem("shiguang.theme");
+            if (["light", "dark", "system"].includes(cached)) theme = cached;
+            const font = localStorage.getItem("shiguang.fontScale");
+            if (["1", "1.15", "1.3", "2"].includes(font)) scale = font;
+          }
         } catch { /* A denied cache must not prevent a usable first paint. */ }
         const root = document.documentElement;
         root.dataset.themePreference = theme;
@@ -26,7 +31,24 @@
     <link rel="stylesheet" href="./ui/search.css" />
   </head>
   <body>
-    <div class="app-shell" id="app-shell" inert>
+    <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="拾光" tabindex="-1">
+      <p data-testid="startup-cover" role="status">拾光</p>
+      <div data-testid="startup-error" class="data-card" hidden>
+        <p data-testid="startup-message" role="alert"></p>
+        <button type="button" class="button" data-testid="startup-retry">重试</button>
+      </div>
+      <form data-testid="unlock-form" class="data-card" hidden>
+        <div class="lock-emblem" aria-hidden="true">⌑</div>
+        <p class="eyebrow">这一间展馆，只属于你</p><h1>拾光 · 私人时光</h1>
+        <p data-testid="unlock-hint" role="status"></p>
+        <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
+        <button type="submit" class="button" data-testid="app-unlock">解锁</button>
+        <button type="button" class="button ghost" data-testid="unlock-cancel" hidden>取消验证</button>
+        <p data-testid="unlock-feedback" role="status"></p>
+      </form>
+    </div>
+
+    <div class="app-shell" id="app-shell" hidden inert>
       <a class="skip-link" href="#main-content">跳到内容</a>
       <aside class="sidebar">
         <div class="brand">
@@ -41,7 +63,6 @@
       <main class="main" id="main-content" tabindex="-1">
         <div class="main-inner">
           <div data-testid="notice" id="notice" class="notice" hidden>
-            <p id="preview-notice" class="notice-line preview" hidden></p>
             <p id="app-notice" class="notice-line" role="status" aria-live="polite" hidden></p>
           </div>
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
@@ -93,7 +114,7 @@
               <p class="data-desc">照片始终保留原色。夜间用柔和的暖光陪你阅读。</p>
             </div>
             <div class="data-card font-card"><h2>阅读字号</h2>
-              <label>字体大小 <select data-testid="font-scale"><option value="1">标准</option><option value="1.15">大</option><option value="1.3">特大</option></select></label>
+              <label>字体大小 <select data-testid="font-scale"><option value="1">标准</option><option value="1.15">大</option><option value="1.3">特大</option><option value="2">200%</option></select></label>
               <p class="font-sample">把值得记住的小事，一页一页收好。</p>
               <p class="data-desc">以系统默认字号为基础；额外字号偏好仅保存在本机。</p>
             </div>
@@ -179,37 +200,49 @@
           </section>
 
           <section id="view-timeline" class="view" hidden>
-            <header class="view-head">
-              <div>
-                <h1>时光轴</h1>
-                <p class="view-sub">已经好好收起来的小事，按年、月、日慢慢翻。</p>
+            <header class="timeline-masthead">
+              <h1>拾光</h1>
+              <div class="timeline-entries">
+                <button type="button" class="index-action" data-testid="timeline-search" data-go="search" aria-label="查找时光">查找</button>
+                <button type="button" class="index-action" data-testid="timeline-filters" aria-haspopup="dialog" aria-controls="timeline-sheet" aria-expanded="false">筛选</button>
               </div>
-              <button type="button" class="button ghost" data-testid="timeline-search" data-go="search">查找时光</button>
             </header>
-
+            <div id="active-conditions" role="group" aria-label="已启用的时光轴条件" hidden></div>
             <div class="resume-card" id="resume-draft" data-testid="resume-draft" hidden>
               <span class="resume-text">有一篇没写完的草稿</span>
-              <button type="button" class="button ghost" id="resume-draft-button" data-testid="resume-draft-button">继续写</button>
+              <button type="button" class="index-action" id="resume-draft-button" data-testid="resume-draft-button">继续写</button>
             </div>
-
-            <div class="timeline-toolbar">
-              <label class="tool-field">跳到年月
-                <select id="jump-month" data-testid="jump-month"></select>
-              </label>
-              <button type="button" class="button ghost" data-testid="jump-latest" id="jump-latest">回到最近</button>
-              <button type="button" class="button ghost" data-testid="order-toggle" id="order-toggle">由近到远</button>
-              <label class="check-inline"><input type="checkbox" id="favorite-filter" data-testid="favorite-filter" /> 只看珍藏</label>
-              <button type="button" class="button ghost" data-testid="manage-tags" id="manage-tags">管理标签</button>
-            </div>
-
-            <div class="tag-filter-bar" id="tag-filter-bar" hidden>
-              <p class="tag-filter-hint">多个标签满足任一即可</p>
-              <div class="tag-filter-chips" id="tag-filter-chips"></div>
-            </div>
-
-            <p class="timeline-summary" id="timeline-summary" data-testid="timeline-summary"></p>
-            <div id="timeline-list" class="timeline-list"></div>
+            <div id="timeline-list" class="journal"></div>
             <div id="timeline-sentinel" data-testid="timeline-sentinel" class="timeline-sentinel" aria-hidden="true"></div>
+            <p class="timeline-summary" id="timeline-summary" data-testid="timeline-summary" role="status"></p>
+
+            <dialog id="timeline-sheet" class="timeline-sheet" aria-modal="true" aria-labelledby="timeline-sheet-title">
+              <div class="sheet-head">
+                <h2 id="timeline-sheet-title">筛选时光</h2>
+                <button type="button" class="index-action" data-testid="filters-close">完成</button>
+              </div>
+              <div class="sheet-section">
+                <label for="jump-month">跳到年月</label>
+                <div class="sheet-row">
+                  <select id="jump-month" data-testid="jump-month" aria-label="跳到年月"></select>
+                  <button type="button" class="index-action" data-testid="jump-latest" id="jump-latest">回到最近</button>
+                </div>
+                <div class="sheet-row"><span>日期顺序</span>
+                  <button type="button" class="button ghost" data-testid="order-toggle" id="order-toggle">由近到远</button>
+                </div>
+                <label class="check-inline"><input type="checkbox" id="favorite-filter" data-testid="favorite-filter" />只看珍藏</label>
+              </div>
+              <div class="sheet-section">
+                <div class="sheet-row"><h3>标签</h3>
+                  <button type="button" class="index-action" data-testid="manage-tags" id="manage-tags">管理标签</button>
+                </div>
+                <div id="tag-filter-bar" hidden>
+                  <p class="tag-filter-hint">多个标签满足任一即可</p>
+                  <div class="tag-filter-chips" id="tag-filter-chips"></div>
+                </div>
+              </div>
+              <p class="sheet-result" id="filter-result" role="status"></p>
+            </dialog>
           </section>
 
           <section id="view-calendar" class="view" hidden>
@@ -365,6 +398,7 @@
               </ul>
             </article>
           </section>
+          <p id="preview-notice" class="preview-footnote" hidden></p>
         </div>
       </main>
     </div>
@@ -407,11 +441,6 @@
       </div>
     </dialog>
 
-    <div id="app-lock-screen" data-testid="app-lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="应用锁">
-      <form data-testid="unlock-form" class="data-card"><div class="lock-emblem" aria-hidden="true">⌑</div><p class="eyebrow">这一间展馆，只属于你</p><h1>拾光 · 私人时光</h1><p data-testid="unlock-hint">正在检查应用锁…</p>
-      <label>口令<input data-testid="app-passcode" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" /></label>
-      <button class="button" data-testid="app-unlock">解锁</button><p data-testid="unlock-feedback" role="status"></p></form>
-    </div>
     <script type="module" src="./ui/main.js"></script>
   </body>
 </html>

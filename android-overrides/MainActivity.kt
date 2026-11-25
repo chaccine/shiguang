@@ -3,6 +3,7 @@
 // 所以在原生侧把状态栏 / 导航栏 / 刘海 / 输入法 insets 作为根视图 padding，网页不再画到系统栏下面。
 package com.shiguang.unit0
 
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -49,16 +50,27 @@ class MainActivity : TauriActivity() {
     } catch (_: Exception) { false } catch (_: OutOfMemoryError) { false }
   }
 
-  override fun onCreate(savedInstanceState: Bundle?) {
-    // 界面固定浅色（color-scheme: light）：系统栏用透明底 + 深色图标，避免深色模式下白字看不清。
-    enableEdgeToEdge(
-      statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-      navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+  // The native inset background follows the web palette. AndroidX selects the
+  // supported icon mode / fallback scrim on older platform versions.
+  private fun paintBars(dark: Boolean) {
+    val night = Color.rgb(23, 20, 16)
+    val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+                else SystemBarStyle.light(Color.TRANSPARENT, night)
+    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+    findViewById<View>(android.R.id.content).setBackgroundColor(
+      if (dark) night else Color.rgb(248, 241, 228)
     )
+  }
+
+  @androidx.annotation.Keep
+  fun setBarAppearance(dark: Boolean) {
+    runOnUiThread { paintBars(dark) }
+  }
+
+  override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    paintBars((resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
     val content = findViewById<View>(android.R.id.content)
-    // 系统栏背后的颜色与顶部栏（.sidebar #ead9c6）一致。
-    content.setBackgroundColor(Color.parseColor("#EAD9C6"))
     ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
       val bars = insets.getInsets(
         WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()

@@ -1,0 +1,84 @@
+{
+  "capturedBy": "parent-dispatched computerUse",
+  "scope": "synthetic fixtures only; original bytes, no crop/resize",
+  "viewportLimit": "GUI 390x844 and360x800; empty/slow readings matched, later390x844 GUI versus390x800 page inconsistent; DPR unknown",
+  "artifacts": [
+    {
+      "file": "dark-responsive-390x844-devtools.webp",
+      "bytes": 130460,
+      "sha256": "cc30cde8b93fafb5f3c28e178f4681318117a5dd165a375dc276ec447423d283",
+      "kind": "full desktop capture with Responsive toolbar",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 1920,
+        "height": 1200
+      }
+    },
+    {
+      "file": "empty-light-390x844.png",
+      "bytes": 466315,
+      "sha256": "67e0085d9580e3ae30bbc47e18ec4703179402cda6ea70617485e9a1be66b810",
+      "kind": "page capture",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "light-responsive-390x844-devtools.webp",
+      "bytes": 148818,
+      "sha256": "0b67ddfc5ca551454ba1d04b026d4abd7ab90f78b9fa03ba1f60c6dcb13cf338",
+      "kind": "full desktop capture with Responsive toolbar",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 1920,
+        "height": 1200
+      }
+    },
+    {
+      "file": "lock-enabled-cover-360x800-devtools.webp",
+      "bytes": 106412,
+      "sha256": "8d1938416c7d383bd22c838af7b6c195cc16a45fd79ff3926656fcb23d637900",
+      "kind": "full desktop capture with Responsive toolbar",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 1920,
+        "height": 1200
+      }
+    },
+    {
+      "file": "lock-enabled-unlocked-360x800-devtools.webp",
+      "bytes": 121854,
+      "sha256": "92cafd8f443f3d60f9024f48e55492aded63f17a0caa3259804e0d3cc236d634",
+      "kind": "full desktop capture with Responsive toolbar",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 1920,
+        "height": 1200
+      }
+    },
+    {
+      "file": "lock-error-before-retry-360x800-devtools.webp",
+      "bytes": 104436,
+      "sha256": "de8bc19bcd86e662a282599afe87dd0e281bb445cf672eb3dc204cc5f60126e1",
+      "kind": "full desktop capture with Responsive toolbar",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 1920,
+        "height": 1200
+      }
+    },
+    {
+      "file": "lock-slow-200pct-360x800.png",
+      "bytes": 216109,
+      "sha256": "23ec3fd234aa70d33be1c85bcafea941a60072a86424c33087dc4b2c91e7c108",
+      "kind": "page capture",
+      "dpr": null,
+      "filePixelDimensions": {
+        "width": 360,
+        "height": 800
+      }
+    }
+  ]
+}

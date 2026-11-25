@@ -14,6 +14,8 @@ use tauri::Manager;
 
 #[cfg(target_os = "android")]
 mod android_thumb;
+#[cfg(target_os = "android")]
+mod android_bars;
 mod backup_cmd;
 mod u010_cmd;
 mod u011_cmd;
@@ -769,6 +771,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(move |app| {
+            #[cfg(target_os = "android")]
+            android_bars::listen(app.handle());
             // 同一进程只打开一次；Activity 重建再次进入时直接复用。
             if !state.store.begin() {
                 return Ok(());

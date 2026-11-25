@@ -1,3 +1,8 @@
+import { icon } from "./icons.ts";
+import type { UiPreferences } from "./appearance.ts";
+import { mobilePreview } from "./mobile-preview.ts";
+import { bindLocalBack, type BackLayer } from "./local-back.ts";
+import { bindTimelineSheet } from "./timeline-sheet.ts";
 import { renderReading } from "./reading.ts";
 import { PersonalUi } from "./personal.ts";
 import { MuseumUi } from "./museum.ts";
@@ -12,7 +17,7 @@ import type { ErrorDescription } from "../domain/errors.ts";
 import { durabilityLabel, formalHeadline, formatEventWhen } from "../domain/format.ts";
 import { LAST_TAB_KEY, NAV_TABS, initialTab, rememberableTab, tabOf, timelineEmptyKind } from "../domain/navigation.ts";
 import type { MainTab, View } from "../domain/navigation.ts";
-import { calendarGrid, countLabel, daysInMonth, groupByYmd, localToday } from "../domain/timeline.ts";
+import { calendarGrid, countLabel, daysInMonth, localToday } from "../domain/timeline.ts";
 import type {
   BackupSummary, CalendarDay, ConflictCopy, FieldIssue, PhotoUse, RecordRow, TagInfo, TimelineFilter, TimelineItem,
 } from "../domain/types.ts";
@@ -44,22 +49,13 @@ for (const tab of NAV_TABS) {
   button.className = "tab";
   button.dataset.testid = tab.testId;
   button.dataset.navTab = tab.id;
-  if (tab.id === "create") button.setAttribute("aria-label", "＋记录");
+  button.setAttribute("aria-label", tab.label);
   // Page navigation includes a create action and secondary pages, not an ARIA tab widget.
   button.setAttribute("aria-current", "false");
-  const dot = document.createElement("span");
-  dot.className = "tab-dot";
-  dot.setAttribute("aria-hidden", "true");
-  dot.textContent = {timeline: "≡", calendar: "▦", create: "＋", museum: "⌂", mine: "◌"}[tab.id];
   const label = document.createElement("span");
   label.className = "tab-label";
-  label.textContent = tab.id === "create" ? "记录" : tab.label;
-  if (tab.id === "museum" || tab.id === "mine") {
-    const desktop = document.createElement("span"); desktop.className = "desktop-nav-label";
-    desktop.textContent = tab.id === "museum" ? "回忆博物馆" : "个人空间";
-    label.classList.add("mobile-nav-label"); button.append(desktop);
-  }
-  button.append(dot, label);
+  label.textContent = tab.label;
+  button.append(icon(tab.id), label);
   button.addEventListener("click", () => { void activateMainTab(tab.id); });
   navTabs.append(button);
   tabButtons.set(tab.id, button);
@@ -163,23 +159,38 @@ const collectManageTags = byTestId<HTMLButtonElement>("collect-manage-tags");
 const openTrashButton = byTestId<HTMLButtonElement>("open-trash");
 const backToSettingsButton = byTestId<HTMLButtonElement>("back-to-settings");
 
+const filterEntry = byTestId<HTMLButtonElement>("timeline-filters");
+const timelineSheet = byId<HTMLDialogElement>("timeline-sheet");
+const activeConditions = byId("active-conditions");
+const filterResult = byId("filter-result");
+filterEntry.prepend(icon("filters"));
+byTestId("timeline-search").prepend(icon("search"));
+const syncBack = bindLocalBack(backLayers, () => !byId("app-shell").inert, showError);
+const openTimelineSheet = bindTimelineSheet(timelineSheet, filterEntry, byTestId("filters-close"),
+  () => currentView === "timeline" && !byId("app-shell").inert, syncBack);
+
 const params = new URLSearchParams(window.location.search);
 const invoke = tauriInvokeFromWindow();
+const visualPreview = mobilePreview(params, invoke !== null);
+// Last-tab and last-draft hints are optional, including on hosts that deny Web Storage.
+const uiPreferences: UiPreferences = visualPreview?.preferences ?? {
+  getItem(key) { try { return window.localStorage.getItem(key); } catch { return null; } },
+  setItem(key, value) { try { window.localStorage.setItem(key, value); } catch { /* optional hint */ } },
+  removeItem(key) { try { window.localStorage.removeItem(key); } catch { /* optional hint */ } },
+};
 const searchDemo = searchDemoMode(params, invoke !== null);
 const demo = invoke === null && searchDemo === null && params.get("demo") === "1";
 
-if (demo) {
-  window.localStorage.removeItem(PREVIEW_STORAGE_KEY);
-  window.localStorage.removeItem(LAST_DRAFT_KEY);
-}
-if (searchDemo !== null) window.localStorage.removeItem(SEARCH_DEMO_STORAGE_KEY);
-
-const memory = invoke === null
-  ? new MemoryAdapter({ storage: window.localStorage, storageKey: searchDemo !== null ? SEARCH_DEMO_STORAGE_KEY : PREVIEW_STORAGE_KEY,
+const memory = visualPreview?.adapter ?? (invoke === null
+  ? new MemoryAdapter({ storage: window.localStorage, deferOpen: true, storageKey: searchDemo !== null ? SEARCH_DEMO_STORAGE_KEY : PREVIEW_STORAGE_KEY,
     ...(searchDemo !== null ? { now: searchDemoClock(), search: "" } : {}) })
-  : null;
+  : null);
 let search: SearchUi;
-const api: ShiguangApi = searchAwareApi(memory ?? createTauriApi(invoke!), () => search?.invalidate());
+let formalGeneration = 0;
+const api: ShiguangApi = searchAwareApi(memory ?? createTauriApi(invoke!), () => {
+  formalGeneration++;
+  search?.invalidate();
+});
 
 let currentView: View = "timeline";
 let photoKey: string | null = null;
@@ -197,7 +208,7 @@ function createSession(): DraftSession<number> {
     const recordId = state.recordId;
     if (recordId !== null && currentView === "editor"
       && (state.status === "saved" || state.status === "savedUncertain")) {
-      window.localStorage.setItem(LAST_DRAFT_KEY, recordId);
+      uiPreferences.setItem(LAST_DRAFT_KEY, recordId);
     }
   });
   return created;
@@ -234,16 +245,24 @@ function previewText(body: string, limit: number): string {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 
+const mainScroller = byId("main-content");
+function scrollPosition() { return { main: mainScroller.scrollTop, window: window.scrollY }; }
+type ScrollPosition = ReturnType<typeof scrollPosition>;
+const tabPositions = new Map<View, ScrollPosition>();
+function restoreScroll(place?: ScrollPosition) {
+  mainScroller.scrollTop = place?.main ?? 0;
+  window.scrollTo(0, place?.window ?? 0);
+}
+
 function setView(view: View): void {
+  if (currentView === "timeline" || currentView === "calendar") tabPositions.set(currentView, scrollPosition());
+  if (timelineSheet.open && view !== "timeline") timelineSheet.close();
   if (currentView === "search" && view !== "search") search.leave();
   currentView = view;
   for (const id of ["mine", "museum", "reading", "storage", "appearance", "privacy", "search"]) byId(`view-${id}`).hidden = view !== id;
   byTestId("sidebar-search").setAttribute("aria-current", view === "search" || view === "reading" && readingOrigin === "search" ? "page" : "false");
   if (view === "storage") void personal.renderStorage().catch(showError);
   if (view === "privacy" || view === "appearance") void personal.refresh().catch(showError);
-  const scroller = document.querySelector<HTMLElement>(".main");
-  if (scroller !== null) scroller.scrollTop = 0;
-  window.scrollTo(0, 0);
   viewDrafts.hidden = view !== "drafts";
   viewEditor.hidden = view !== "editor";
   viewTimeline.hidden = view !== "timeline";
@@ -263,17 +282,18 @@ function setView(view: View): void {
     heading.tabIndex = -1;
     heading.focus({preventScroll: true});
   }
+  if (view === "editor") backButton.textContent = readingId ? "← 返回阅读" : "← 全部草稿";
+  restoreScroll(tabPositions.get(view));
+  syncBack();
   const remembered = rememberableTab(view);
-  if (remembered !== null) window.localStorage.setItem(LAST_TAB_KEY, remembered);
+  if (remembered !== null) uiPreferences.setItem(LAST_TAB_KEY, remembered);
   // 数据打不开时，每个页签都显示同一条错误提示，但导航始终可用。
   if (blockedDescription !== null) showErrorDescription(blockedDescription);
 }
 
 function showPreviewNotice(): void {
   previewNotice.hidden = false;
-  previewNotice.className = "notice-line preview";
-  previewNotice.textContent = "浏览器预览模式：数据只存在本浏览器，用于界面预览，不是真实存储";
-  notice.hidden = false;
+  previewNotice.textContent = visualPreview ? "合成预览 · 刷新后重新开始" : "浏览器预览 · 数据仅保存在本浏览器";
 }
 
 function showAppNotice(message: string, tone: "calm" | "ok" | "warn"): void {
@@ -286,7 +306,7 @@ function showAppNotice(message: string, tone: "calm" | "ok" | "warn"): void {
 function clearAppNotice(): void {
   appNotice.hidden = true;
   appNotice.textContent = "";
-  notice.hidden = previewNotice.hidden;
+  notice.hidden = true;
 }
 
 function clearErrorBox(): void {
@@ -371,6 +391,7 @@ function finishConfirm(value: boolean): void {
 
 /** 应用内二次确认；不使用 window.confirm，取消/关闭一律按“不执行”处理。 */
 function askConfirm(title: string, message: string, okLabel = "确定"): Promise<boolean> {
+  if (byId("app-shell").inert) return Promise.resolve(false);
   if (confirmSettler !== null) finishConfirm(false);
   confirmTitle.textContent = title;
   confirmMessage.textContent = message;
@@ -378,6 +399,7 @@ function askConfirm(title: string, message: string, okLabel = "确定"): Promise
   return new Promise<boolean>((resolve) => {
     confirmSettler = resolve;
     confirmDialog.showModal();
+    syncBack();
   });
 }
 
@@ -393,10 +415,7 @@ confirmDialog.addEventListener("close", () => {
   settle?.(false);
 });
 
-/**
- * 数据打不开时：保留全部导航，页签仍可切换；每个页签显示同一条错误提示，不做任何写操作。
- * 不再整屏遮挡，避免用户被困在错误页里看不到入口。
- */
+/** 数据目录不可用时保留错误，直到启动重试成功。 */
 let blockedDescription: ErrorDescription | null = null;
 let blockedTitle = "";
 
@@ -407,19 +426,27 @@ function showStoreBlocked(code: string, error: unknown): void {
     ? "拾光已在别处打开"
     : code === "SCHEMA_TOO_NEW" ? "需要更新拾光" : code === "STORE_STARTING" ? "拾光还在打开数据" : "数据暂时无法打开";
   showErrorDescription({ ...description, title: blockedTitle });
-  showAppNotice(`${blockedTitle}：${description.detail} 页签仍可切换，但暂时不能读取或写入数据。`, "warn");
 }
 
-async function gateStore(): Promise<boolean> {
+async function waitForStore(): Promise<void> {
   // 数据仍在打开（STORE_STARTING）或宿主刚重建时短暂重试，不把等待误报为“无法打开”。
-  const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
-  if (outcome.ok) return true;
-  showStoreBlocked(outcome.code, outcome.error);
-  return false;
+  for (;;) {
+    const outcome = await gateWithRetry(() => api.storeStatus(), (ms) => new Promise((r) => setTimeout(r, ms)));
+    if (outcome.ok) {
+      if (blockedDescription !== null) { blockedDescription = null; blockedTitle = ""; clearErrorBox(); }
+      return;
+    }
+    showStoreBlocked(outcome.code, outcome.error);
+    const advice = outcome.code === "STORE_LOCKED" ? "请关闭另一个拾光窗口，再重试或重新打开应用。"
+      : outcome.code === "SCHEMA_TOO_NEW" ? "请使用支持这份数据的新版拾光。"
+      : "请重试。若仍无法打开，请保留本机数据并重新打开拾光。";
+    await personal.waitForStoreRetry(`${blockedTitle}。${advice}`);
+  }
 }
 
 /** 数据打不开时不允许进入写流程；提示已有的错误，不做无用的写入尝试。 */
 function ensureWritable(): boolean {
+  if (byId("app-shell").inert) return false;
   if (blockedDescription === null) return true;
   showErrorDescription(blockedDescription);
   return false;
@@ -625,7 +652,7 @@ function openInEditor(row: RecordRow | null): void {
   fillEditor();
   void refreshEditorTags();
   editorBadge.hidden = !(row !== null && row.formal !== null && row.draft !== null);
-  if (row !== null) window.localStorage.setItem(LAST_DRAFT_KEY, row.recordId);
+  if (row !== null) uiPreferences.setItem(LAST_DRAFT_KEY, row.recordId);
 }
 
 async function refreshEditorTags(): Promise<void> {
@@ -690,7 +717,7 @@ async function startNewDraft(): Promise<void> {
   try {
     readingId = null;
     openInEditor(null);
-    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    uiPreferences.removeItem(LAST_DRAFT_KEY);
     clearAppNotice();
     clearErrorBox();
     setView("editor");
@@ -704,7 +731,9 @@ async function openModification(recordId: string): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
+    const origin = currentView;
     const created = await api.createDraft({ baseRecordId: recordId });
+    if (currentView !== origin || byId("app-shell").inert) return;
     openInEditor(created.row);
     clearAppNotice();
     clearErrorBox();
@@ -908,16 +937,51 @@ function formatDayHeading(date: string): string {
   return `${month}月${day}日 ${weekday}`;
 }
 
+function formatMonth(date: string): string {
+  return `${Number(date.slice(0, 4))}年${Number(date.slice(5, 7))}月`;
+}
+
 function lastDayOfMonth(year: number, month: number): string {
   const mm = String(month).padStart(2, "0");
   return `${String(year).padStart(4, "0")}-${mm}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
 }
 
-async function loadTimelineTags(): Promise<void> {
-  timelineTags = await api.listTags();
+function syncTimelineTags(tags: TagInfo[]): void {
+  timelineTags = tags;
   const available = new Set(timelineTags.map((tag) => tag.tagId));
   for (const id of [...selectedTagIds]) if (!available.has(id)) selectedTagIds.delete(id);
   renderTagFilterChips();
+}
+
+function renderActiveConditions(): void {
+  const chips: HTMLButtonElement[] = [];
+  const add = (key: string, label: string, remove: () => void) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "condition-chip";
+    button.dataset.condition = key;
+    button.textContent = `${label} ×`;
+    button.setAttribute("aria-label", `移除条件，${label}`);
+    button.addEventListener("click", () => {
+      remove();
+      void reloadTimeline();
+    });
+    chips.push(button);
+  };
+  if (timelineTo) add("month", `截至 ${formatMonth(timelineTo)}`, () => { timelineTo = null; });
+  if (timelineOrder === "asc") add("order", "由远到近", () => { timelineOrder = "desc"; paintOrderToggle(); });
+  if (favoriteFilter.checked) add("favorite", "只看珍藏", () => { favoriteFilter.checked = false; });
+  for (const id of selectedTagIds) add(`tag:${id}`, tagName(id), () => { selectedTagIds.delete(id); });
+
+  const focused = document.activeElement as HTMLElement | null;
+  const oldIndex = Array.from(activeConditions.children).findIndex(button => button === focused);
+  activeConditions.replaceChildren(...chips);
+  activeConditions.hidden = chips.length === 0;
+  if (oldIndex >= 0) {
+    const next = chips.find(button => button.dataset.condition === focused?.dataset.condition)
+      ?? chips[Math.min(oldIndex, chips.length - 1)] ?? filterEntry;
+    next.focus({ preventScroll: true });
+  }
 }
 
 function renderTagFilterChips(): void {
@@ -939,7 +1003,11 @@ function renderTagFilterChips(): void {
     });
     return chip;
   });
+  const focused = document.activeElement as HTMLElement | null;
+  const tagId = focused?.dataset.testid === "tag-filter-chip" ? focused.dataset.tagId : null;
   tagFilterChips.replaceChildren(...chips);
+  if (tagId) (chips.find(button => button.dataset.tagId === tagId) ?? manageTagsButton).focus({ preventScroll: true });
+  renderActiveConditions();
 }
 
 async function refreshMonthOptions(generation: number): Promise<void> {
@@ -956,45 +1024,69 @@ async function refreshMonthOptions(generation: number): Promise<void> {
     option.textContent = `${m.year}年${m.month}月（${m.count}）`;
     options.push(option);
   }
+  const selected = timelineTo?.slice(0, 7) ?? "";
+  if (selected && !options.some(option => option.value === selected)) {
+    const option = document.createElement("option");
+    option.value = selected;
+    option.textContent = `${formatMonth(selected)}（0）`;
+    options.push(option);
+  }
   jumpMonth.replaceChildren(...options);
-  const selected = timelineTo;
-  jumpMonth.value = selected !== null
-    && months.some((m) => selected.startsWith(`${String(m.year).padStart(4, "0")}-${String(m.month).padStart(2, "0")}`))
-    ? selected.slice(0, 7) : "";
+  jumpMonth.value = selected;
 }
 
-async function reloadTimeline(): Promise<void> {
+async function reloadTimeline(keepDepth = false): Promise<void> {
   if (blockedDescription !== null) {
     timelineList.replaceChildren(blockedCard());
     timelineSummary.textContent = "";
     return;
   }
   const generation = ++timelineGeneration;
-  timelineItems = [];
+  const wanted = keepDepth ? timelineItems.length : 0;
   timelineCursor = null;
-  timelineTotal = 0;
   timelineLoading = false;
   timelineLoaded = false;
-  timelineSummary.textContent = "";
-  timelineList.replaceChildren(timelineEmpty("正在加载时光…"));
+  renderActiveConditions();
+  filterResult.textContent = "正在查找…";
+  if (!keepDepth || !timelineItems.length) {
+    if (coverObserver) for (const img of timelineList.querySelectorAll("img")) coverObserver.unobserve(img);
+    timelineItems = [];
+    timelineList.replaceChildren(timelineEmpty("正在加载时光…"));
+    timelineSummary.textContent = "";
+    timelineSentinel.hidden = true;
+  }
   try {
-    await loadTimelineTags();
+    const tags = await api.listTags();
     if (generation !== timelineGeneration) return;
-    const page = await api.timelinePage(currentTimelineFilter(), null, TIMELINE_PAGE_SIZE);
+    syncTimelineTags(tags);
+    const filter = currentTimelineFilter();
+    let page = await api.timelinePage(filter, null, TIMELINE_PAGE_SIZE);
     if (generation !== timelineGeneration) return;
-    timelineItems = page.items;
+    const items = [...page.items];
+    while (page.nextCursor && items.length < wanted) {
+      page = await api.timelinePage(filter, page.nextCursor, TIMELINE_PAGE_SIZE);
+      if (generation !== timelineGeneration) return;
+      items.push(...page.items);
+    }
+    const formalCount = hasTimelineFilter() && !page.total
+      ? (await api.timelinePage({ order: timelineOrder }, null, 1)).total : page.total;
+    if (generation !== timelineGeneration) return;
+    timelineItems = items;
     timelineCursor = page.nextCursor;
     timelineTotal = page.total;
-    // 空态需要区分“一条都没有”和“筛选后为空”，所以有筛选时再取一次全量条数。
-    timelineFormalCount = hasTimelineFilter()
-      ? (await api.timelinePage({ order: timelineOrder }, null, 1)).total
-      : page.total;
-    if (generation !== timelineGeneration) return;
+    timelineFormalCount = formalCount;
     timelineLoaded = true;
     renderTimelineLoaded();
     await refreshMonthOptions(generation);
   } catch (error) {
-    if (generation === timelineGeneration) showError(error);
+    if (generation !== timelineGeneration) return;
+    const description = describeError(error);
+    showErrorDescription(description);
+    filterResult.textContent = description.title;
+    if (!timelineLoaded) timelineList.replaceChildren(emptyCard({
+      title: description.title, message: description.detail,
+      actionLabel: "重试", onAction: () => { void reloadTimeline(keepDepth); },
+    }));
   }
 }
 
@@ -1005,27 +1097,38 @@ async function loadMoreTimeline(): Promise<void> {
   try {
     const page = await api.timelinePage(currentTimelineFilter(), timelineCursor, TIMELINE_PAGE_SIZE);
     if (generation !== timelineGeneration) return;
+    const previousDate = timelineItems.at(-1)?.eventDate;
     timelineItems.push(...page.items);
     timelineCursor = page.nextCursor;
     timelineTotal = page.total;
-    renderTimelineLoaded();
+    timelineList.append(...journalPage(page.items, previousDate));
+    paintTimelineCount();
   } catch (error) {
     if (generation === timelineGeneration) showError(error);
   } finally {
-    timelineLoading = false;
+    if (generation === timelineGeneration) timelineLoading = false;
   }
 }
 
 function clearTimelineFilters(): void {
+  timelineOrder = "desc";
+  paintOrderToggle();
+  filterEntry.focus();
   timelineTo = null;
   favoriteFilter.checked = false;
   selectedTagIds.clear();
   void reloadTimeline();
 }
 
-function renderTimelineLoaded(): void {
+function paintTimelineCount(): void {
+  filterResult.textContent = `共 ${timelineTotal} 条时光`;
+  timelineSummary.hidden = !timelineItems.length;
   timelineSummary.textContent = `已显示 ${timelineItems.length} / 共 ${timelineTotal} 条`;
   timelineSentinel.hidden = timelineCursor === null;
+}
+function renderTimelineLoaded(): void {
+  paintTimelineCount();
+  if (coverObserver) for (const img of timelineList.querySelectorAll("img")) coverObserver.unobserve(img);
   if (timelineItems.length === 0) {
     const kind = timelineEmptyKind(timelineTotal, timelineFormalCount);
     if (kind === "no-entries") {
@@ -1053,36 +1156,24 @@ function renderTimelineLoaded(): void {
     timelineList.replaceChildren();
     return;
   }
+  timelineList.replaceChildren(...journalPage(timelineItems));
+}
+
+function journalPage(items: TimelineItem[], previousDate?: string): HTMLElement[] {
   const nodes: HTMLElement[] = [];
-  for (const yearGroup of groupByYmd(timelineItems)) {
-    const year = document.createElement("h2");
-    year.className = "timeline-year";
-    year.textContent = `${yearGroup.year}年`;
-    nodes.push(year);
-    for (const monthGroup of yearGroup.months) {
-      const month = document.createElement("h3");
-      month.className = "timeline-month";
-      month.textContent = `${monthGroup.month}月`;
-      nodes.push(month);
-      for (const dayGroup of monthGroup.days) {
-        const dayHead = document.createElement("div");
-        dayHead.className = "timeline-day-head";
-        const dayLabel = document.createElement("span");
-        dayLabel.className = "timeline-day-date";
-        dayLabel.textContent = formatDayHeading(dayGroup.date);
-        dayHead.append(dayLabel);
-        if (dayGroup.items.some((item) => item.isFuture)) {
-          const future = document.createElement("span");
-          future.className = "pill is-pending";
-          future.textContent = "未来时光";
-          dayHead.append(future);
-        }
-        nodes.push(dayHead);
-        for (const item of dayGroup.items) nodes.push(timelineCard(item));
-      }
+  let previousMonth = previousDate?.slice(0, 7);
+  for (const item of items) {
+    const month = item.eventDate.slice(0, 7);
+    if (month !== previousMonth) {
+      const heading = document.createElement("h2");
+      heading.className = "timeline-month";
+      heading.textContent = formatMonth(month);
+      nodes.push(heading);
+      previousMonth = month;
     }
+    nodes.push(timelineCard(item));
   }
-  timelineList.replaceChildren(...nodes);
+  return nodes;
 }
 
 let coverObserver: IntersectionObserver | null = null;
@@ -1120,7 +1211,7 @@ async function loadCoverImage(img: HTMLImageElement, assetId: string): Promise<v
 function timelineCover(item: TimelineItem): HTMLElement | null {
   const cover = item.cover;
   if (cover === null) return null;
-  const holder = document.createElement("div");
+  const holder = document.createElement("span");
   holder.className = "timeline-cover";
   const img = document.createElement("img");
   img.alt = cover.caption.trim() || "时光封面";
@@ -1174,110 +1265,79 @@ async function toggleFavorite(item: TimelineItem, button: HTMLButtonElement): Pr
 
 function timelineCard(item: TimelineItem, readOnly = false): HTMLElement {
   const article = document.createElement("article");
-  article.className = "timeline-card timeline-card--record";
-  article.setAttribute("data-testid", "timeline-item");
+  article.className = "journal-entry";
+  article.dataset.testid = "timeline-item";
   article.dataset.recordId = item.recordId;
 
+  const read = document.createElement("button");
+  read.type = "button";
+  read.className = "entry-read";
+  read.dataset.testid = "edit-button";
+  read.setAttribute("aria-label", `阅读，${formatEventWhen(item)}，${itemHeadline(item)}`);
+  read.addEventListener("click", () => { void openReading(item.recordId, false, read).catch(showError); });
+  const cover = timelineCover(item);
+  if (cover) read.append(cover);
+
+  const dateLine = document.createElement("span");
+  dateLine.className = "entry-dateline";
+  const date = document.createElement("time");
+  date.dateTime = item.eventDate;
+  const [day, weekday] = formatDayHeading(item.eventDate).split(" ");
+  date.textContent = day;
+  const detail = document.createElement("span");
+  detail.textContent = [weekday, item.eventTime?.slice(0, 5), item.isFuture ? "未来时光" : ""].filter(Boolean).join(" · ");
+  dateLine.append(date, detail, icon("next"));
+  read.append(dateLine);
+  for (const [className, text] of [["entry-title", item.title], ["entry-excerpt", item.excerpt]]) {
+    if (!text) continue;
+    const line = document.createElement("span");
+    line.className = className;
+    line.textContent = text;
+    read.append(line);
+  }
+  article.append(read);
+
+  const footer = document.createElement("footer");
+  footer.className = "entry-footer";
+  const meta = document.createElement("div");
+  meta.className = "entry-meta";
+  for (const id of item.tagIds) {
+    const tag = document.createElement("span");
+    tag.className = "entry-tag";
+    tag.textContent = tagName(id);
+    meta.append(tag);
+  }
+  const context = [item.mood, item.location, item.photoCount ? `${item.photoCount} 张照片` : ""].filter(Boolean).join(" · ");
+  if (context) {
+    const note = document.createElement("span");
+    note.textContent = context;
+    meta.append(note);
+  }
+  footer.append(meta);
   if (readOnly) {
-    if (item.favorite) {
-      const star = document.createElement("span");
-      star.className = "favorite-static";
-      star.title = "已珍藏";
-      star.textContent = "★";
-      star.setAttribute("aria-label", "已珍藏");
-      article.append(star);
-    }
+    if (item.favorite) meta.append(document.createTextNode("已珍藏"));
   } else {
     const star = document.createElement("button");
     star.type = "button";
-    star.className = "favorite-toggle";
+    star.className = "entry-favorite";
     star.dataset.testid = "favorite-toggle";
     paintFavorite(star, item);
     star.addEventListener("click", () => { void toggleFavorite(item, star); });
-    article.append(star);
+    const more = document.createElement("details");
+    more.className = "entry-more";
+    const summary = document.createElement("summary");
+    summary.setAttribute("aria-label", `更多操作，${itemHeadline(item)}`);
+    summary.append(icon("more"));
+    const actions = document.createElement("div");
+    actions.className = "entry-actions";
+    const tags = tagActionButton("标签", "edit-tags", () => { void openTagPicker(item); });
+    const trash = tagActionButton("移到回收站", "trash-button", () => { void trashTimelineItem(item.recordId, itemHeadline(item)); });
+    trash.classList.add("danger");
+    actions.append(tags, trash);
+    more.append(summary, actions);
+    footer.append(star, more);
   }
-
-  if (item.title.length > 0 || item.eventTime !== null || item.isFuture) {
-    const head = document.createElement("div");
-    head.className = "card-head";
-    if (item.title.length > 0) {
-      const title = document.createElement("h3");
-      title.className = "timeline-title";
-      title.textContent = item.title;
-      head.append(title);
-    }
-    if (item.eventTime !== null) {
-      const time = document.createElement("span");
-      time.className = "timeline-time";
-      time.textContent = item.eventTime.slice(0, 5);
-      head.append(time);
-    }
-    if (item.isFuture) {
-      const future = document.createElement("span");
-      future.className = "pill is-pending";
-      future.textContent = "未来时光";
-      head.append(future);
-    }
-    article.append(head);
-  }
-
-  if (item.excerpt.length > 0) {
-    const excerpt = document.createElement("p");
-    excerpt.className = "card-excerpt";
-    excerpt.textContent = item.excerpt;
-    article.append(excerpt);
-  }
-
-  const cover = timelineCover(item);
-  if (cover !== null) article.append(cover);
-
-  const meta = document.createElement("div");
-  meta.className = "timeline-meta-line";
-  if (item.photoCount > 0) {
-    const count = document.createElement("span");
-    count.className = "timeline-photo-count";
-    count.textContent = `${item.photoCount} 张照片`;
-    meta.append(count);
-  }
-  if (item.tagIds.length > 0) {
-    const tags = document.createElement("div");
-    tags.className = "timeline-tags";
-    for (const id of item.tagIds) {
-      const pill = document.createElement("span");
-      pill.className = "tag-pill";
-      pill.textContent = tagName(id);
-      tags.append(pill);
-    }
-    meta.append(tags);
-  }
-  if (item.location || item.mood) { const context = document.createElement("span"); context.textContent = [item.mood, item.location].filter(Boolean).join(" · "); meta.append(context); }
-  article.append(meta);
-
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  const read = document.createElement("button"); read.type = "button"; read.className = "button ghost";
-  read.dataset.testid = "edit-button"; read.textContent = "阅读";
-  read.addEventListener("click", () => { void openReading(item.recordId).catch(showError); });
-  actions.append(read);
-  article.append(actions);
-  if (!readOnly) {
-    const tagsButton = document.createElement("button");
-    tagsButton.type = "button";
-    tagsButton.className = "button ghost";
-    tagsButton.dataset.testid = "edit-tags";
-    tagsButton.textContent = "标签";
-    tagsButton.addEventListener("click", () => { void openTagPicker(item); });
-    actions.append(tagsButton);
-
-    const trash = document.createElement("button");
-    trash.type = "button";
-    trash.className = "button ghost danger";
-    trash.dataset.testid = "trash-button";
-    trash.textContent = "移到回收站";
-    trash.addEventListener("click", () => { void trashTimelineItem(item.recordId, itemHeadline(item)); });
-    actions.append(trash);
-
-  }
+  article.append(footer);
   return article;
 }
 
@@ -1300,7 +1360,8 @@ async function trashTimelineItem(recordId: string, headline: string): Promise<vo
 }
 
 // ---- Unit-0.7 日历 / 当天 / 那年今日 ----
-const initialToday = localToday();
+const calendarToday = visualPreview?.adapter.today ?? localToday;
+const initialToday = calendarToday();
 let calYear = Number(initialToday.slice(0, 4));
 let calMonth = Number(initialToday.slice(5, 7));
 let calSelectedDate: string | null = null;
@@ -1346,7 +1407,7 @@ async function refreshCalendar(): Promise<void> {
 function renderCalendar(): void {
   calTitle.textContent = `${calYear}年${calMonth}月`;
   calMonthInput.value = `${String(calYear).padStart(4, "0")}-${String(calMonth).padStart(2, "0")}`;
-  const today = localToday();
+  const today = calendarToday();
   const cells = calendarGrid(calYear, calMonth).map((date) => {
     if (date === null) {
       const empty = document.createElement("span");
@@ -1425,6 +1486,7 @@ function renderDayPanelPlaceholder(): void {
   dayPanelGeneration += 1;
   dayPanelTitle.textContent = "当天时光";
   dayPanelDate.textContent = "点一天，看看那天留下的时光";
+  delete dayPanelList.dataset.date;
   dayPanelList.replaceChildren(dayEmpty("还没有选择日期", null));
 }
 
@@ -1432,7 +1494,8 @@ async function loadDayPanel(date: string): Promise<void> {
   const generation = ++dayPanelGeneration;
   dayPanelTitle.textContent = "当天时光";
   dayPanelDate.textContent = formatDayHeading(date);
-  dayPanelList.replaceChildren(timelineEmpty("正在翻找这一天…"));
+  if (dayPanelList.dataset.date !== date) dayPanelList.replaceChildren(timelineEmpty("正在翻找这一天…"));
+  dayPanelList.dataset.date = date;
   try {
     const items = await api.dayEntries(date);
     if (generation !== dayPanelGeneration) return;
@@ -1448,13 +1511,13 @@ async function loadDayPanel(date: string): Promise<void> {
 
 async function refreshOnThisDay(): Promise<void> {
   const generation = ++onThisDayGeneration;
-  const base = calSelectedDate ?? localToday();
+  const base = calSelectedDate ?? calendarToday();
   const month = Number(base.slice(5, 7));
   const day = Number(base.slice(8, 10));
   onThisDayTitle.textContent = "那年今日";
   onThisDaySub.textContent = calSelectedDate === null ? `${month}月${day}日` : `${month}月${day}日 · 往年同月同日`;
   try {
-    const groups = await api.onThisDay(month, day, localToday());
+    const groups = await api.onThisDay(month, day, calendarToday());
     if (generation !== onThisDayGeneration) return;
     if (groups.length === 0) {
       onThisDayList.replaceChildren(timelineEmpty("往年的今天还没有记录"));
@@ -1485,7 +1548,7 @@ async function startNewDraftAt(date: string): Promise<void> {
     openInEditor(null);
     session.edit({ eventDate: date });
     editorDate.value = date;
-    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    uiPreferences.removeItem(LAST_DRAFT_KEY);
     clearAppNotice();
     clearErrorBox();
     setView("editor");
@@ -1515,10 +1578,7 @@ function impactMessage(impact: { active: number; trashed: number }): string {
 
 async function refreshTagManager(): Promise<void> {
   const tags = await api.listTags();
-  timelineTags = tags;
-  const available = new Set(tags.map((tag) => tag.tagId));
-  for (const id of [...selectedTagIds]) if (!available.has(id)) selectedTagIds.delete(id);
-  renderTagFilterChips();
+  syncTimelineTags(tags);
   renderTagManagerRows(tags);
 }
 
@@ -1694,8 +1754,8 @@ async function openTagManager(): Promise<void> {
   setDialogStatus(tagDialogStatus, "", "calm");
   tagNewInput.value = "";
   try {
+    if (!tagDialog.open) { tagDialog.showModal(); syncBack(); }
     await refreshTagManager();
-    if (!tagDialog.open) tagDialog.showModal();
   } catch (error) {
     showError(error);
   }
@@ -1743,8 +1803,8 @@ async function openTagPicker(item: NonNullable<PickerState["item"]>): Promise<vo
   setDialogStatus(tagPickerStatus, "", "calm");
   tagPickerNew.value = "";
   try {
+    if (!tagPickerDialog.open) { tagPickerDialog.showModal(); syncBack(); }
     await renderTagPickerOptions();
-    if (!tagPickerDialog.open) tagPickerDialog.showModal();
   } catch (error) {
     showError(error);
   }
@@ -1934,10 +1994,11 @@ async function showDrafts(): Promise<void> {
   await refreshDrafts();
 }
 
-async function showTimeline(): Promise<void> {
+async function showTimeline(fromStart = false): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   setView("timeline");
-  await reloadTimeline();
+  if (fromStart) { tabPositions.delete("timeline"); restoreScroll(); }
+  await reloadTimeline(!fromStart);
 }
 
 async function showTrash(): Promise<void> {
@@ -1969,7 +2030,7 @@ function filterTimelineByTag(tagId: string): void {
   selectedTagIds.add(tagId);
   favoriteFilter.checked = false;
   timelineTo = null;
-  void showTimeline();
+  void showTimeline(true);
 }
 
 function renderCollectTagList(tags: readonly TagInfo[]): void {
@@ -2241,7 +2302,7 @@ async function restoreBackupNow(): Promise<void> {
     pickedToken = null;
     pickedBackup.hidden = true;
     session = createSession();
-    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    uiPreferences.removeItem(LAST_DRAFT_KEY);
     const r = result.restored;
     showAppNotice(`恢复完成：${r.formal} 条正式记录、${r.drafts} 份草稿、${r.trashed} 条回收站记录。恢复前的数据已保存在 ${result.safetyBackup}`, "ok");
     exportResult.hidden = true;
@@ -2265,12 +2326,14 @@ async function commitCurrent(): Promise<void> {
   commitButton.textContent = "正在存入…";
   try {
     const result = await session.commit();
-    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    uiPreferences.removeItem(LAST_DRAFT_KEY);
     unfinishedDraft = null;
     refreshResumeNotice();
     showAppNotice(durabilityLabel(result.durability), result.durability === "uncertain" ? "warn" : "ok");
+    // M05 refreshes its retained result pages in SearchUi.resume().
     if (readingId && readingOrigin === "search") await openReading(readingId, true);
-    else await showTimeline();
+    else if (readingId) await leaveEditor();
+    else await showTimeline(true);
   } catch (error) {
     const description = describeError(error);
     if (description.kind === "validation" && isFieldIssue(error)) showFieldIssue(error);
@@ -2310,7 +2373,7 @@ async function resolveKeepFormal(): Promise<void> {
   try {
     await api.resolveConflict(recordId, "keepFormal");
     session = createSession();
-    window.localStorage.removeItem(LAST_DRAFT_KEY);
+    uiPreferences.removeItem(LAST_DRAFT_KEY);
     showAppNotice("你的草稿已另存为冲突副本，不会丢失", "ok");
     await showDrafts();
   } catch (error) {
@@ -2341,7 +2404,7 @@ async function attachSelectedPhotos(): Promise<void> {
 }
 
 
-const personal = new PersonalUi(api, memory !== null, flushBeforeLeave);
+const personal = new PersonalUi(api, memory !== null, flushBeforeLeave, visualPreview?.preferences);
 const museum = new MuseumUi(byId("view-museum"), api, {
   read: id => openReading(id), write: () => { void startNewDraft(); },
   active: () => currentView === "museum", error: showError,
@@ -2356,16 +2419,24 @@ async function showSearch(): Promise<void> {
 }
 let readingId: string | null = null;
 let readingOrigin: View = "timeline";
-let readingScroll = { main: 0, window: 0 };
+let readingScroll: ScrollPosition;
+let readingEditScroll: ScrollPosition;
+let readingList: Element | null = null;
+let readingGeneration = 0;
 let readingFocus: HTMLElement | null = null;
-async function openReading(id: string, returning = false): Promise<void> {
+async function openReading(id: string, returning = false, originControl?: HTMLElement): Promise<void> {
+  const origin = currentView;
   if (!(await flushBeforeLeave())) return;
   const row = await api.getRecord(id); if (!row.formal || row.status !== "active") return;
-  timelineTags = await api.listTags();
+  const tags = await api.listTags();
+  if (currentView !== origin || byId("app-shell").inert) return;
+  timelineTags = tags;
   if (!returning) {
     readingOrigin = currentView;
-    readingScroll = { main: document.querySelector<HTMLElement>(".main")?.scrollTop ?? 0, window: window.scrollY };
-    readingFocus = document.activeElement as HTMLElement | null;
+    readingScroll = scrollPosition();
+    readingList = originControl?.closest(".journal, .timeline-list, #on-this-day-list") ?? null;
+    readingGeneration = formalGeneration;
+    readingFocus = originControl ?? document.activeElement as HTMLElement | null;
   }
   readingId = id;
   renderReading(byTestId("reading-content"), row, tagName, (img, photo, holder) => {
@@ -2386,21 +2457,63 @@ async function openReading(id: string, returning = false): Promise<void> {
     }; void load();
   });
   setView("reading");
+  if (returning) {
+    byTestId("reading-edit").focus({ preventScroll: true });
+    restoreScroll(readingEditScroll);
+  }
+}
+async function refreshReadingList(): Promise<void> {
+  const generation = formalGeneration;
+  if (readingOrigin === "timeline") await reloadTimeline(true);
+  if (readingOrigin === "calendar") await refreshCalendar();
+  if (readingOrigin === "collect") await refreshCollect();
+  readingGeneration = generation;
 }
 async function leaveEditor(): Promise<void> {
-  if (readingId) { await openReading(readingId, true); return; }
-  await showDrafts();
+  const id = readingId;
+  if (!id) { await showDrafts(); return; }
+  if (readingGeneration !== formalGeneration) await refreshReadingList();
+  if (currentView === "editor" && readingId === id) await openReading(id, true);
 }
-byTestId("reading-edit").addEventListener("click", () => { if (readingId) void openModification(readingId); });
-byTestId("reading-back").addEventListener("click", () => { void (async () => {
+byTestId("reading-edit").addEventListener("click", () => {
+  readingEditScroll = scrollPosition();
+  if (readingId) void openModification(readingId);
+});
+async function returnFromReading(): Promise<void> {
   setView(readingOrigin);
   if (readingOrigin === "museum") await museum.resume();
   if (readingOrigin === "search") await search.resume();
+  if (readingGeneration !== formalGeneration) await refreshReadingList();
   if (currentView !== readingOrigin) return;
-  if (readingFocus?.isConnected) readingFocus.focus({preventScroll: true});
-  const scroller = document.querySelector<HTMLElement>(".main"); if (scroller) scroller.scrollTop = readingScroll.main;
-  window.scrollTo(0, readingScroll.window);
-})().catch(showError); });
+  if (readingFocus?.isConnected) readingFocus.focus({ preventScroll: true });
+  else if (readingList) {
+    const entry = Array.from(readingList.querySelectorAll<HTMLElement>('[data-testid="timeline-item"]'))
+      .find(node => node.dataset.recordId === readingId);
+    entry?.querySelector<HTMLElement>('[data-testid="edit-button"]')?.focus({ preventScroll: true });
+  }
+  restoreScroll(readingScroll);
+}
+byTestId("reading-back").addEventListener("click", () => { void returnFromReading().catch(showError); });
+
+function backLayers(): BackLayer[] {
+  const stack: BackLayer[] = [];
+  const id = readingId, origin = readingOrigin;
+  if (id && (currentView === "reading" || currentView === "editor")) {
+    stack.push({ close: returnFromReading, reopen: async () => {
+      if (currentView === origin) await openReading(id);
+    } });
+    if (currentView === "editor") stack.push({ close: leaveEditor, reopen: async () => {
+      if (currentView === "reading" && readingId === id) await openModification(id);
+    } });
+  }
+  if (timelineSheet.open) stack.push({ close: () => timelineSheet.close(), reopen: openTimelineSheet });
+  for (const dialog of [tagDialog, tagPickerDialog, confirmDialog]) {
+    if (dialog.open) stack.push({ close: () => dialog.close() });
+  }
+  return stack;
+}
+for (const dialog of [tagDialog, tagPickerDialog, confirmDialog]) dialog.addEventListener("close", syncBack);
+
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
   const view = button.dataset.go as View;
   if (view === "search") void showSearch().catch(showError);
@@ -2419,7 +2532,7 @@ function refreshResumeNotice(): void {
 /** 找到没写完的草稿只在时光轴顶部温和提示，不强制跳走。 */
 async function prepareUnfinishedDraft(): Promise<void> {
   try {
-    const preferred = window.localStorage.getItem(LAST_DRAFT_KEY) ?? undefined;
+    const preferred = uiPreferences.getItem(LAST_DRAFT_KEY) ?? undefined;
     unfinishedDraft = await recoverLastDraft(api, preferred);
   } catch (error) {
     showError(error);
@@ -2448,7 +2561,7 @@ byTestId("add-photos").addEventListener("click", () => photoInput.click());
 openTrashButton.addEventListener("click", () => { void showTrash(); });
 backToSettingsButton.addEventListener("click", () => { void showData(); });
 collectManageTags.addEventListener("click", () => { void openTagManager(); });
-calEmptyWrite.addEventListener("click", () => { void startNewDraftAt(localToday()); });
+calEmptyWrite.addEventListener("click", () => { void startNewDraftAt(calendarToday()); });
 exportBackupButton.addEventListener("click", () => { void exportBackupNow(); });
 pickBackupButton.addEventListener("click", () => { void pickBackupNow(); });
 restoreBackupButton.addEventListener("click", () => { void restoreBackupNow(); });
@@ -2467,6 +2580,7 @@ keepFormalButton.addEventListener("click", () => { void resolveKeepFormal(); });
 // ---- Unit-0.7 时光轴工具条 / 日历 / 标签交互 ----
 function paintOrderToggle(): void {
   orderToggle.textContent = timelineOrder === "desc" ? "由近到远" : "由远到近";
+  orderToggle.setAttribute("aria-label", `日期顺序，${orderToggle.textContent}，点击切换`);
   orderToggle.title = timelineOrder === "desc" ? "当前从新到旧，点击切换" : "当前从旧到新，点击切换";
 }
 paintOrderToggle();
@@ -2543,7 +2657,7 @@ calMonthInput.addEventListener("change", () => {
   void refreshCalendar();
 });
 calToday.addEventListener("click", () => {
-  const today = localToday();
+  const today = calendarToday();
   calYear = Number(today.slice(0, 4));
   calMonth = Number(today.slice(5, 7));
   calSelectedDate = today;
@@ -2586,34 +2700,31 @@ window.addEventListener("pagehide", () => {
 });
 
 async function boot(): Promise<void> {
+  if (visualPreview) await visualPreview.prepare();
+  await waitForStore();
+  await personal.start();
+  const start = initialTab({ param: params.get("view") });
+  setView(start);
   try {
     if (memory !== null) {
       showPreviewNotice();
-      if (searchDemo !== null) await seedSearchDemo(memory, searchDemo);
-      if (demo) await seedDemo(memory);
+      if (!visualPreview && (demo || searchDemo !== null) && memory.resetUnlockedDemo()) {
+        if (searchDemo !== null) await seedSearchDemo(memory, searchDemo);
+        else { uiPreferences.removeItem(LAST_DRAFT_KEY); await seedDemo(memory); }
+      }
       if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
       if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
     }
-    // 启动默认落在时光轴（显式 ?view= 仅用于预览），不再自动跳进草稿编辑器。
-    const start = initialTab({
-      param: params.get("view"),
-      lastTab: window.localStorage.getItem(LAST_TAB_KEY),
-    });
-    // 启动先确认数据目录可用（第二个实例 STORE_LOCKED / 数据版本过新 SCHEMA_TOO_NEW），不可用时不做任何写操作。
-    if (!(await gateStore())) {
-      byTestId("unlock-hint").textContent = "数据暂时无法打开，请关闭其他实例后重启；数据保持原样。";
-      byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
-      // 数据打不开也不能没有入口：导航照常，每个页签显示同一条错误提示。
-      setView(start);
-      renderBlockedState();
-      return;
+    if (visualPreview?.filtered) {
+      favoriteFilter.checked = true;
+      timelineTo = "2026-11-30";
     }
-    await personal.start();
     await reportMedia();
     await refreshDrafts();
     await reloadTimeline();
     await prepareUnfinishedDraft();
-    setView(start);
+    if (currentView !== start) return;
+    if (start === "timeline" && visualPreview?.panel) openTimelineSheet();
     if (start === "calendar") await refreshCalendar();
     if (start === "collect") await refreshCollect();
     if (start === "museum") await museum.enter();
@@ -2624,9 +2735,4 @@ async function boot(): Promise<void> {
   }
 }
 
-void boot().catch((error: unknown) => {
-  byTestId("unlock-hint").textContent = "无法检查本机数据或应用锁，请重启后重试。为保护隐私，界面保持关闭。";
-  byTestId("app-passcode").hidden = true; byTestId("app-unlock").hidden = true;
-  showError(error);
-  setView("timeline");
-});
+void boot().catch(showError);

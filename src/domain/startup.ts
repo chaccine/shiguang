@@ -11,8 +11,8 @@ function isTransient(code: string, message: string): boolean {
 
 function codeOf(error: unknown): { code: string; message: string } {
   if (error && typeof error === "object") {
-    const e = error as { code?: unknown; message?: unknown };
-    return { code: typeof e.code === "string" ? e.code : "", message: typeof e.message === "string" ? e.message : String(error) };
+    return { code: "code" in error && typeof error.code === "string" ? error.code : "",
+      message: "message" in error && typeof error.message === "string" ? error.message : String(error) };
   }
   return { code: "", message: String(error) };
 }
@@ -28,9 +28,10 @@ export async function gateWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const s = await status();
-      if (s.ok) return { ok: true, attempts: attempt };
-      last = { code: s.code, error: { code: s.code, message: s.message } };
-      if (!isTransient(s.code, s.message)) return { ok: false, ...last, attempts: attempt };
+      if (s?.ok === true) return { ok: true, attempts: attempt };
+      const failure = codeOf(s);
+      last = { code: failure.code, error: failure };
+      if (!isTransient(failure.code, failure.message)) return { ok: false, ...last, attempts: attempt };
     } catch (error) {
       const { code, message } = codeOf(error);
       last = { code, error };
