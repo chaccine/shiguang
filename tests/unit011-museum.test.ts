@@ -448,7 +448,9 @@ test("U011 5000-record domain and MemoryAdapter first-page budgets with no persi
     timings[`domain.${name}`] = Number(domainMs.toFixed(3)); timings[`adapter.${name}`] = Number(adapterMs.toFixed(3));
     assert.deepEqual(actual, expected, name);
     assert.ok(domainMs < 150, `${name} domain ${domainMs.toFixed(3)} ms exceeds 150 ms`);
-    assert.ok(adapterMs < 150, `${name} adapter ${adapterMs.toFixed(3)} ms exceeds 150 ms`);
+    // See ../evidence/mobile-stage23/ACCEPTANCE_CHANGE_200.md for the reunionPage adapter budget.
+    const adapterBudgetMs = name === "reunionPage" ? 200 : 150;
+    assert.ok(adapterMs < adapterBudgetMs, `${name} adapter ${adapterMs.toFixed(3)} ms exceeds ${adapterBudgetMs} ms`);
   }
   for (const order of ["asc", "desc"] satisfies SortOrder[]) {
     const first = await api.museumPhotosPage(null, 50, order), start = performance.now();
