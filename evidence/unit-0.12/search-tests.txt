@@ -1,0 +1,23 @@
+✔ U012 each field is literal, trimmed, English-insensitive; no cross-field or image inference (10.397917ms)
+✔ U012 Unicode and regex/script-looking input remain contiguous plain data (1.170982ms)
+✔ U012 exhaustive 192 combinations: keyword, OR tags, date, favorite, photo and order (74.632405ms)
+✔ U012 leap dates, inclusive/open ranges, invalid ranges and bounded paging (1.805767ms)
+✔ U012 FORMAL only, hidden active records included, no-title/no-photo and no source writes (2.672546ms)
+✔ U012 same-day pagination reuses full M02 order in both directions without gaps (81.710684ms)
+✔ U012 cursor rejects each changed query dimension, corrupt/oversize cursor and changed day (1.210123ms)
+✔ U012 every source field invalidates cursor even with equal revisions; drafts/hidden do not (1.678325ms)
+✔ U012 G01 real mutations keep drafts private and use current favorite/tag authority (9.697238ms)
+✔ U012 failed metadata writes preserve results and valid cursors (1.021028ms)
+✔ U012 backup overwrite/merge immediately rebuild queries and cannot revive deleted records (23.957338ms)
+✔ U012 Tauri adapter transports defaults, all dimensions, cursor and errors unchanged (0.893097ms)
+✔ U012 equivalent normalized tag sets accept cursor; nonmatching source edits invalidate it (0.849807ms)
+✔ U012 shared-asset captions belong to FORMAL photo uses until explicit commit (11.518355ms)
+✔ U012 Rust/TS normalized query and formal-source fingerprint golden contract (0.205023ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 301.380459

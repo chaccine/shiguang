@@ -1,4 +1,4 @@
-import type { TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
+import type { SearchFilter, SearchPage, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import type { CommitResult, Durability, RecordRow, ConflictChoice, ConflictCopy, MediaReport, PhotoStatus, PurgeResult, StoreStatus, BackupCapabilities, ExportBackupOptions, ExportBackupResult, MergePlan, MergeResult, PickBackupResult, RestoreBackupResult, BackupSummary } from "../domain/types.ts";
 import type { Mood, AppSettings, SettingsResult, ThemePreference } from "../domain/types.ts";
 import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
@@ -93,6 +93,8 @@ export interface ShiguangApi {
   /** 只解除关联，不删除任何记录/照片/文字。 */
   deleteTag(tagId: string): Promise<TagDeleteResult>;
   tagImpact(tagId: string): Promise<TagImpact>;
+  /** M05: bounded FORMAL search. Restart at null on SEARCH_CURSOR_STALE/MISMATCH. */
+  searchPage(filter: SearchFilter, cursor: string | null, limit: number, today?: string): Promise<SearchPage>;
   // ---- Unit-0.7 时光轴 / 日历（只读，只含正式记录） ----
   timelinePage(filter: TimelineFilter, cursor: string | null, limit: number): Promise<TimelinePage>;
   timelineMonths(filter: TimelineFilter): Promise<MonthCount[]>;

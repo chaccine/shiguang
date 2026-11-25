@@ -1,0 +1,26 @@
+[
+  {
+    "path": "evidence/unit-0.12/manual/m05-actual-1920x1072-dark-combined.png",
+    "pixels": [
+      1920,
+      1072
+    ],
+    "sha256": "24a46d48c3aa0c51e91a536fe22abcd67d160657e9d77c9eb8edfe68ecf71905"
+  },
+  {
+    "path": "evidence/unit-0.12/manual/m05-actual-1920x1072-empty-light.png",
+    "pixels": [
+      1920,
+      1072
+    ],
+    "sha256": "2fb3dbe042f71f45f078bbe43d470d482d1a99f1596fceb1d1259aa293bf0471"
+  },
+  {
+    "path": "evidence/unit-0.12/manual/m05-actual-1920x1072-light-mixed.png",
+    "pixels": [
+      1920,
+      1072
+    ],
+    "sha256": "ed423b8203a77562903ce6536d29248608ff20865944a2132d37094841bb44c5"
+  }
+]

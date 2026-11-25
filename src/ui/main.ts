@@ -1,6 +1,9 @@
 import { renderReading } from "./reading.ts";
 import { PersonalUi } from "./personal.ts";
 import { MuseumUi } from "./museum.ts";
+import { SearchUi } from "./search.ts";
+import { searchAwareApi } from "./search-source.ts";
+import { SEARCH_DEMO_STORAGE_KEY, searchDemoClock, searchDemoMode, seedSearchDemo } from "./search-demo.ts";
 import type { Mood } from "../domain/types.ts";
 import { DraftSession, recoverLastDraft } from "../domain/draft-session.ts";
 import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
@@ -162,17 +165,21 @@ const backToSettingsButton = byTestId<HTMLButtonElement>("back-to-settings");
 
 const params = new URLSearchParams(window.location.search);
 const invoke = tauriInvokeFromWindow();
-const demo = invoke === null && params.get("demo") === "1";
+const searchDemo = searchDemoMode(params, invoke !== null);
+const demo = invoke === null && searchDemo === null && params.get("demo") === "1";
 
 if (demo) {
   window.localStorage.removeItem(PREVIEW_STORAGE_KEY);
   window.localStorage.removeItem(LAST_DRAFT_KEY);
 }
+if (searchDemo !== null) window.localStorage.removeItem(SEARCH_DEMO_STORAGE_KEY);
 
 const memory = invoke === null
-  ? new MemoryAdapter({ storage: window.localStorage, storageKey: PREVIEW_STORAGE_KEY })
+  ? new MemoryAdapter({ storage: window.localStorage, storageKey: searchDemo !== null ? SEARCH_DEMO_STORAGE_KEY : PREVIEW_STORAGE_KEY,
+    ...(searchDemo !== null ? { now: searchDemoClock(), search: "" } : {}) })
   : null;
-const api: ShiguangApi = memory ?? createTauriApi(invoke!);
+let search: SearchUi;
+const api: ShiguangApi = searchAwareApi(memory ?? createTauriApi(invoke!), () => search?.invalidate());
 
 let currentView: View = "timeline";
 let photoKey: string | null = null;
@@ -228,8 +235,10 @@ function previewText(body: string, limit: number): string {
 }
 
 function setView(view: View): void {
+  if (currentView === "search" && view !== "search") search.leave();
   currentView = view;
-  for (const id of ["mine", "museum", "reading", "storage", "appearance", "privacy"]) byId(`view-${id}`).hidden = view !== id;
+  for (const id of ["mine", "museum", "reading", "storage", "appearance", "privacy", "search"]) byId(`view-${id}`).hidden = view !== id;
+  byTestId("sidebar-search").setAttribute("aria-current", view === "search" || view === "reading" && readingOrigin === "search" ? "page" : "false");
   if (view === "storage") void personal.renderStorage().catch(showError);
   if (view === "privacy" || view === "appearance") void personal.refresh().catch(showError);
   const scroller = document.querySelector<HTMLElement>(".main");
@@ -1115,6 +1124,7 @@ function timelineCover(item: TimelineItem): HTMLElement | null {
   holder.className = "timeline-cover";
   const img = document.createElement("img");
   img.alt = cover.caption.trim() || "时光封面";
+  img.loading = "lazy"; img.decoding = "async";
   img.dataset.testid = "timeline-cover";
   holder.append(img);
   observeCover(img, cover.assetId);
@@ -2259,7 +2269,8 @@ async function commitCurrent(): Promise<void> {
     unfinishedDraft = null;
     refreshResumeNotice();
     showAppNotice(durabilityLabel(result.durability), result.durability === "uncertain" ? "warn" : "ok");
-    await showTimeline();
+    if (readingId && readingOrigin === "search") await openReading(readingId, true);
+    else await showTimeline();
   } catch (error) {
     const description = describeError(error);
     if (description.kind === "validation" && isFieldIssue(error)) showFieldIssue(error);
@@ -2335,6 +2346,14 @@ const museum = new MuseumUi(byId("view-museum"), api, {
   read: id => openReading(id), write: () => { void startNewDraft(); },
   active: () => currentView === "museum", error: showError,
 });
+search = new SearchUi(byId("view-search"), api, {
+  read: id => openReading(id), active: () => currentView === "search",
+  photo: timelineCover, manageTags: () => { void openTagManager(); },
+});
+async function showSearch(): Promise<void> {
+  if (!(await flushBeforeLeave())) return;
+  setView("search"); if (!blockedDescription) await search.enter();
+}
 let readingId: string | null = null;
 let readingOrigin: View = "timeline";
 let readingScroll = { main: 0, window: 0 };
@@ -2342,6 +2361,7 @@ let readingFocus: HTMLElement | null = null;
 async function openReading(id: string, returning = false): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   const row = await api.getRecord(id); if (!row.formal || row.status !== "active") return;
+  timelineTags = await api.listTags();
   if (!returning) {
     readingOrigin = currentView;
     readingScroll = { main: document.querySelector<HTMLElement>(".main")?.scrollTop ?? 0, window: window.scrollY };
@@ -2375,6 +2395,7 @@ byTestId("reading-edit").addEventListener("click", () => { if (readingId) void o
 byTestId("reading-back").addEventListener("click", () => { void (async () => {
   setView(readingOrigin);
   if (readingOrigin === "museum") await museum.resume();
+  if (readingOrigin === "search") await search.resume();
   if (currentView !== readingOrigin) return;
   if (readingFocus?.isConnected) readingFocus.focus({preventScroll: true});
   const scroller = document.querySelector<HTMLElement>(".main"); if (scroller) scroller.scrollTop = readingScroll.main;
@@ -2382,7 +2403,8 @@ byTestId("reading-back").addEventListener("click", () => { void (async () => {
 })().catch(showError); });
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
   const view = button.dataset.go as View;
-  if (view === "timeline") void showTimeline(); else if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
+  if (view === "search") void showSearch().catch(showError);
+  else if (view === "timeline") void showTimeline(); else if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
   else void flushBeforeLeave().then(ok => { if (ok) setView(view); });
 });
 byTestId<HTMLInputElement>("editor-location").addEventListener("input", e => session.edit({location: (e.target as HTMLInputElement).value}));
@@ -2567,6 +2589,7 @@ async function boot(): Promise<void> {
   try {
     if (memory !== null) {
       showPreviewNotice();
+      if (searchDemo !== null) await seedSearchDemo(memory, searchDemo);
       if (demo) await seedDemo(memory);
       if (params.get("fail") === "conflict") memory.failNext("REVISION_CONFLICT", "commitRecord");
       if (params.get("fail") === "uncertain") memory.durabilityMode = "uncertain";
@@ -2594,6 +2617,7 @@ async function boot(): Promise<void> {
     if (start === "calendar") await refreshCalendar();
     if (start === "collect") await refreshCollect();
     if (start === "museum") await museum.enter();
+    if (start === "search") await search.enter();
   } finally {
     // 视觉证据脚本等待这个标记，确保演示数据和初始视图都已就绪。
     document.body.dataset.appReady = "1";

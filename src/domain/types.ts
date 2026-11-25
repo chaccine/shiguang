@@ -180,3 +180,7 @@ export interface StorageStats {
   media: number; previews: number; backups: number; data: number; other: number; total: number;
   available: number | null; skippedSymlinks: number;
 }
+
+// ---- Unit-0.12 M05: active FORMAL search; hasPhoto null/true/false = all/with/without ----
+export interface SearchFilter extends TimelineFilter { keyword?: string }
+export interface SearchPage extends TimelinePage { queryKey: string; sourceGeneration: string }

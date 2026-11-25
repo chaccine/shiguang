@@ -2,9 +2,14 @@
 
 本地离线的个人回忆记录应用（Tauri v2：Android / macOS / Windows）。只用合成数据开发与测试；无云同步、无 AI、无网络权限。
 
-**当前版本：0.1.11**（Android versionCode 1011，由版本推导，安装包未实测）· 分支开发、PR 合并由 Cine 决定。
+**当前版本：0.1.12**（Android versionCode 1012，由版本推导，安装包未实测）· 分支开发、PR 合并由 Cine 决定。
 
-## 进度（Unit-0.11 Task A / 0.1.11）
+## Unit-0.12 M05 core（0.1.12）
+
+本轮新增正式记录本地检索核心、两适配器与行为测试；搜索 UI 留待后续。schema 保持 v5，无持久化索引、网络或 AI。
+规格及实际验证状态见 [SPEC](evidence/unit-0.12/SPEC.md) 和 [core verification](evidence/unit-0.12/CORE_VERIFICATION.md)。
+
+## 前序进度（Unit-0.11 Task A / 0.1.11）
 
 | 单元 | 内容 | 状态 |
 |---|---|---|

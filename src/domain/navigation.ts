@@ -4,7 +4,7 @@
  */
 export type MainTab = "timeline" | "calendar" | "create" | "museum" | "mine";
 /** 一级页签之外的二级视图：编辑器、回收站（从设置进入）。 */
-export type View = MainTab | "drafts" | "collect" | "settings" | "editor" | "trash" | "reading" | "storage" | "appearance" | "privacy";
+export type View = MainTab | "drafts" | "collect" | "settings" | "editor" | "trash" | "reading" | "storage" | "appearance" | "privacy" | "search";
 
 export interface NavTab { id: MainTab; label: string; testId: string }
 
@@ -38,7 +38,7 @@ export function initialTab(input: InitialViewInput = {}): View {
   for (const raw of [input.param]) {
     if (raw == null) continue;
     if (isMainTab(raw) && raw !== "create") return raw;
-    if (["drafts", "collect", "settings"].includes(raw)) return raw as View;
+    if (["drafts", "collect", "settings", "search"].includes(raw)) return raw as View;
     const legacy = LEGACY[raw];
     if (legacy !== undefined) return legacy;
   }
@@ -49,6 +49,7 @@ export function initialTab(input: InitialViewInput = {}): View {
 export function tabOf(view: View): MainTab {
   if (view === "editor") return "create";
   if (view === "reading") return "timeline";
+  if (view === "search") return "timeline";
   if (!isMainTab(view)) return "mine";
   return view;
 }

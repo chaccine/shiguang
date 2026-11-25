@@ -5,6 +5,11 @@ export interface ErrorDescription {
 }
 
 const validation: Record<string, string> = {
+  INVALID_SEARCH_FILTER: "查找条件无效，请检查后重试。",
+  INVALID_CURSOR: "分页位置无效，请从第一页重新加载。",
+  INVALID_LIMIT: "每页条数需在 1–500 之间。",
+  SEARCH_CURSOR_MISMATCH: "查找条件已改变，请从第一页重新查找。",
+  SEARCH_CURSOR_STALE: "正式内容或标签已更新，请从第一页重新查找。",
   LOCATION_TOO_LONG: "地点最多 200 个字符，当前输入仍保留。",
   MOOD_INVALID: "请选择列表中的心情，或留空。",
   COVER_PHOTO_INVALID: "封面必须是当前记录中的照片，请重新选择。",

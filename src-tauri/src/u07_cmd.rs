@@ -34,7 +34,7 @@ fn order(v: Option<&str>) -> Order {
 }
 
 impl FilterInput {
-    fn into_core(self) -> TimelineFilter {
+    pub(crate) fn into_core(self) -> TimelineFilter {
         TimelineFilter {
             from: self.from.filter(|s| !s.is_empty()),
             to: self.to.filter(|s| !s.is_empty()),

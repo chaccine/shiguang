@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="./ui/tokens.css" />
     <link rel="stylesheet" href="./ui/styles.css" />
     <link rel="stylesheet" href="./ui/museum.css" />
+    <link rel="stylesheet" href="./ui/search.css" />
   </head>
   <body>
     <div class="app-shell" id="app-shell" inert>
@@ -33,6 +34,7 @@
           <span class="brand-sub">把小事留住</span>
         </div>
         <nav class="tabs" id="nav-tabs" aria-label="主要视图"></nav>
+        <button type="button" class="button ghost search-sidebar-entry" data-testid="sidebar-search" data-go="search" aria-current="false">查找时光</button>
         <div class="sidebar-foot">所有文字和照片<br />都留在这台设备上。</div>
       </aside>
 
@@ -45,12 +47,14 @@
           <div data-testid="error-box" id="error-box" class="error-box" role="alert" hidden></div>
 
           <section id="view-museum" class="view museum" data-testid="museum-view" aria-label="回忆博物馆" hidden>
+            <button type="button" class="button ghost" data-testid="museum-search" data-go="search">查找时光</button>
             <div data-testid="museum-content"><h1>回忆博物馆</h1></div>
             <div class="museum-feedback" data-testid="museum-feedback" hidden>
               <p role="status" aria-live="polite" data-testid="museum-message"></p>
               <button class="button ghost" data-testid="museum-undo" hidden>撤销</button>
             </div>
           </section>
+          <section id="view-search" class="view" data-testid="search-view" aria-label="查找时光" hidden><h1>查找时光</h1></section>
           <section id="view-mine" class="view" hidden><h1>个人空间</h1><p>照顾好你的时光，也照顾好本机的数据。</p>
             <div class="hub-grid">
               <button class="data-card" data-testid="drafts-tab" data-go="drafts">草稿箱</button>
@@ -180,6 +184,7 @@
                 <h1>时光轴</h1>
                 <p class="view-sub">已经好好收起来的小事，按年、月、日慢慢翻。</p>
               </div>
+              <button type="button" class="button ghost" data-testid="timeline-search" data-go="search">查找时光</button>
             </header>
 
             <div class="resume-card" id="resume-draft" data-testid="resume-draft" hidden>

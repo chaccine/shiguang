@@ -1,0 +1,75 @@
+{
+  "records": 5000,
+  "photoUses": 6250,
+  "stateBytes": 16632810,
+  "perCallRegressionBudgetMs": 10000,
+  "fieldUtf8Bytes": {
+    "title": {
+      "min": 31,
+      "max": 34
+    },
+    "body": {
+      "min": 2440,
+      "max": 2459
+    },
+    "location": {
+      "min": 30,
+      "max": 30
+    },
+    "caption": {
+      "min": 132,
+      "max": 132
+    }
+  },
+  "timings": [
+    {
+      "name": "coldOpenAndFirst",
+      "ms": "1702.485",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "warmFirst1",
+      "ms": "742.723",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "warmFirst2",
+      "ms": "745.449",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "warmFirst3",
+      "ms": "739.969",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "page2",
+      "ms": "776.241",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "page3",
+      "ms": "781.098",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "page4",
+      "ms": "793.095",
+      "returned": 50,
+      "total": 1000
+    },
+    {
+      "name": "combinedFirst",
+      "ms": "657.617",
+      "returned": 50,
+      "total": 250
+    }
+  ],
+  "scope": "Synthetic only; cold=new Store open+first query, OS caches not flushed, no device/IPC/UI PASS"
+}

@@ -55,3 +55,6 @@ pub use query::{
 
 pub mod storage;
 pub mod museum;
+
+pub mod search;
+pub use search::{SearchFilter, SearchPage};

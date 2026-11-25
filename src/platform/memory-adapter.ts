@@ -1,4 +1,5 @@
-import type { TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
+import { searchPage } from "../domain/search.ts";
+import type { SearchFilter, SearchPage, TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import * as tl from "../domain/timeline.ts";
 import * as museum from "../domain/museum.ts";
 import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
@@ -821,6 +822,11 @@ export class MemoryAdapter implements ShiguangApi {
   }
   async tagImpact(tagId: string): Promise<TagImpact> { this.check("tagImpact"); return tg.tagImpact(this.reload(), tagId); }
   // ---- Unit-0.7：时光轴 / 日历 / 那年今日（只读衍生视图） ----
+  async searchPage(filter: SearchFilter, cursor: string | null, limit: number, today = this.today()): Promise<SearchPage> {
+    this.check("searchPage");
+    const state = this.reload();
+    return searchPage(state.records, state.tags, filter, cursor, limit, today);
+  }
   async timelinePage(filter: TimelineFilter, cursor: string | null, limit: number): Promise<TimelinePage> {
     this.check("timelinePage"); return tl.timelinePage(this.reload().records, filter, cursor, limit, this.today());
   }
