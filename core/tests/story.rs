@@ -357,3 +357,28 @@ fn formal_and_draft_can_describe_the_same_occurrence_with_different_originals() 
     assert_eq!(formal.photos().next(), Some(&original));
     assert_eq!(draft.photos().next(), Some(&changed));
 }
+
+#[test]
+fn shared_editor_fixture_round_trips_v5_and_projects_ordered_runs_and_captions() {
+    let cases = json::parse(include_str!("fixtures/story-parity.json")).unwrap();
+    let legacy = Snapshot::from_json(cases.get("legacy").unwrap()).unwrap();
+    let converted = legacy_round_trip(&legacy);
+    assert_eq!(converted.complexity(), Simple);
+    assert_eq!(converted.cover_photo_use_id(), Some("pu-000002"));
+    for body in cases.get("legacyBodies").unwrap().as_arr().unwrap() {
+        let body = body.as_str().unwrap();
+        let story = legacy_round_trip(&Snapshot {
+            body: body.into(),
+            ..Default::default()
+        });
+        assert_eq!(story.blocks().len(), usize::from(!body.is_empty()));
+    }
+    let mixed = Story::from_json(cases.get("mixed").unwrap()).unwrap();
+    assert_eq!(mixed.complexity(), Complex);
+    assert_eq!(
+        mixed.plain_text(),
+        cases.get("mixedText").unwrap().as_str().unwrap()
+    );
+    let captions: Vec<_> = mixed.photos().map(|p| Json::str(&p.caption)).collect();
+    assert_eq!(Json::Arr(captions), *cases.get("mixedCaptions").unwrap());
+}
