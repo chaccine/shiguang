@@ -24,6 +24,15 @@ export interface AttachPhotoBytesInput {
   caption: string;
   mediaType?: string | null;
 }
+export type PhotoFile = Pick<AttachPhotoBytesInput, "fileName" | "bytes" | "mediaType">;
+export interface ReplacePhotoInput {
+  editorMode?: "quick" | "story";
+  recordId: string;
+  photoUseId: string;
+  undoSession?: string;
+  expectedStory?: import("../domain/story.ts").Story;
+  source: ({ kind: "file" } & PhotoFile) | { kind: "history"; assetId: string; sha256: string; mediaType: string };
+}
 export interface SaveResult { row: RecordRow; durability: Durability }
 export interface DiscardResult { row: RecordRow | null; durability: Durability }
 
@@ -58,6 +67,8 @@ export interface ShiguangApi {
   createDraft(input: CreateDraftInput): Promise<SaveResult>;
   saveDraft(input: SaveDraftInput): Promise<SaveResult>;
   attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult>;
+  replaceDraftPhoto(input: ReplacePhotoInput): Promise<SaveResult>;
+  releasePhotoHistory(recordId: string, undoSession: string): Promise<void>;
   removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo?: boolean, expectedStory?: import("../domain/story.ts").Story): Promise<SaveResult>;
   setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult>;
   setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult>;

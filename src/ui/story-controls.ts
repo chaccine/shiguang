@@ -44,7 +44,7 @@ export class StoryBlocksUi {
   reset() { this.structure = ""; this.updates.clear(); this.holder.replaceChildren(); }
   render(editor: StoryEditor, actions: BlockActions) {
     const { blocks } = editor.story;
-    const structure = JSON.stringify(blocks.map(b => b.kind === "photo" ? ["photo", editor.photoKey(b.photoUse.photoUseId)] : b.kind));
+    const structure = JSON.stringify(blocks.map(b => b.kind === "photo" ? ["photo", ...editor.photoRenderKey(b.photoUse)] : b.kind));
     if (structure !== this.structure) {
       this.structure = structure;
       this.updates.clear();
@@ -76,6 +76,7 @@ export class StoryBlocksUi {
   private block(editor: StoryEditor, actions: BlockActions, index: number) {
     const block = editor.story.blocks[index], name = labels[block.kind];
     const card = document.createElement("section");
+    card.dataset.blockIndex = String(index);
     card.className = "story-block"; card.dataset.testid = "story-block";
     card.setAttribute("aria-label", `第 ${index + 1} 块，${name}`);
     if (block.kind === "photo") { card.append(actions.photo(index)); return card; }

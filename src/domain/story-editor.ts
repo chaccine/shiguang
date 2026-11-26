@@ -1,4 +1,4 @@
-import type { AttachPhotoBytesInput, ShiguangApi } from "../platform/api.ts";
+import type { AttachPhotoBytesInput, PhotoFile, ShiguangApi } from "../platform/api.ts";
 import { sha256, sniffMediaType } from "../platform/bytes.ts";
 import { describeError, type ErrorDescription } from "./errors.ts";
 import { DraftSession } from "./draft-session.ts";
@@ -53,6 +53,7 @@ export class StoryEditor {
   mode: Mode;
   preview = false;
   publishing = false;
+  changingPhoto = false;
 
   constructor(options: Options) {
     this.options = options;
@@ -74,7 +75,7 @@ export class StoryEditor {
   get meta() { return this.doc.meta; }
   get simple() { return isSimple(this.story); }
   get protected() { return this.mode === "quick" && !this.simple; }
-  get editable() { return !this.protected && !this.preview && !this.publishing; }
+  get editable() { return !this.protected && !this.preview && !this.publishing && !this.changingPhoto; }
   get pending() { return this.dirty; }
   get needsReload() { return this.photoConflict; }
   get canUndo() { return this.editable && this.past.length > 0; }
@@ -87,6 +88,10 @@ export class StoryEditor {
   }
   get recordId() { return this.draft.state.recordId; }
   photoKey(id: string) { return this.photoKeys.get(id) ?? id; }
+  photoRenderKey(photo: PhotoUse) { return [this.photoKey(photo.photoUseId), photo.assetId, photo.sha256]; }
+  async releaseHistory() {
+    if (this.recordId) await this.options.api.releasePhotoHistory(this.recordId, this.undoSession);
+  }
   pendingPhoto(id: string) { return this.media.get(id); }
   subscribe(fn: () => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   private notify() { for (const fn of this.listeners) fn(); }
@@ -113,7 +118,7 @@ export class StoryEditor {
     this.change({ meta: this.meta, story: { blocks, coverPhotoUseId } });
   }
   switchMode(mode: Mode) {
-    if (this.preview || this.publishing || this.mode === mode) return;
+    if (this.preview || this.publishing || this.changingPhoto || this.mode === mode) return;
     this.mode = mode;
     if (this.simple && this.recordId && this.draft.state.status !== "idle") this.changed();
     else this.notify();
@@ -156,12 +161,56 @@ export class StoryEditor {
     if (block && "runs" in block && end > start && this.mode === "story")
       this.replace(index, { ...block, runs: toggleMark(block.runs, start, end, mark) });
   }
-  move(index: number, delta: -1 | 1) {
-    const blocks = this.story.blocks.slice(), target = index + delta;
-    if (!blocks[index] || !blocks[target]) return;
+  private movedBlocks(index: number, target: number) {
+    const blocks = this.story.blocks.slice();
+    if (!blocks[index] || !blocks[target] || index === target) return;
     if (this.mode === "quick" && (blocks[index].kind !== "photo" || blocks[target].kind !== "photo")) return;
-    [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
-    this.blocks(blocks);
+    const [block] = blocks.splice(index, 1);
+    blocks.splice(target, 0, block);
+    return blocks;
+  }
+  move(index: number, delta: -1 | 1) {
+    const blocks = this.movedBlocks(index, index + delta);
+    if (blocks) this.blocks(blocks);
+  }
+  // A picker result or drop is one history step, published locally only after its
+  // checked store operation succeeds. Pending inserts must first obtain their real IDs.
+  private async photoOperation(id: string, operation: (index: number, photo: PhotoUse) => Promise<Story | undefined>) {
+    if (!this.editable || this.needsReload) throw readOnly();
+    this.changingPhoto = true;
+    this.notify();
+    try {
+      await this.flush();
+      const index = this.photoIndex(id), block = this.story.blocks[index];
+      if (block?.kind !== "photo") throw new Error("照片使用位已改变，请重新选择");
+      const story = await operation(index, block.photoUse);
+      if (story && !sameStory(story, this.story)) {
+        this.past.push(this.doc); this.future = [];
+        this.doc = { meta: this.meta, story };
+      }
+    } catch (error) {
+      if ((error as { code?: string })?.code === "STORY_CHANGED") this.photoConflict = true;
+      if (!this.dirty) this.draft.dismissPhotoError();
+      throw error;
+    } finally { this.changingPhoto = false; this.notify(); }
+  }
+  movePhoto(id: string, target: number) {
+    return this.photoOperation(id, async index => {
+      const blocks = this.movedBlocks(index, target);
+      if (!blocks) return;
+      const story = { blocks, coverPhotoUseId: this.story.coverPhotoUseId };
+      const result = await this.draft.saveDocument({ story, editorMode: this.mode }, this.story);
+      this.savedMode = this.mode;
+      return storyOf(result.row.draft!);
+    });
+  }
+  replacePhoto(id: string, input: PhotoFile) {
+    return this.photoOperation(id, async (_index, photo) => {
+      const result = await this.draft.replacePhoto({ photoUseId: photo.photoUseId,
+        expectedStory: this.story, editorMode: this.mode, undoSession: this.undoSession, source: { ...input, kind: "file" } });
+      this.savedMode = this.mode;
+      return storyOf(result.row.draft!);
+    });
   }
   remove(index: number) {
     const block = this.story.blocks[index];
@@ -276,6 +325,17 @@ export class StoryEditor {
         const result = await this.draft.removePhoto(extra.photoUseId, this.undoSession, false, expected);
         this.checkPhotos({ photos: remaining, coverPhotoUseId: source.coverPhotoUseId === extra.photoUseId
           ? remaining[0]?.photoUseId ?? null : source.coverPhotoUseId }, result.row.draft!);
+        expected = storyOf(result.row.draft!);
+        continue;
+      }
+      const previousById = new Map(source.photos.map(p => [p.photoUseId, p]));
+      const restored = photos.find(p => {
+        const previous = previousById.get(p.photoUseId)!;
+        return previous.assetId !== p.assetId || previous.sha256 !== p.sha256 || previous.mediaType !== p.mediaType;
+      });
+      if (restored) {
+        const result = await this.draft.replacePhoto({ photoUseId: restored.photoUseId, expectedStory: expected,
+          undoSession: this.undoSession, source: { kind: "history", assetId: restored.assetId, sha256: restored.sha256, mediaType: restored.mediaType } });
         expected = storyOf(result.row.draft!);
         continue;
       }

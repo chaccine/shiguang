@@ -1,6 +1,7 @@
 import { icon } from "./icons.ts";
 import type { UiPreferences } from "./appearance.ts";
 import { mobilePreview } from "./mobile-preview.ts";
+import { bindPhotoDrag } from "./photo-drag.ts";
 import { bindLocalBack, type BackLayer } from "./local-back.ts";
 import { bindTimelineSheet } from "./timeline-sheet.ts";
 import { renderReading, renderStoryReading } from "./reading.ts";
@@ -590,6 +591,26 @@ function pendingPhotoUrl(photo: PhotoUse): string | undefined {
   return url;
 }
 
+function photoArea() { return editor.mode === "story" ? byId("story-blocks") : photoGrid; }
+function focusPhoto(id: string, control: string, place: ScrollPosition) {
+  const cell = Array.from(photoArea().querySelectorAll<HTMLElement>(".photo-cell")).find(node => node.dataset.photoKey === editor.photoKey(id));
+  const button = cell?.querySelector<HTMLButtonElement>(`[data-testid="${control}"]`);
+  (button && !button.disabled ? button : cell?.querySelector<HTMLButtonElement>('[data-testid="photo-drag"]'))?.focus({ preventScroll: true });
+  restoreScroll(place);
+}
+async function moveEditorPhoto(id: string, target: number, control: string, place: ScrollPosition) {
+  const owner = editor;
+  if (!canChangeEditor()) return;
+  try {
+    await owner.movePhoto(id, target);
+    if (editor === owner) {
+      const position = owner.mode === "story" ? `第 ${owner.photoIndex(id) + 1} 块`
+        : `第 ${storyPhotos(owner.story).findIndex(p => owner.photoKey(p.photoUseId) === owner.photoKey(id)) + 1} 张`;
+      showAppNotice(`照片已移到${position}。`, "ok");
+    }
+  } catch (error) { showError(error); }
+  if (editor === owner && currentView === "editor") focusPhoto(id, control, place);
+}
 function editorPhotoCell(photo: PhotoUse): HTMLElement {
   const cell = document.createElement("div");
   cell.className = "photo-cell";
@@ -622,19 +643,54 @@ function editorPhotoCell(photo: PhotoUse): HTMLElement {
     move.setAttribute("aria-label", editor.mode === "quick" ? `第 ${ordinal} 张照片${label}` : `第 ${index + 1} 块照片${label}`);
     move.addEventListener("click", () => {
       if (!canChangeEditor()) return;
-      editor.move(editor.photoIndex(id), delta);
-      const area = editor.mode === "story" ? byId("story-blocks") : photoGrid;
-      const moved = Array.from(area.querySelectorAll<HTMLElement>(".photo-cell")).find(node => node.dataset.photoKey === editor.photoKey(id));
-      (moved?.querySelector<HTMLButtonElement>(`[data-testid="${move.dataset.testid}"]:not(:disabled)`) ?? moved?.querySelector("textarea"))?.focus();
+      void moveEditorPhoto(id, editor.photoIndex(id) + delta, move.dataset.testid!, scrollPosition());
     }); controls.append(move);
   }
+  const replace = document.createElement("button"); replace.type = "button";
+  replace.dataset.testid = "photo-replace"; replace.textContent = "替换照片";
+  replace.addEventListener("click", () => {
+    if (!canChangeEditor()) return;
+    pickerTarget = { owner: editor, id }; photoInput.multiple = false; photoInput.click();
+  });
+  const handle = document.createElement("button"); handle.type = "button"; handle.className = "photo-drag-handle";
+  handle.dataset.testid = "photo-drag"; handle.textContent = "拖动排序";
+  handle.setAttribute("aria-label", "长按拖动照片，也可以使用上移或下移");
+  let start: ScrollPosition;
+  const owner = editor;
+  bindPhotoDrag(handle, {
+    allowed: () => handle.isConnected && editor === owner && canChangeEditor(),
+    start() { start = scrollPosition(); },
+    target(x, y) {
+      const hit = document.elementFromPoint(x, y);
+      const target = hit?.closest<HTMLElement>(owner.mode === "story" ? ".story-block" : ".photo-cell");
+      return target && photoArea().contains(target) ? target : null;
+    },
+    scroll(y) {
+      const rect = mainScroller.getBoundingClientRect();
+      const top = Math.max(0, rect.top), bottom = Math.min(window.innerHeight, rect.bottom);
+      const speed = y < top + 48 ? -10 : y > bottom - 48 ? 10 : 0;
+      if (speed) {
+        const before = mainScroller.scrollTop;
+        mainScroller.scrollTop += speed;
+        if (before === mainScroller.scrollTop) window.scrollBy(0, speed);
+      }
+    },
+    finish(target) {
+      if (owner !== editor || currentView !== "editor") return;
+      const to = target?.dataset.blockIndex;
+      const index = to !== undefined ? Number(to) : target ? owner.photoIndex(target.dataset.photoId!) : -1;
+      if (index >= 0 && index !== owner.photoIndex(id)) void moveEditorPhoto(id, index, "photo-drag", start);
+      else focusPhoto(id, "photo-drag", start);
+    },
+  });
+  controls.append(replace, handle);
   cell.dataset.photoId = id; cell.dataset.photoKey = editor.photoKey(id);
   cell.append(remove, caption, controls);
   return cell;
 }
 
 function renderPhotos(photos: PhotoUse[]) {
-  const key = JSON.stringify(photos.map(p => editor.photoKey(p.photoUseId)));
+  const key = JSON.stringify(photos.map(p => editor.photoRenderKey(p)));
   if (key === photoKey) return;
   photoKey = key;
   if (!photos.length) {
@@ -656,7 +712,9 @@ async function confirmRemove(index: number) {
   const description = block.kind === "photo" ? "这张照片及其说明" : "这个故事块";
   if (await askConfirm(`移除${description}？`, "可以在本次编辑中撤销。", "移除") &&
       editor === owner && canChangeEditor() && editor.story.blocks[index] === block) {
+    const wasCover = block.kind === "photo" && block.photoUse.photoUseId === editor.story.coverPhotoUseId;
     editor.remove(index);
+    if (wasCover) showAppNotice(editor.story.coverPhotoUseId ? "已移除封面，第一张剩余照片已成为封面。" : "已移除最后一张照片，封面已清除。", "calm");
     if (editor.mode === "story") focusBlock(Math.min(index, editor.story.blocks.length - 1));
   }
 }
@@ -726,6 +784,7 @@ function renderEditor() {
 
 function openInEditor(row: RecordRow | null, date = calendarToday(), retained?: StoryEditor) {
   unsubscribeEditor?.();
+  if (editor !== retained && !parked.has(editor)) void editor.releaseHistory().catch(showError);
   for (const url of pendingUrls.values()) URL.revokeObjectURL(url);
   pendingUrls.clear(); byTestId("draft-preview-content").replaceChildren();
   editor = retained ?? makeEditor(row, date);
@@ -768,7 +827,7 @@ byTestId<HTMLButtonElement>("editor-tag-add").addEventListener("click", () => {
 
 async function flushBeforeLeave(): Promise<boolean> {
   try {
-    if (editor.publishing) return false;
+    if (editor.publishing || editor.changingPhoto) return false;
     await editor.settle();
     if (editor.needsReload) parked.add(editor);
     return true;
@@ -2522,15 +2581,41 @@ async function mayResetSessions() {
 function resetEditorLibrary() {
   parked.clear(); openInEditor(null);
 }
-let insertion: { owner: StoryEditor; index: number } | undefined;
+let pickerTarget: { owner: StoryEditor; index: number } | { owner: StoryEditor; id: string } | undefined;
 function pickPhotos(index: number) {
   if (!canChangeEditor()) return;
-  insertion = { owner: editor, index }; photoInput.click();
+  pickerTarget = { owner: editor, index }; photoInput.multiple = true; photoInput.click();
 }
 async function attachSelectedPhotos() {
-  const target = insertion; insertion = undefined;
+  const target = pickerTarget; pickerTarget = undefined;
   const files = Array.from(photoInput.files ?? []); photoInput.value = "";
   if (!target) return;
+  if ("id" in target) {
+    const file = files[0], place = scrollPosition();
+    const active = () => target.owner === editor && canChangeEditor();
+    if (!file || !active()) return;
+    while (active()) {
+      try {
+        if (file.size > 25 * 1024 * 1024) throw new Error("图片超过 25 MB");
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (!active()) return;
+        await target.owner.replacePhoto(target.id, { bytes, fileName: file.name, mediaType: file.type });
+        if (active()) {
+          showAppNotice("照片已替换，请核对这张照片的说明。", "ok");
+          focusPhoto(target.id, "photo-caption", place);
+        }
+        return;
+      } catch (error) {
+        if (!active()) return;
+        if (editor.needsReload) { showError(error); return; }
+        if (!await askConfirm("照片替换失败", describeError(error).detail, "重试")) {
+          if (active()) focusPhoto(target.id, "photo-replace", place);
+          return;
+        }
+      }
+    }
+    return;
+  }
   let index = target.index;
   try {
     for (const file of files) {
@@ -2697,6 +2782,7 @@ resumeDraftButton.addEventListener("click", () => { void resumeUnfinishedDraft()
 newDraftButton.addEventListener("click", () => { void startNewDraft(); });
 backButton.addEventListener("click", () => { void leaveEditor(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
+photoInput.addEventListener("cancel", () => { pickerTarget = undefined; });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
 byTestId("add-photos").addEventListener("click", () => pickPhotos(editor.story.blocks.length));
 

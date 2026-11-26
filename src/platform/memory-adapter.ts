@@ -1,5 +1,5 @@
 import { decodeStory, fromLegacy, isSimple, projectStory, sameStory, storyOf, type Story } from "../domain/story.ts";
-import type { DraftFields } from "./api.ts";
+import type { DraftFields, PhotoFile, ReplacePhotoInput } from "./api.ts";
 import type { PhotoUse } from "../domain/types.ts";
 import { searchPage } from "../domain/search.ts";
 import type { SearchFilter, SearchPage, TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
@@ -465,6 +465,12 @@ export class MemoryAdapter implements ShiguangApi {
   }
   private quarantineOrphans(next: MemoryState, candidates?: ReadonlySet<string>): QuarantinedMedia[] {
     const referenced = new Set(this.references(next).map((r) => r.photo.assetId));
+    for (const [id, history] of this.photoUndo) {
+      const row = next.records.find(r => r.recordId === id);
+      if (row && history.createdAt === row.createdAt && history.revision === row.contentRevision && history.base === row.baseRevision) {
+        for (const p of [...history.versions, ...history.removed.values()]) referenced.add(p.assetId);
+      }
+    }
     const quarantined: QuarantinedMedia[] = [], stamp = this.now().replace(/[-:.]/g, "").replace(/Z$/, "");
     for (const [assetId, asset] of Object.entries(next.assets)) {
       if (referenced.has(assetId) || (candidates && !candidates.has(assetId))) continue;
@@ -564,27 +570,85 @@ export class MemoryAdapter implements ShiguangApi {
     const issue = validateSnapshotDetails(draft); if (issue) throw issue;
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
-  async attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult> {
-    this.checkWrite("attachPhotoBytes");
-    const next = this.reload(), row = this.active(this.row(next, input.recordId));
+  private ingestOriginal(next: MemoryState, input: PhotoFile) {
     if (!input.fileName || [".", ".."].includes(input.fileName) || /[/\\:\0]/.test(input.fileName)) fail("INVALID_ASSET_NAME");
     if (!input.bytes.length) fail("EMPTY_ASSET");
     if (input.bytes.length > 25 * 1024 * 1024) fail("ASSET_TOO_LARGE");
     for (const b of input.bytes) { if (!Number.isInteger(b) || b < 0 || b > 255) fail("INVALID_ASSET_BYTES"); }
-    const draft = this.draft(row);
     const bytes = Uint8Array.from(input.bytes), hash = sha256(bytes), assetId = `ast-${hash.slice(0, 16)}`;
     const mediaType = input.mediaType?.trim() ? input.mediaType : sniffMediaType(input.fileName, bytes);
-    const existing = next.assets[assetId];
-    if (existing && existing.sha256 !== hash) fail("ASSET_CONFLICT");
-    next.assets[assetId] ??= { dataUrl: `data:${mediaType};base64,${base64(bytes)}`, sha256: hash, bytes: bytes.length };
-    const photo = { photoUseId: this.id(next, "pu"), assetId, caption: input.caption, sha256: hash, bytes: bytes.length, mediaType };
+    if (this.references(next).some(({ photo }) => photo.assetId === assetId && (photo.sha256 !== hash || photo.bytes !== bytes.length))) fail("ASSET_CONFLICT");
+    const asset = next.assets[assetId] ?? { dataUrl: `data:${mediaType};base64,${base64(bytes)}`, sha256: hash, bytes: bytes.length };
+    this.verifyOriginal(asset, hash, bytes.length);
+    next.assets[assetId] = asset;
+    return { assetId, sha256: hash, bytes: bytes.length, mediaType };
+  }
+  private verifyOriginal(asset: MemoryAsset | undefined, hash: string, length: number) {
+    if (!asset) return fail("ASSET_MISSING");
+    const encoded = /^data:[^,]*;base64,(.*)$/.exec(asset.dataUrl);
+    if (!encoded || asset.sha256 !== hash || asset.bytes !== length) return fail("ASSET_CONFLICT");
+    let raw: string;
+    try { raw = atob(encoded[1]); } catch { return fail("ASSET_CONFLICT"); }
+    if (raw.length !== length || sha256(Uint8Array.from(raw, c => c.charCodeAt(0))) !== hash) fail("ASSET_CONFLICT");
+  }
+  async attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult> {
+    this.checkWrite("attachPhotoBytes");
+    const next = this.reload(), row = this.active(this.row(next, input.recordId));
+    const draft = this.draft(row);
+    const photo = { ...this.ingestOriginal(next, input), photoUseId: this.id(next, "pu"), caption: input.caption };
     const story = storyOf(draft);
     checkExpectedStory(story, input.expectedStory);
     story.blocks.push({ kind: "photo", photoUse: photo }); story.coverPhotoUseId ??= photo.photoUseId;
     Object.assign(draft, projectStory(story));
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
-  private photoUndo = new Map<string, { session: string; createdAt: string; revision: number; base: number; removed: Map<string, PhotoUse> }>();
+  private photoUndo = new Map<string, { session: string; createdAt: string; revision: number; base: number;
+    removed: Map<string, PhotoUse>; versions: PhotoUse[] }>();
+  private history(row: RecordRow, session: string) {
+    const old = this.photoUndo.get(row.recordId);
+    if (old && old.session === session && old.createdAt === row.createdAt && old.revision === row.contentRevision && old.base === row.baseRevision) return old;
+    const entry = { session, createdAt: row.createdAt, revision: row.contentRevision, base: row.baseRevision, removed: new Map<string, PhotoUse>(), versions: [] as PhotoUse[] };
+    this.photoUndo.set(row.recordId, entry);
+    return entry;
+  }
+  async releasePhotoHistory(recordId: string, undoSession: string) {
+    if (this.photoUndo.get(recordId)?.session === undoSession) {
+      this.photoUndo.delete(recordId);
+      this.lastMediaReport = null;
+    }
+  }
+  async replaceDraftPhoto(input: ReplacePhotoInput): Promise<SaveResult> {
+    this.checkWrite("replaceDraftPhoto");
+    const next = this.reload(), row = this.active(this.row(next, input.recordId)), draft = this.draft(row);
+    const story = storyOf(draft);
+    checkExpectedStory(story, input.expectedStory);
+    const block = story.blocks.find(b => b.kind === "photo" && b.photoUse.photoUseId === input.photoUseId);
+    if (block?.kind !== "photo") return fail("PHOTO_USE_NOT_FOUND");
+    if (input.editorMode !== undefined) {
+      if (input.editorMode !== "quick" && input.editorMode !== "story") return fail("STORY_INVALID");
+      row.draftMode = input.editorMode;
+    }
+    const previous = block.photoUse, source = input.source;
+    if (source.kind === "file") {
+      const original = this.ingestOriginal(next, source);
+      if (this.durabilityMode === "uncertain") fail("MEDIA_STATE_WRITE_FAILED");
+      block.photoUse = { ...previous, ...original };
+    } else {
+      const entry = this.photoUndo.get(row.recordId);
+      if (!entry || entry.session !== input.undoSession || entry.createdAt !== row.createdAt ||
+          entry.base !== row.baseRevision || entry.revision !== row.contentRevision) return fail("PHOTO_UNDO_EXPIRED");
+      const photo = entry.versions.find(p => p.photoUseId === previous.photoUseId && p.assetId === source.assetId && p.sha256 === source.sha256 && p.mediaType === source.mediaType) ?? fail("PHOTO_UNDO_EXPIRED");
+      this.verifyOriginal(next.assets[photo.assetId], photo.sha256, photo.bytes);
+      block.photoUse = { ...photo, caption: previous.caption };
+    }
+    Object.assign(draft, projectStory(story));
+    row.updatedAt = this.now(); this.persist(next);
+    if (input.undoSession) {
+      const { versions } = this.history(row, input.undoSession);
+      if (!versions.some(p => p.photoUseId === previous.photoUseId && p.assetId === previous.assetId && p.sha256 === previous.sha256 && p.mediaType === previous.mediaType)) versions.push(previous);
+    }
+    return this.result(row);
+  }
   async removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo = false, expectedStory?: Story): Promise<SaveResult> {
     this.checkWrite("removeDraftPhoto");
     if (undoSession === "") return fail("PHOTO_UNDO_EXPIRED");
@@ -593,7 +657,7 @@ export class MemoryAdapter implements ShiguangApi {
     const index = draft.photos.findIndex(p => p.photoUseId === photoUseId);
     const story = storyOf(draft);
     checkExpectedStory(story, expectedStory);
-    let receipt = this.photoUndo.get(recordId);
+    const receipt = this.photoUndo.get(recordId);
     if (undo) {
       if (!receipt || receipt.session !== undoSession || row.createdAt !== receipt.createdAt ||
           row.contentRevision !== receipt.revision || row.baseRevision !== receipt.base || index >= 0) return fail("PHOTO_UNDO_EXPIRED");
@@ -609,13 +673,7 @@ export class MemoryAdapter implements ShiguangApi {
       if (story.coverPhotoUseId === photoUseId) story.coverPhotoUseId = story.blocks.find(b => b.kind === "photo")?.photoUse.photoUseId ?? null;
       Object.assign(draft, projectStory(story));
       row.updatedAt = this.now(); this.persist(next);
-      if (undoSession) {
-        if (receipt?.session !== undoSession || receipt.base !== row.baseRevision || receipt.revision !== row.contentRevision || receipt.createdAt !== row.createdAt) {
-          receipt = { session: undoSession, createdAt: row.createdAt, revision: row.contentRevision, base: row.baseRevision, removed: new Map() };
-          this.photoUndo.set(recordId, receipt);
-        }
-        receipt.removed.set(photoUseId, photo);
-      }
+      if (undoSession) this.history(row, undoSession).removed.set(photoUseId, photo);
     }
     return this.result(row);
   }
@@ -1060,27 +1118,32 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
   const skippedDeleted: string[] = [], deletedInBackup: string[] = [];
   const usedIds = new Set<string>([...next.records.map((r) => r.recordId), ...next.deletionMarkers.map((m) => m.recordId)]);
   const usedConflict = new Set(next.conflictCopies.map((c) => c.conflictId));
-  const usedPhotoUse = new Map<string, string>();
+  const usedPhotoUse = new Map<string, Set<string>>();
+  const recordOwner = (id: string, owner: string) => {
+    const owners = usedPhotoUse.get(id) ?? new Set<string>();
+    owners.add(owner); usedPhotoUse.set(id, owners);
+  };
   const owner = (recordId: string, photo: Snapshot["photos"][number]) => JSON.stringify([recordId, photo.assetId, photo.sha256]);
-  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) usedPhotoUse.set(p.photoUseId, owner(r.recordId, p));
-  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) usedPhotoUse.set(p.photoUseId, owner(c.recordId, p));
+  for (const r of next.records) for (const s of [r.formal, r.draft]) for (const p of s?.photos ?? []) recordOwner(p.photoUseId, owner(r.recordId, p));
+  for (const c of next.conflictCopies) for (const p of c.snapshot.photos) recordOwner(p.photoUseId, owner(c.recordId, p));
   const maxSeq = (ids: Iterable<string>) => Math.max(0, ...[...ids].map((id) => Number(/-(\d+)$/.exec(id)?.[1] ?? 0)));
   next.seq = Math.max(next.seq, incoming.seq);
   const alloc = (prefix: string) => `${prefix}-${String(++next.seq).padStart(6, "0")}`;
   const idMap = new Map<string, string>();
-  const remapPhotos = (snap: Snapshot, sourceRecord: RecordRow, targetId: string): Snapshot => {
-    const mapping = new Map<string, string>();
+  const remapPhotos = (snap: Snapshot, sourceRecord: RecordRow, targetId: string, mapping = new Map<string, string>()): Snapshot => {
     const photos = snap.photos.map((p) => {
+      const matched = mapping.get(p.photoUseId);
+      if (matched) { recordOwner(matched, owner(targetId, p)); return { ...p, photoUseId: matched }; }
       const previous = Object.entries(incoming.mergeOrigins ?? {}).find(([key, id]) => {
         const source = photoOrigin(key);
-        return id === p.photoUseId && source?.[2] === sourceRecord.createdAt && source[4] === p.assetId && source[5] === p.sha256;
+        return id === p.photoUseId && source?.[2] === sourceRecord.createdAt;
       });
       const source: PhotoOrigin = previous ? photoOrigin(previous[0])! : ["photo", recordOrigin(incoming, sourceRecord), sourceRecord.createdAt, p.photoUseId, p.assetId, p.sha256];
       const key = JSON.stringify(source), wantedOwner = owner(targetId, p);
       let id = next.mergeOrigins![key] ?? source[3];
-      if (usedPhotoUse.has(id) && usedPhotoUse.get(id) !== wantedOwner) id = alloc("pu");
+      if (!next.mergeOrigins![key] && usedPhotoUse.has(id) && !usedPhotoUse.get(id)!.has(wantedOwner)) id = alloc("pu");
       if (id !== source[3]) next.mergeOrigins![key] = id;
-      usedPhotoUse.set(id, wantedOwner); mapping.set(p.photoUseId, id); return { ...p, photoUseId: id };
+      recordOwner(id, wantedOwner); mapping.set(p.photoUseId, id); return { ...p, photoUseId: id };
     });
     const story = storyOf(snap);
     let index = 0;
@@ -1118,6 +1181,7 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
     if (markerMatches(sourceId, r.createdAt)) { counts.skippedDeleted++; skippedDeleted.push(sourceId); continue; }
     const originKey = sourceId + "\u0000" + r.createdAt;
     const mapped = next.mergeOrigins[originKey];
+    const recordUses = new Map<string, string>();
     const exactLocal = next.records.find((l) => l.recordId === (mapped ?? sourceId) && l.createdAt === r.createdAt);
     // A removed remapped record cannot fall back to the unrelated record that
     // originally occupied its source ID, or an old backup could resurrect it.
@@ -1128,14 +1192,14 @@ export function mergeStates(local: MemoryState, incoming: MemoryState, now: stri
       if (usedIds.has(row.recordId)) { row.recordId = alloc("rec"); next.mergeOrigins[originKey] = row.recordId; }
       idMap.set(r.recordId + "\u0000" + r.createdAt, row.recordId);
       usedIds.add(row.recordId);
-      row.formal = row.formal && remapPhotos(row.formal, original, row.recordId); row.draft = row.draft && remapPhotos(row.draft, original, row.recordId);
+      row.formal = row.formal && remapPhotos(row.formal, original, row.recordId, recordUses); row.draft = row.draft && remapPhotos(row.draft, original, row.recordId, recordUses);
       row.tagIds = tg.mapTagIds(row.tagIds, tagMap);
       next.records.push(row); counts.added++;
       continue;
     }
     idMap.set(r.recordId + "\u0000" + r.createdAt, local.recordId);
-    r.formal = r.formal && remapPhotos(r.formal, original, local.recordId);
-    r.draft = r.draft && remapPhotos(r.draft, original, local.recordId);
+    r.formal = r.formal && remapPhotos(r.formal, original, local.recordId, recordUses);
+    r.draft = r.draft && remapPhotos(r.draft, original, local.recordId, recordUses);
     mergeMeta(local, r);
     if (local.status === "trashed" && r.status === "active") counts.keptTrashed++;
     if (local.status === "active" && r.status === "trashed") counts.keptActive++;

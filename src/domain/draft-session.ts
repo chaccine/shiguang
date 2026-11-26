@@ -1,4 +1,4 @@
-import type { AttachPhotoBytesInput, DraftFields, ShiguangApi, SaveResult } from "../platform/api.ts";
+import type { AttachPhotoBytesInput, ReplacePhotoInput, DraftFields, ShiguangApi, SaveResult } from "../platform/api.ts";
 import type { CommitResult, Durability, RecordRow, Snapshot } from "./types.ts";
 import { describeError } from "./errors.ts";
 import type { ErrorDescription } from "./errors.ts";
@@ -219,6 +219,24 @@ export class DraftSession<Handle = unknown> {
       if (this.version !== this.savedVersion) this.arm();
       return result;
     });
+  }
+  replacePhoto(input: Omit<ReplacePhotoInput, "recordId">): Promise<SaveResult> {
+    return this.exclusive(async () => {
+      await this.drain();
+      if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
+      const result = await this.api.replaceDraftPhoto({ ...input, recordId: this.data.recordId });
+      this.data.snapshot = copy(result.row.draft!);
+      this.saved(result.durability, result.row.updatedAt);
+      this.emit();
+      return result;
+    });
+  }
+  dismissPhotoError() {
+    if (this.data.status === "error" && this.version === this.savedVersion && !this.photoWrites.length) {
+      this.clearError();
+      this.data.status = this.materialized ? "saved" : "idle";
+      this.emit();
+    }
   }
   /** StoryEditor owns the working document while this queue owns durable acknowledgements. */
   saveDocument(fields: DraftFields & { story: Story }, expectedStory: Story): Promise<SaveResult> {
