@@ -79,6 +79,8 @@ const settingsQueues = new WeakMap<object,Map<string,Promise<void>>>();
 export class MemoryAdapter implements ShiguangApi {
   durabilityMode: Durability = "durable";
   private state = emptyState();
+  // While this string is retained, state is the private, unmodified result of open().
+  private openedRaw: string | null = null;
   private failures = new Map<Operation, string>();
   private pendingConflicts = new Map<string, { snapshot: Snapshot; baseRevision: number }>();
   private simulatedPhotos = new Map<string, PhotoStatus>();
@@ -111,10 +113,11 @@ export class MemoryAdapter implements ShiguangApi {
     if (pick && ["corrupt", "truncated", "schemaTooNew", "encrypted", "notBackup"].includes(pick)) this.nextPick = pick as PreviewPickKind;
     for (const id of options.missingAssets ?? []) this.simulatedPhotos.set(id, "missing");
     for (const id of options.corruptAssets ?? []) this.simulatedPhotos.set(id, "corrupt");
-    if (!this.startupError && !options.deferOpen) this.state = this.reload();
+    if (!this.startupError && !options.deferOpen) this.open();
   }
   /** Called only for an explicit preview fixture. A locked preview keeps its entire store. */
   resetUnlockedDemo(): boolean {
+    this.openedRaw = null;
     const { settings } = this.reload();
     if (settings.appLock !== null) return false;
     this.persist({ ...emptyState(), settings });
@@ -126,10 +129,23 @@ export class MemoryAdapter implements ShiguangApi {
     const code = this.failures.get(op);
     if (code) { this.failures.delete(op); fail(code); }
   }
-  private reload(): MemoryState {
-    let raw: string | null;
-    try { raw = this.storage?.getItem(this.key) ?? null; }
+  private checkWrite(op: Operation): void {
+    this.openedRaw = null;
+    this.check(op);
+  }
+  private readRaw(): string | null {
+    try { return this.storage?.getItem(this.key) ?? null; }
     catch (error) { return fail("IO_ERROR", String(error)); }
+  }
+  private replaceState(next: MemoryState, openedRaw: string | null = null): void {
+    this.state = next;
+    this.openedRaw = openedRaw;
+  }
+  private open(): void {
+    const raw = this.readRaw();
+    this.replaceState(this.reload(raw), raw);
+  }
+  private reload(raw = this.readRaw()): MemoryState {
     if (raw === null) return copy(this.state);
     try {
       const state = JSON.parse(raw) as MemoryState;
@@ -196,9 +212,10 @@ export class MemoryAdapter implements ShiguangApi {
     }
   }
   private persist(next: MemoryState): void {
+    this.openedRaw = null;
     try { this.storage?.setItem(this.key, JSON.stringify(next)); }
     catch (error) { fail("PERSIST_REPLACE_FAILED", String(error)); }
-    this.state = next;
+    this.replaceState(next);
     this.lastMediaReport = null;
   }
   private row(state: MemoryState, id: string): RecordRow {
@@ -241,14 +258,14 @@ export class MemoryAdapter implements ShiguangApi {
   }
   async getSettings():Promise<AppSettings> {this.check("getSettings");return this.settingsView(this.reload().settings);}
   async setTheme(theme:ThemePreference):Promise<SettingsResult> {
-    this.check("setTheme");
+    this.checkWrite("setTheme");
     return this.settingsQueue(async()=>{
       if(!["light","dark","system"].includes(theme))return fail("THEME_INVALID","主题必须为 light、dark 或 system");
       const next=this.reload();next.settings.theme=theme;return this.persistSettings(next);
     });
   }
   async setAppLock(passcode:string):Promise<SettingsResult> {
-    this.check("setAppLock");
+    this.checkWrite("setAppLock");
     return this.settingsQueue(async()=>{
       if(this.reload().settings.appLock!==null)return fail("APP_LOCK_ALREADY_SET","应用锁已启用，更改密码需要当前密码");
       const lock=await newPreviewLock(passcode),next=this.reload();
@@ -280,14 +297,15 @@ export class MemoryAdapter implements ShiguangApi {
       return this.persistSettings(next);
     });
   }
-  async verifyAppLock(passcode:string):Promise<SettingsResult>{this.check("verifyAppLock");return this.authLock("verify",passcode);}
-  async changeAppLock(currentPasscode:string,newPasscode:string):Promise<SettingsResult>{this.check("changeAppLock");return this.authLock("change",currentPasscode,newPasscode);}
-  async disableAppLock(currentPasscode:string):Promise<SettingsResult>{this.check("disableAppLock");return this.authLock("disable",currentPasscode);}
+  async verifyAppLock(passcode:string):Promise<SettingsResult>{this.checkWrite("verifyAppLock");return this.authLock("verify",passcode);}
+  async changeAppLock(currentPasscode:string,newPasscode:string):Promise<SettingsResult>{this.checkWrite("changeAppLock");return this.authLock("change",currentPasscode,newPasscode);}
+  async disableAppLock(currentPasscode:string):Promise<SettingsResult>{this.checkWrite("disableAppLock");return this.authLock("disable",currentPasscode);}
 
   async storeStatus(): Promise<StoreStatus> {
+    this.openedRaw = null;
     if (this.startupError) return { ok: false, ...copy(this.startupError) };
     this.check("storeStatus");
-    try { this.state = this.reload(); return { ok: true }; }
+    try { this.open(); return { ok: true }; }
     catch (error) {
       if (error && typeof error === "object" && "code" in error && typeof error.code === "string"
           && "message" in error && typeof error.message === "string") {
@@ -297,14 +315,14 @@ export class MemoryAdapter implements ShiguangApi {
     }
   }
   async trashRecord(recordId: string): Promise<SaveResult> {
-    this.check("trashRecord");
+    this.checkWrite("trashRecord");
     const next = this.reload(), row = this.active(this.row(next, recordId));
     if (!row.formal) fail("RECORD_NOT_FORMAL");
     row.status = "trashed"; row.trashedAt = this.now();
     this.persist(next); return this.result(row);
   }
   async restoreRecord(recordId: string): Promise<SaveResult> {
-    this.check("restoreRecord");
+    this.checkWrite("restoreRecord");
     const next = this.reload(), row = this.row(next, recordId);
     if (row.status !== "trashed") fail("RECORD_NOT_TRASHED");
     row.status = "active"; row.trashedAt = null;
@@ -329,13 +347,13 @@ export class MemoryAdapter implements ShiguangApi {
     return { deletionMarkers: copy(deletionMarkers), quarantined, durability: this.durabilityMode };
   }
   async purgeRecord(recordId: string): Promise<PurgeResult> {
-    this.check("purgeRecord");
+    this.checkWrite("purgeRecord");
     const next = this.reload(), row = this.row(next, recordId);
     if (row.status !== "trashed") fail("RECORD_NOT_TRASHED");
     return this.purge(next, [row]);
   }
   async emptyTrash(): Promise<PurgeResult> {
-    this.check("emptyTrash");
+    this.checkWrite("emptyTrash");
     const next = this.reload(), rows = next.records.filter((r) => r.status === "trashed");
     if (!rows.length) return { deletionMarkers: [], quarantined: [], durability: this.durabilityMode };
     return this.purge(next, rows);
@@ -346,7 +364,7 @@ export class MemoryAdapter implements ShiguangApi {
     state.conflictCopies.push({ conflictId: this.id(state, "conflict"), recordId, snapshot: copy(snapshot), baseRevision, createdAt: this.now(), reason });
   }
   async resolveConflict(recordId: string, choice: ConflictChoice): Promise<SaveResult> {
-    this.check("resolveConflict");
+    this.checkWrite("resolveConflict");
     if (choice !== "keepMine" && choice !== "keepFormal") fail("INVALID_CONFLICT_CHOICE");
     const next = this.reload(), row = this.active(this.row(next, recordId));
     if (row.formal === null) fail("RECORD_NOT_FORMAL", "这条记录还没有正式版，不存在需要选择的冲突");
@@ -366,7 +384,7 @@ export class MemoryAdapter implements ShiguangApi {
     return copy(this.reload().conflictCopies.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.conflictId.localeCompare(a.conflictId)));
   }
   async restoreConflictCopy(conflictId: string): Promise<SaveResult> {
-    this.check("restoreConflictCopy");
+    this.checkWrite("restoreConflictCopy");
     const next = this.reload(), conflict = next.conflictCopies.find((c) => c.conflictId === conflictId) ?? fail("CONFLICT_NOT_FOUND");
     const row = this.active(this.row(next, conflict.recordId));
     if (row.draft) fail("DRAFT_OCCUPIED");
@@ -439,11 +457,11 @@ export class MemoryAdapter implements ShiguangApi {
       || (b.committedAt ?? "").localeCompare(a.committedAt ?? "") || b.recordId.localeCompare(a.recordId)));
   }
   async getRecord(recordId: string): Promise<RecordRow> {
-    this.check("getRecord"); this.state = this.reload();
+    this.check("getRecord"); this.replaceState(this.reload());
     return copy(this.row(this.state, recordId));
   }
   async createDraft(input: CreateDraftInput): Promise<SaveResult> {
-    this.check("createDraft");
+    this.checkWrite("createDraft");
     const next = this.reload(), now = this.now();
     let row: RecordRow;
     if (input.baseRecordId) {
@@ -461,7 +479,7 @@ export class MemoryAdapter implements ShiguangApi {
     this.persist(next); return this.result(row);
   }
   async saveDraft(input: SaveDraftInput): Promise<SaveResult> {
-    this.check("saveDraft");
+    this.checkWrite("saveDraft");
     const next = this.reload(), row = this.active(this.row(next, input.recordId));
     if (input.eventDate !== undefined && input.eventDate.trim() && !isValidDate(input.eventDate)) fail("INVALID_EVENT_DATE");
     if (!input.clearEventTime && input.eventTime?.trim() && !isValidTime(input.eventTime)) fail("INVALID_EVENT_TIME");
@@ -476,7 +494,7 @@ export class MemoryAdapter implements ShiguangApi {
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
   async attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult> {
-    this.check("attachPhotoBytes");
+    this.checkWrite("attachPhotoBytes");
     const next = this.reload(), row = this.active(this.row(next, input.recordId));
     if (!input.fileName || [".", ".."].includes(input.fileName) || /[/\\:\0]/.test(input.fileName)) fail("INVALID_ASSET_NAME");
     if (!input.bytes.length) fail("EMPTY_ASSET");
@@ -493,7 +511,7 @@ export class MemoryAdapter implements ShiguangApi {
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
   async removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult> {
-    this.check("removeDraftPhoto");
+    this.checkWrite("removeDraftPhoto");
     const next = this.reload(), row = this.active(this.row(next, recordId));
     const index = row.draft?.photos.findIndex((p) => p.photoUseId === photoUseId) ?? -1;
     if (index < 0) fail("PHOTO_USE_NOT_FOUND");
@@ -508,7 +526,7 @@ export class MemoryAdapter implements ShiguangApi {
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
   async setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult> {
-    this.check("setDraftPhotoCaption");
+    this.checkWrite("setDraftPhotoCaption");
     return this.editDraftPhotos(recordId, (draft) => {
       if (typeof caption !== "string") fail("CAPTION_INVALID", "照片说明必须是纯文本");
       const photo = draft.photos.find((p) => p.photoUseId === photoUseId) ?? fail("PHOTO_USE_NOT_FOUND");
@@ -516,11 +534,11 @@ export class MemoryAdapter implements ShiguangApi {
     });
   }
   async setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult> {
-    this.check("setDraftCover");
+    this.checkWrite("setDraftCover");
     return this.editDraftPhotos(recordId, (draft) => { draft.coverPhotoUseId = photoUseId; });
   }
   async reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult> {
-    this.check("reorderDraftPhotos");
+    this.checkWrite("reorderDraftPhotos");
     return this.editDraftPhotos(recordId, (draft) => {
       const byId = new Map(draft.photos.map((p) => [p.photoUseId, p]));
       if (photoUseIds.length !== byId.size || new Set(photoUseIds).size !== byId.size || photoUseIds.some((id) => !byId.has(id))) fail("PHOTO_ORDER_INVALID");
@@ -528,14 +546,14 @@ export class MemoryAdapter implements ShiguangApi {
     });
   }
   async discardDraft(recordId: string): Promise<DiscardResult> {
-    this.check("discardDraft");
+    this.checkWrite("discardDraft");
     const next = this.reload(), row = this.active(this.row(next, recordId));
     if (!row.formal) next.records = next.records.filter((r) => r.recordId !== recordId);
     else { row.draft = null; row.baseRevision = row.contentRevision; row.updatedAt = this.now(); }
     this.persist(next); return { row: row.formal ? copy(row) : null, durability: this.durabilityMode };
   }
   async commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult> {
-    this.check("commitRecord");
+    this.checkWrite("commitRecord");
     const next = this.reload(), row = this.active(this.row(next, recordId));
     const local = this.state.records.find((r) => r.recordId === recordId) ?? row, pending = this.pendingConflicts.get(recordId);
     const draft = copy(pending?.snapshot ?? local.draft ?? fail("NO_DRAFT"));
@@ -705,7 +723,7 @@ export class MemoryAdapter implements ShiguangApi {
     return { cancelled: false, fileName: `拾光备份-${stamp}${pkg.lock ? "-加密" : ""}.sgbak`, location: "浏览器预览（内存，未写入文件）", sha256: pkg.sha256, summary, missingMedia };
   }
   async pickBackup(): Promise<PickBackupResult> {
-    this.check("pickBackup");
+    this.checkWrite("pickBackup");
     let pkg: PreviewBackup | null = this.injected ?? (this.lastExport ? copy(this.lastExport) : null);
     this.injected = null;
     const base = () => pkg ?? this.packBackup(this.reload());
@@ -729,7 +747,7 @@ export class MemoryAdapter implements ShiguangApi {
     return { cancelled: false, token, fileName: "拾光备份-预览.sgbak", encrypted: false, summary };
   }
   async unlockBackup(token: string, password: string): Promise<{ summary: BackupSummary }> {
-    this.check("unlockBackup");
+    this.checkWrite("unlockBackup");
     const entry = this.picked.get(token) ?? fail("BACKUP_TOKEN_INVALID", "请重新选择备份文件");
     const { summary, state } = this.verifyPreview(entry.pkg, password);
     entry.state = state;
@@ -740,7 +758,7 @@ export class MemoryAdapter implements ShiguangApi {
     return entry.state ?? fail("BACKUP_PASSWORD_REQUIRED", "这是加密备份，请先输入口令");
   }
   async restoreBackup(token: string): Promise<RestoreBackupResult> {
-    this.check("restoreBackup");
+    this.checkWrite("restoreBackup");
     const incoming = this.pickedState(token);
     const current = this.reload();
     const stamp = this.now().replace(/[-:.]/g, "");
@@ -759,7 +777,7 @@ export class MemoryAdapter implements ShiguangApi {
     return mergeStates(this.reload(), this.pickedState(token), this.now()).plan;
   }
   async mergeBackup(token: string): Promise<MergeResult> {
-    this.check("mergeBackup");
+    this.checkWrite("mergeBackup");
     const current = this.reload();
     const { state: next, plan } = mergeStates(current, this.pickedState(token), this.now());
     const stamp = this.now().replace(/[-:.]/g, "");
@@ -785,7 +803,7 @@ export class MemoryAdapter implements ShiguangApi {
     return { recordId: row.recordId, favorite: row.favorite, favoriteRevision: row.favoriteRevision, tagIds: [...row.tagIds], tagRevision: row.tagRevision, durability: this.durabilityMode };
   }
   async setFavorite(recordId: string, favorite: boolean, expectedRevision?: number | null): Promise<MetaResult> {
-    this.check("setFavorite");
+    this.checkWrite("setFavorite");
     const next = this.reload(), row = this.metaRow(next, recordId);
     if (expectedRevision !== undefined && expectedRevision !== null && expectedRevision !== row.favoriteRevision) {
       fail("META_REVISION_CONFLICT", "珍藏状态已在别处改变，请刷新后重试");
@@ -795,7 +813,7 @@ export class MemoryAdapter implements ShiguangApi {
     this.persist(next); return this.meta(row);
   }
   async setRecordTags(recordId: string, tagIds: string[], expectedRevision?: number | null): Promise<MetaResult> {
-    this.check("setRecordTags");
+    this.checkWrite("setRecordTags");
     const next = this.reload(), row = this.metaRow(next, recordId, false);
     if (expectedRevision !== undefined && expectedRevision !== null && expectedRevision !== row.tagRevision) {
       fail("META_REVISION_CONFLICT", "标签已在别处改变，请刷新后重试");
@@ -811,26 +829,26 @@ export class MemoryAdapter implements ShiguangApi {
   }
   async listTags(): Promise<TagInfo[]> { this.check("listTags"); return tg.listTags(this.reload()); }
   async createTag(name: string): Promise<TagInfo> {
-    this.check("createTag");
+    this.checkWrite("createTag");
     const next = this.reload(), tag = tg.createTag(next, name, this.now());
     this.persist(next); return this.tagInfo(next, tag.tagId);
   }
   async renameTag(tagId: string, name: string): Promise<TagInfo> {
-    this.check("renameTag");
+    this.checkWrite("renameTag");
     const next = this.reload(), before = next.tagDictRevision;
     tg.renameTag(next, tagId, name);
     if (next.tagDictRevision !== before) this.persist(next);
     return this.tagInfo(next, tagId);
   }
   async mergeTags(fromTagId: string, intoTagId: string): Promise<TagMergeResult> {
-    this.check("mergeTags");
+    this.checkWrite("mergeTags");
     const next = this.reload(), affectedRecords = tg.mergeTags(next, fromTagId, intoTagId, this.now());
     tg.validateTagState(next);
     this.persist(next);
     return { into: this.tagInfo(next, intoTagId), affectedRecords, durability: this.durabilityMode };
   }
   async deleteTag(tagId: string): Promise<TagDeleteResult> {
-    this.check("deleteTag");
+    this.checkWrite("deleteTag");
     const next = this.reload(), affectedRecords = tg.deleteTag(next, tagId, this.now());
     tg.validateTagState(next);
     this.persist(next);
@@ -879,16 +897,24 @@ export class MemoryAdapter implements ShiguangApi {
   async museumReshuffle(seed: number, previousIds: string[], limit: number, today = this.today()): Promise<MuseumShuffle> {
     this.check("museumReshuffle"); return museum.museumReshuffle(this.reload().records,seed,previousIds,limit,today);
   }
-  async museumHomeSummary(today = this.today()): Promise<MuseumSummary> {
-    this.check("museumHomeSummary"); return museum.museumHomeSummary(this.reload().records,today);
+  async museumHomeSummary(today?: string): Promise<MuseumSummary> {
+    try {
+      if (today === undefined) today = this.today();
+      this.check("museumHomeSummary");
+      const raw = this.readRaw();
+      const state = typeof raw === "string" && raw === this.openedRaw ? this.state : this.reload(raw);
+      return museum.museumHomeSummary(state.records, today);
+    } finally {
+      this.openedRaw = null;
+    }
   }
   async setMuseumHidden(recordId: string, hidden: boolean): Promise<MuseumHiddenResult> {
-    this.check("setMuseumHidden"); const next=this.reload(),row=this.metaRow(next,recordId);
+    this.checkWrite("setMuseumHidden"); const next=this.reload(),row=this.metaRow(next,recordId);
     if(row.museumHidden!==hidden){row.museumHidden=hidden;this.persist(next);}
     return {recordId,museumHidden:hidden,durability:this.durabilityMode};
   }
   async resetMuseumHidden(): Promise<MuseumResetResult> {
-    this.check("resetMuseumHidden");const next=this.reload();let affectedRecords=0;
+    this.checkWrite("resetMuseumHidden");const next=this.reload();let affectedRecords=0;
     for(const row of next.records){if(row.museumHidden){row.museumHidden=false;affectedRecords++;}}
     if(affectedRecords>0)this.persist(next);
     return {affectedRecords,durability:this.durabilityMode};

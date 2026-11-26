@@ -1,0 +1,13 @@
+The isolated focused command reported the file only.
+A named synthetic test wrote a marker from its body while the parent omitted its name and diagnostic.
+A separate child showed fd 1 is a socket. fs.writeSync(1, ...) arrived, while process.stdout.write(...) produced no output.
+The named test and diagnostic appeared with the following worker-only output transport.
+const { createWriteStream, fstatSync } = require("node:fs");
+const { Writable } = require("node:stream");
+if (process.env.NODE_TEST_CONTEXT === "child-v8") {
+  for (const [name, fd] of [["stdout", 1], ["stderr", 2]]) {
+    if (process[name].constructor === Writable && fstatSync(fd).isSocket()) {
+      Object.defineProperty(process, name, { value: createWriteStream(null, { fd, autoClose: false }), configurable: true });
+    }
+  }
+}
