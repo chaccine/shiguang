@@ -1,0 +1,16 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-e76b184c8295cfa6)
+
+running 6 tests
+test migration::tests::ownership_and_source_version_refusal_precede_candidate_writes ... ok
+test migration::tests::existing_store_import_recovery_runs_before_taking_the_preimage ... ok
+v3 durable candidate 202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c preimage 2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 originals 7
+test migration::tests::builder_and_validator_run_with_both_store_locks_and_a_verified_preimage ... ok
+v5 durable candidate 3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 preimage b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb originals 2
+test migration::tests::frozen_stories_install_and_remain_committed_after_reopen ... ok
+test migration::tests::an_existing_wrong_backup_is_never_replaced ... ok
+test migration::tests::malformed_or_lossy_round_trip_cannot_install ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.08s
+

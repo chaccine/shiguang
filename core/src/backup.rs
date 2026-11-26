@@ -174,7 +174,7 @@ fn array<'a>(v: &'a Json, key: &str) -> Result<&'a [Json], CoreError> {
 }
 // The shared parser rejects duplicate keys, bad UTF-8 and trailing garbage.
 // Bound recursion BEFORE invoking it, and reject non-JSON leading-zero integers.
-fn parse_document(input: &str) -> Result<Json, String> {
+pub(crate) fn parse_document(input: &str) -> Result<Json, String> {
     let bytes = input.as_bytes();
     let mut at = 0;
     let mut depth = 0usize;
@@ -222,7 +222,7 @@ fn parse_document(input: &str) -> Result<Json, String> {
     json::parse(input)
 }
 
-fn digest_valid(s: &str) -> bool {
+pub(crate) fn digest_valid(s: &str) -> bool {
     s.len() == 64
         && s.bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
@@ -250,7 +250,7 @@ fn name_valid(s: &str) -> bool {
 fn path_valid(s: &str) -> bool {
     s == "state.json" || s.strip_prefix("media/").is_some_and(name_valid)
 }
-fn no_link(path: &Path) -> io::Result<()> {
+pub(crate) fn no_link(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(path) {
         Ok(m) if m.file_type().is_symlink() => {
             Err(io::Error::other("不允许通过符号链接访问备份数据"))
@@ -621,6 +621,7 @@ impl Store {
         let destination = canonical_parent.join(name);
         if (canonical_parent == root
             && (name.starts_with(".tmp-")
+                || crate::migration::reserved(name)
                 || name.starts_with(".restore-")
                 || name.starts_with(".merge-")
                 || (!internal && (name.starts_with(".encrypt-") || name.starts_with(".decrypt-")))))
@@ -1005,7 +1006,7 @@ fn media_paths(root: &Path) -> Result<Vec<PathBuf>, CoreError> {
     out.sort();
     Ok(out)
 }
-fn copy_checked(src: &Path, dest: &Path) -> Result<(), CoreError> {
+pub(crate) fn copy_checked(src: &Path, dest: &Path) -> Result<(), CoreError> {
     let mut input = File::open(src)?;
     no_link(src)?;
     let size = input.metadata()?.len();
@@ -1193,6 +1194,17 @@ mod tests {
 }
 
 const MERGE_JOURNAL: &str = ".merge-journal.json";
+#[cfg(test)]
+pub(crate) fn import_pending(root: &Path) -> Result<bool, CoreError> {
+    for name in [JOURNAL, MERGE_JOURNAL] {
+        let path = root.join(name);
+        no_link(&path)?;
+        if path.try_exists()? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 fn merge_error(e: impl std::fmt::Display) -> CoreError {
     CoreError::new("MERGE_FAILED", format!("合并失败：{e}"))
 }

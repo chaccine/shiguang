@@ -27,7 +27,18 @@ impl Durability {
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> {
-    write_atomic_inner(path, |file| file.write_all(bytes), None)
+    write_atomic_inner(
+        path,
+        |file| {
+            #[cfg(all(test, feature = "fault-injection"))]
+            if let Err(error) = fault::hit(FaultPoint::PartialTempWrite) {
+                file.write_all(&bytes[..bytes.len() / 2])?;
+                return Err(error);
+            }
+            file.write_all(bytes)
+        },
+        None,
+    )
 }
 
 pub(crate) fn write_atomic_restore(path: &Path, source: &Path) -> Result<Durability, CoreError> {

@@ -17,6 +17,7 @@ mod fault;
 pub mod json;
 pub mod lock;
 pub mod model;
+mod migration;
 pub mod persist;
 pub mod preview;
 pub mod session;

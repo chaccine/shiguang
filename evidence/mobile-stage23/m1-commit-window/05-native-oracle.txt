@@ -1,0 +1,12 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.35s
+     Running tests/v5_oracle.rs (target/debug/deps/v5_oracle-8ad6ae9f6317c26f)
+
+running 4 tests
+test archived_envelopes_decrypt_to_the_exact_plain_package_and_source_files ... ok
+test v5_wrong_password_and_changed_bytes_preserve_the_destination ... ok
+test v5_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+test archived_v3_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+

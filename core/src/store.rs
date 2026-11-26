@@ -73,10 +73,7 @@ impl Store {
         let root = root.into();
         preflight(&root)?;
         fs::create_dir_all(&root)?;
-        let lock = match crate::lock::try_acquire(&root, ".instance.lock")? {
-            crate::lock::Acquire::Held(guard) => guard,
-            crate::lock::Acquire::Busy => return Err(CoreError::new("STORE_LOCKED", "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。")),
-        };
+        let lock = instance_lock(&root)?;
         let mut store = Self::open(root)?;
         store.instance_lock = Some(lock);
         Ok(store)
@@ -1737,7 +1734,20 @@ fn unique_path(dir: &Path, stem: &str, suffix: &str) -> PathBuf {
     }
 }
 
+pub(crate) fn instance_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
+    match crate::lock::try_acquire(root, ".instance.lock")? {
+        crate::lock::Acquire::Held(guard) => Ok(guard),
+        crate::lock::Acquire::Busy => Err(CoreError::new("STORE_LOCKED", "拾光已在另一个窗口或程序中打开。为保护你的数据，这里暂不能写入，请先关闭另一个窗口再重新打开。")),
+    }
+}
+
 pub(crate) fn write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
+    let guard = acquire_write_lock(root)?;
+    crate::migration::require_idle(root)?;
+    Ok(guard)
+}
+
+pub(crate) fn acquire_write_lock(root: &Path) -> Result<crate::lock::LockGuard, CoreError> {
     let start = Instant::now();
     loop {
         match crate::lock::try_acquire(root, ".write.lock")? {
