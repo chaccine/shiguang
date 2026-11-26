@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-26T11:49:46.932543+08:00",
+  "model": {
+    "id": "gpt-6.2-astra",
+    "reasoning_effort": "ultra",
+    "service_tier": "priority",
+    "service_tier_official_name": "Fast",
+    "banner_and_thread_settings_confirmed": true,
+    "review_session": "01a215f4-cec2-72c0-b2ea-593ce5cd0f76",
+    "probe_session": "01a215f3-fa1a-7141-99a4-75040ea0b467"
+  },
+  "quota_after_review": {
+    "usedPercent": 29,
+    "planType": "prolite",
+    "ordinaryUsageAllowed": true,
+    "note": "usedPercent is consumption, not remaining"
+  },
+  "independentM1Check": {
+    "agreesWithReview": true,
+    "source": "core/src/migration.rs finish() renames clearing to synced at L157, then parent_sync at L158; compensation rename back to clearing is L161. recover() L205-208 treats a visible SYNCED receipt as a confirmed commit, syncs, unlinks and returns Ok without restoring the old preimage. Existing faults.rs ParentSync visit 6 allows successful compensation then expects old bytes; MigrationAfterCommit covers a crash after successful final sync. The crash or failed compensation window after rename-to-SYNCED was not executed this round.",
+    "productionWriterStillOuter1Schema5": true,
+    "faultSequenceNotRunThisRound": true
+  },
+  "sourceTreeUnchangedByReview": true,
+  "candidateAndOracleHashesVerifiedAfterReview": true,
+  "noImplementationThisRound": true,
+  "homeSummaryLimitUnchangedMs": 150,
+  "prBodyNotEdited": "prior GraphQL failures; no retry"
+}
