@@ -1,3 +1,4 @@
+import { legacySnapshots } from "./support/legacy-story.ts";
 // M04 projections and preview mirror; every fixture is synthetic.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -240,15 +241,15 @@ test("U011 lossless v4 to v5 and v3 chain preserve formal, draft, photo and inde
   const { api, saved } = device(), id = await record(api, "2024-11-12", 2);
   await api.setFavorite(id, true); const tag = await api.createTag("合成标签"); await api.setRecordTags(id, [tag.tagId]);
   await api.saveDraft({ recordId: id, location: "合成地点", mood: "想念" });
-  const original = raw(saved), v4 = JSON.parse(JSON.stringify(original)); v4.schemaVersion = 4;
+  const original = legacySnapshots(raw(saved)), v4 = JSON.parse(JSON.stringify(original)); v4.schemaVersion = 4;
   for (const row of v4.records) delete row.museumHidden;
   const migrated = migrateToV5(structuredClone(v4));
   assert.deepEqual(migrated, original); assert.deepEqual(migrateToV5(structuredClone(migrated)), migrated);
   const savedV4 = storage(); savedV4.setItem(KEY, JSON.stringify(v4)); const disk = savedV4.getItem(KEY);
   const old = new MemoryAdapter({ storage: savedV4, storageKey: KEY, search: "" });
-  assert.deepEqual(await old.getRecord(id), original.records[0]);
+  assert.deepEqual(await old.getRecord(id), await api.getRecord(id));
   assert.equal(savedV4.getItem(KEY), disk); // Preview migrates in memory; native core also saves an exact pre-migration backup.
-  await old.setMuseumHidden(id, true); assert.equal(raw(savedV4).schemaVersion, 5);
+  await old.setMuseumHidden(id, true); assert.equal(raw(savedV4).schemaVersion, 6);
   const v3 = structuredClone(v4); v3.schemaVersion = 3; delete v3.settings;
   for (const row of v3.records) for (const snap of [row.formal, row.draft]) if (snap) {
     delete snap.location; delete snap.mood; delete snap.coverPhotoUseId;
@@ -274,13 +275,13 @@ test("U011 schema v5 requires boolean flag and future schema rejects without wri
   assert.equal(saved.writes, writes);
 });
 
-test("U011 v5 plain and password preview backups roundtrip hidden flags with active edit draft", async () => {
+test("U011 current plain and password preview backups roundtrip hidden flags with active edit draft", async () => {
   const a = device(), id = await record(a.api, "2024-11-12", 1);
   await a.api.setMuseumHidden(id, true); await a.api.saveDraft({ recordId: id, body: "未提交正文", eventDate: "2099-01-01" });
   for (const password of [undefined, "synthetic-u011-pass"]) {
     const b = device(), exp = await a.api.exportBackup({ password });
     assert.equal(exp.cancelled, false); if (exp.cancelled) throw new Error("synthetic export cancelled");
-    assert.equal(exp.summary.schemaVersion, 5);
+    assert.equal(exp.summary.schemaVersion, 6);
     const token = await pick(b.api, a.api.lastExportedPackage()!);
     if (password) await b.api.unlockBackup(token, password);
     await b.api.restoreBackup(token);
@@ -295,7 +296,7 @@ test("U011 old v4 and v3 preview backups restore and merge with default false wi
   await a.api.setMuseumHidden(id, true); await a.api.exportBackup();
   const current = a.api.lastExportedPackage()!;
   for (const version of [4, 3]) {
-    const body = JSON.parse(current.body); body.manifest.schemaVersion = body.state.schemaVersion = version;
+    const body = JSON.parse(current.body); legacySnapshots(body.state); body.manifest.schemaVersion = body.state.schemaVersion = version;
     for (const row of body.state.records) {
       delete row.museumHidden;
       if (version === 3) for (const snap of [row.formal, row.draft]) if (snap) {
@@ -309,7 +310,7 @@ test("U011 old v4 and v3 preview backups restore and merge with default false wi
       if (merge) await b.api.mergeBackup(token); else await b.api.restoreBackup(token);
       assert.equal((await b.api.getRecord(id)).museumHidden, false);
       assert.deepEqual((await b.api.getRecord(id)).formal, (await a.api.getRecord(id)).formal);
-      assert.equal(raw(b.saved).schemaVersion, 5);
+      assert.equal(raw(b.saved).schemaVersion, 6);
     }
     const own = device(); await own.api.restoreBackup(await pick(own.api, current));
     await own.api.mergeBackup(await pick(own.api, pkg)); assert.equal((await own.api.getRecord(id)).museumHidden, true);

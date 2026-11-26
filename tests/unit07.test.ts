@@ -261,14 +261,14 @@ test("U07 备份往返：标签、珍藏、别名、墓碑完整；覆盖恢复�
   const exp = await A.api.exportBackup();
   assert.equal(exp.cancelled, false);
   if (exp.cancelled) return;
-  assert.equal(exp.summary.schemaVersion, 5);
+  assert.equal(exp.summary.schemaVersion, 6);
   assert.equal(exp.summary.counts.tags, 1); assert.equal(exp.summary.counts.favorites, 1);
   B.api.setNextPickedPackage(A.api.lastExportedPackage()!);
   const picked = await B.api.pickBackup();
   if (picked.cancelled) throw new Error("x");
   await B.api.restoreBackup(picked.token);
   const s = JSON.parse(B.saved.getItem(KEY)!);
-  assert.equal(s.schemaVersion, 5);
+  assert.equal(s.schemaVersion, 6);
   assert.equal(s.tags.length, 1); assert.equal(s.tagAliases.length, 1); assert.equal(s.tagTombstones.length, 1);
   const row = await B.api.getRecord(r);
   assert.equal(row.favorite, true); assert.deepEqual(row.tagIds, [t1.tagId]);

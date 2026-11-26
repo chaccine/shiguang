@@ -11,8 +11,8 @@ import { searchAwareApi } from "./search-source.ts";
 import { SEARCH_DEMO_STORAGE_KEY, searchDemoClock, searchDemoMode, seedSearchDemo } from "./search-demo.ts";
 import type { Mood } from "../domain/types.ts";
 import { recoverLastDraft } from "../domain/draft-session.ts";
-import { StoryEditor, type Mode } from "../domain/story-editor.ts";
-import { plainText, sessionOnlyMessage, storyPhotos } from "../domain/story.ts";
+import { StoryEditor } from "../domain/story-editor.ts";
+import { plainText, storyPhotos } from "../domain/story.ts";
 import { bindTyping, showValue, StoryBlocksUi } from "./story-controls.ts";
 import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
@@ -200,7 +200,6 @@ let photoKey: string | null = null;
 
 const blocksUi = new StoryBlocksUi(byId("story-blocks"));
 const parked = new Set<StoryEditor>();
-const draftModes = new Map<string, Mode>();
 const pendingUrls = new Map<string, string>();
 const chooseDraft = byId<HTMLDialogElement>("choose-draft");
 let editor = makeEditor(null, "");
@@ -209,7 +208,7 @@ let originHasFormal = false;
 let lastEditorFocus: HTMLElement | null = null;
 
 function makeEditor(row: RecordRow | null, defaultDate: string) {
-  return new StoryEditor({ api, row, defaultDate, mode: row ? draftModes.get(row.recordId) : undefined,
+  return new StoryEditor({ api, row, defaultDate,
     schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle) });
 }
 
@@ -520,7 +519,7 @@ function renderStatus(state: DraftSessionSnapshot): void {
       retry.className = "retry";
       retry.textContent = "重试";
       retry.addEventListener("click", () => {
-        if (!canChangeEditor() || !editor.simple) return;
+        if (!canChangeEditor()) return;
         void editor.flush().catch((error: unknown) => { showError(error); });
       });
       saveStatus.append(text, retry);
@@ -664,7 +663,7 @@ async function confirmRemove(index: number) {
 
 function renderEditor() {
   const state = editor.saveState, { meta } = editor, protectedMode = editor.protected;
-  if (editor.simple && !editor.needsReload) parked.delete(editor);
+  if (!editor.needsReload) parked.delete(editor);
   const storyView = editor.mode === "story" || protectedMode;
   const photos = storyPhotos(editor.story);
   byId("editor-work").hidden = editor.preview;
@@ -676,12 +675,12 @@ function renderEditor() {
   byTestId("reload-editor").hidden = !editor.needsReload || protectedMode;
   byTestId<HTMLButtonElement>("draft-preview-open").disabled = protectedMode || editor.publishing;
   const limit = byId("story-limit");
-  limit.hidden = editor.simple;
-  limit.textContent = editor.simple ? "" : (protectedMode ? "速记已锁定全部编辑操作。 " : "") + sessionOnlyMessage;
+  limit.hidden = !protectedMode;
+  limit.textContent = protectedMode ? "速记已锁定全部编辑操作。请进入故事编辑继续修改。" : "";
   byTestId<HTMLButtonElement>("story-undo").disabled = !editor.canUndo;
   byTestId<HTMLButtonElement>("story-redo").disabled = !editor.canRedo;
-  commitButton.disabled = !editor.editable || !editor.simple || editor.needsReload;
-  byTestId<HTMLButtonElement>("editor-tag-add").disabled = !editor.editable || (!editor.simple && !state.recordId);
+  commitButton.disabled = !editor.editable || editor.needsReload;
+  byTestId<HTMLButtonElement>("editor-tag-add").disabled = !editor.editable;
   showValue(editorTitle, meta.title); editorDate.value = meta.eventDate; editorTime.value = meta.eventTime ?? "";
   showValue(byTestId<HTMLInputElement>("editor-location"), meta.location);
   byTestId<HTMLSelectElement>("editor-mood").value = meta.mood ?? "";
@@ -716,13 +715,9 @@ function renderEditor() {
     }
     cell.dataset.photoId = photo.photoUseId;
   }
-  const status = editor.pending && editor.simple && ["idle", "saved", "savedUncertain"].includes(state.status)
+  const status = editor.pending && ["idle", "saved", "savedUncertain"].includes(state.status)
     ? { ...state, status: "dirty" as const } : state;
   renderStatus(status);
-  if (!editor.simple) {
-    saveStatus.textContent = "仅本次会话 · 自动保存已暂停";
-    conflictActions.hidden = true;
-  }
   if (currentView === "editor" && state.recordId && (state.status === "saved" || state.status === "savedUncertain") && !editor.publishing) {
     uiPreferences.setItem(LAST_DRAFT_KEY, state.recordId);
   }
@@ -766,7 +761,6 @@ byTestId<HTMLButtonElement>("editor-tag-add").addEventListener("click", () => {
   void (async () => {
     if (!ensureWritable() || !canChangeEditor()) return;
     const owner = editor, id = editor.recordId;
-    if (!id && !editor.simple) return;
     const row = id ? await api.getRecord(id) : null;
     if (editor === owner && canChangeEditor()) await openTagPicker(row, owner);
   })().catch(showError);
@@ -776,8 +770,7 @@ async function flushBeforeLeave(): Promise<boolean> {
   try {
     if (editor.publishing) return false;
     await editor.settle();
-    if (!editor.simple || editor.needsReload) parked.add(editor);
-    if (editor.recordId) draftModes.set(editor.recordId, editor.mode);
+    if (editor.needsReload) parked.add(editor);
     return true;
   } catch (error) {
     showError(error);
@@ -847,7 +840,6 @@ async function openModification(recordId: string): Promise<void> {
         if (row.draft) await api.discardDraft(recordId);
         if (retained) parked.delete(retained);
         retained = undefined;
-        draftModes.delete(recordId);
         row = await api.getRecord(recordId);
       }
     }
@@ -981,10 +973,10 @@ async function restoreCopy(copy: ConflictCopy): Promise<void> {
 
 function renderDrafts(rows: readonly RecordRow[], copies: readonly ConflictCopy[]): void {
   const nodes: HTMLElement[] = [];
-  const inMemory = [...parked].filter(item => !item.simple || item.needsReload);
+  const inMemory = [...parked].filter(item => item.needsReload);
   for (const item of inMemory) {
     const card = document.createElement("button"); card.type = "button"; card.className = "draft-card";
-    card.dataset.testid = "session-draft"; card.textContent = (item.meta.title || "未命名故事") + " · 仅本次会话";
+    card.dataset.testid = "session-draft"; card.textContent = (item.meta.title || "未命名故事") + " · 待核对";
     card.addEventListener("click", () => { void (async () => {
       if (!ensureWritable() || !await flushBeforeLeave()) return;
       const row = item.recordId ? await api.getRecord(item.recordId) : null;
@@ -2458,13 +2450,13 @@ async function restoreBackupNow(): Promise<void> {
 
 async function commitCurrent(): Promise<void> {
   if (!ensureWritable()) return;
-  if (!canChangeEditor() || !editor.simple) return;
+  if (!canChangeEditor()) return;
   clearErrorBox();
   commitButton.disabled = true;
   commitButton.textContent = "正在存入…";
   try {
     const result = await editor.commit();
-    parked.delete(editor); draftModes.delete(result.recordId);
+    parked.delete(editor);
     uiPreferences.removeItem(LAST_DRAFT_KEY);
     unfinishedDraft = null;
     refreshResumeNotice();
@@ -2479,14 +2471,14 @@ async function commitCurrent(): Promise<void> {
     if (description.kind === "validation" && isFieldIssue(error)) showFieldIssue(error);
     else showError(error);
   } finally {
-    commitButton.disabled = !editor.editable || !editor.simple || editor.needsReload;
+    commitButton.disabled = !editor.editable || editor.needsReload;
     commitButton.textContent = "存入时光";
   }
 }
 
 async function resolveKeepMine(): Promise<void> {
   const recordId = editor.recordId;
-  if (recordId === null || !canChangeEditor() || !editor.simple) return;
+  if (recordId === null || !canChangeEditor()) return;
   clearErrorBox();
   keepMineButton.disabled = true;
   keepFormalButton.disabled = true;
@@ -2505,7 +2497,7 @@ async function resolveKeepMine(): Promise<void> {
 
 async function resolveKeepFormal(): Promise<void> {
   const recordId = editor.recordId;
-  if (recordId === null || !canChangeEditor() || !editor.simple) return;
+  if (recordId === null || !canChangeEditor()) return;
   clearErrorBox();
   keepMineButton.disabled = true;
   keepFormalButton.disabled = true;
@@ -2525,10 +2517,10 @@ async function resolveKeepFormal(): Promise<void> {
 
 async function mayResetSessions() {
   return !parked.size ||
-    await askConfirm("放弃本次会话的故事排版？", "导入会重新打开资料库。可以取消，回草稿箱继续编辑本次会话中的故事。", "放弃排版并继续");
+    await askConfirm("放弃尚未保存的草稿修改？", "导入会重新打开资料库。可以取消，回草稿箱核对尚未保存的修改。", "放弃修改并继续");
 }
 function resetEditorLibrary() {
-  parked.clear(); draftModes.clear(); openInEditor(null);
+  parked.clear(); openInEditor(null);
 }
 let insertion: { owner: StoryEditor; index: number } | undefined;
 function pickPhotos(index: number) {
@@ -2547,7 +2539,7 @@ async function attachSelectedPhotos() {
       if (editor !== target.owner || !canChangeEditor()) return;
       editor.insertPhoto(index++, { fileName: file.name, bytes, caption: "", mediaType: file.type });
     }
-    if (editor === target.owner && editor.simple) await editor.flush();
+    if (editor === target.owner) await editor.flush();
   } catch (error) { showError(error); }
 }
 
@@ -2884,7 +2876,7 @@ function closeDraftPreview() {
 byTestId("draft-preview-open").addEventListener("click", openDraftPreview);
 byTestId("draft-preview-back").addEventListener("click", closeDraftPreview);
 window.addEventListener("beforeunload", event => {
-  if (!editor.simple || editor.needsReload || parked.size) { event.preventDefault(); event.returnValue = ""; }
+  if (editor.pending || editor.needsReload || parked.size) { event.preventDefault(); event.returnValue = ""; }
   void editor.settle().catch(showError);
 });
 document.addEventListener("visibilitychange", () => {

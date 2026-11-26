@@ -4,6 +4,9 @@ import type { Mood, AppSettings, SettingsResult, ThemePreference } from "../doma
 import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
 
 export interface DraftFields {
+  story?: import("../domain/story.ts").Story;
+  expectedStory?: import("../domain/story.ts").Story;
+  editorMode?: "quick" | "story";
   title?: string;
   body?: string;
   eventDate?: string;
@@ -14,6 +17,7 @@ export interface DraftFields {
 export interface CreateDraftInput extends DraftFields { baseRecordId?: string | null }
 export interface SaveDraftInput extends DraftFields { recordId: string; clearEventTime?: boolean; clearMood?: boolean }
 export interface AttachPhotoBytesInput {
+  expectedStory?: import("../domain/story.ts").Story;
   recordId: string;
   fileName: string;
   bytes: readonly number[] | Uint8Array;
@@ -54,7 +58,7 @@ export interface ShiguangApi {
   createDraft(input: CreateDraftInput): Promise<SaveResult>;
   saveDraft(input: SaveDraftInput): Promise<SaveResult>;
   attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult>;
-  removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo?: boolean): Promise<SaveResult>;
+  removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo?: boolean, expectedStory?: import("../domain/story.ts").Story): Promise<SaveResult>;
   setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult>;
   setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult>;
   reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult>;

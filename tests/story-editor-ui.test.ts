@@ -50,7 +50,7 @@ test("real controls group Chinese composition into one undo, survive autosave, a
   ui.setHidden(true); ui.setHidden(false); await until(() => ui.byTest("save-status").visibleText().includes("已自动保存"));
   ui.button("story-undo"); assert.equal(field.value, ""); ui.button("story-redo"); assert.equal(field.value, "你好");
   field.setSelectionRange(0, 1); field.fire("select"); ui.blocks()[0].querySelector('[data-testid="story-bold"]')!.fire("click");
-  assert.equal(ui.byTest("commit-button").disabled, true); assert.equal(ui.id("story-limit").visible, true);
+  assert.equal(ui.byTest("commit-button").disabled, false); assert.equal(ui.id("story-limit").visible, false);
   field.focus(); ui.id("view-editor").fire("focusin", { target: field }); field.scrollTop = 7;
   ui.id("main-content").scrollTop = 290; window.scrollTo(0, 117); ui.button("draft-preview-open");
   assert.equal(ui.byTest("draft-preview-content").querySelector("strong")!.visibleText(), "你");
@@ -65,7 +65,7 @@ test("real controls group Chinese composition into one undo, survive autosave, a
   assert.deepEqual(await ui.api.listFormalRecords(), []);
 });
 
-test("complex formal edit protects tags, fields, photo actions and publish in quick; preview, parking and simplification preserve the separate saved draft", async t => {
+test("complex formal edit protects tags, fields, photo actions and publish in quick; preview, reopen and simplification preserve the separate saved draft", async t => {
   const ui = setup(t), api = ui.api;
   const id = (await api.createDraft({ eventDate: "2026-11-09", body: "正式\r\n内文", title: "合成记录" })).row.recordId;
   for (const caption of ["一", "二"]) await api.attachPhotoBytes({ recordId: id, fileName: "sample.png", bytes: Uint8Array.of(1, 2), caption });
@@ -76,7 +76,6 @@ test("complex formal edit protects tags, fields, photo actions and publish in qu
   assert.equal((await api.getRecord(id)).draft, null);
   input(ui.byTest("editor-location"), "已存草稿"); ui.setHidden(true); ui.setHidden(false);
   await until(() => ui.byTest("save-status").visibleText().includes("已自动保存"));
-  const baseline = ui.storage.getItem(PREVIEW_STORAGE_KEY);
   ui.button("mode-story"); ui.insert(2, "quote"); input(ui.blocks()[2].querySelector("textarea")!, "<em>合成引用</em>");
   input(ui.byTest("editor-title"), "内存标题");
   ui.blocks()[2].querySelector('[data-testid="story-down"]')!.fire("click");
@@ -91,7 +90,11 @@ test("complex formal edit protects tags, fields, photo actions and publish in qu
   first.querySelector('[data-testid="photo-cover"]')!.fire("click"); first.querySelector('[data-testid="photo-down"]')!.fire("click");
   input(first.querySelector("textarea")!, "禁止修改"); first.querySelector(".photo-remove")!.fire("click");
   assert.equal(ui.id("tag-picker-dialog").open, false); assert.equal(ui.id("confirm-dialog").open, false);
-  ui.setHidden(true); ui.setHidden(false); assert.equal(ui.storage.getItem(PREVIEW_STORAGE_KEY), baseline);
+  ui.setHidden(true); ui.setHidden(false); await until(() => ui.byTest("save-status").visibleText().includes("已自动保存"));
+  const protectedRow = await api.getRecord(id);
+  assert.equal(protectedRow.draft!.title, "内存标题"); assert.deepEqual(protectedRow.formal, formal);
+  assert.equal(protectedRow.draft!.story!.blocks[3].kind, "quote");
+  assert.deepEqual(protectedRow.draft!.photos, formal.photos);
   ui.button("enter-story"); assert.equal(ui.byTest("editor-title").value, "内存标题");
   assert.equal(ui.byTest("editor-date").value, formal.eventDate); assert.equal(ui.byTest("editor-mood").value, "");
   assert.equal(ui.byTest("editor-time").value, ""); assert.equal(ui.byTest("editor-location").value, "已存草稿");
@@ -128,7 +131,7 @@ test("formal Edit offers continue, restart with confirmation, or cancel; untouch
   assert.equal(ui.byTest("editor-body").value, "正式"); assert.equal((await api.getRecord(id)).draft, null);
 });
 
-test("new interleaved photo stays in the session draft box; simplification binds the actual original without interrupting caption composition", async t => {
+test("a heading with an interleaved photo reopens from the draft box and publishes with its composed caption", async t => {
   const ui = setup(t), picker = ui.byTest("photo-input");
   const bytes = Uint8Array.of(137, 80, 78, 71, 7), file = new File([bytes], "synthetic.png", { type: "image/png" });
   let opened = false, started = false, release!: () => void;
@@ -143,21 +146,23 @@ test("new interleaved photo stays in the session draft box; simplification binds
   ui.insert(1, "photo"); assert.ok(opened); picker.fire("change"); await until(() => ui.blocks().length === 2);
   input(ui.blocks()[1].querySelector("textarea")!, "旧说明");
   ui.button("draft-preview-open"); assert.equal(ui.byTest("draft-preview-content").querySelector("figcaption")!.textContent, "旧说明");
-  ui.button("draft-preview-back"); ui.button("back-to-drafts"); await until(() => ui.id("view-drafts").visible);
-  assert.deepEqual(await ui.api.listDrafts(), []); assert.equal(started, false);
-  ui.button("session-draft"); await until(() => ui.id("view-editor").visible); assert.equal(ui.blocks().length, 2);
-  const type = ui.blocks()[0].querySelector("select")!; type.value = "paragraph"; type.fire("change");
+  ui.button("draft-preview-back");
   const caption = ui.blocks()[1].querySelector("textarea")!;
   ui.setHidden(true); ui.setHidden(false); await until(() => started);
   caption.fire("compositionstart"); input(caption, "词语");
   release(); await until(() => ui.byTest("save-status").visibleText().includes("已自动保存"));
   assert.equal(ui.blocks()[1].querySelector("textarea"), caption); assert.equal(caption.value, "词语");
-  caption.fire("compositionend"); ui.button("commit-button"); await until(() => ui.id("view-timeline").visible);
+  caption.fire("compositionend"); ui.button("back-to-drafts"); await until(() => ui.id("view-drafts").visible && !!ui.findTest("draft-item"));
+  const [saved] = await ui.api.listDrafts();
+  assert.equal(saved.draft!.story!.blocks[0].kind, "smallHeading"); assert.equal(saved.draft!.photos[0].caption, "词语");
+  ui.button("draft-item"); await until(() => ui.id("view-editor").visible);
+  assert.equal(ui.byTest("mode-story").getAttribute("aria-pressed"), "true"); ui.button("commit-button"); await until(() => ui.id("view-timeline").visible);
   const [row] = await ui.api.listFormalRecords();
   assert.equal(row.formal!.body, "合成标题"); const [photo] = row.formal!.photos;
   assert.equal(photo.caption, "词语"); assert.match(photo.photoUseId, /^pu-/); assert.equal(photo.bytes, bytes.length);
   assert.equal(row.formal!.coverPhotoUseId, photo.photoUseId);
   const serialized = ui.storage.getItem(PREVIEW_STORAGE_KEY)!;
-  assert.doesNotMatch(serialized, /"blocks"|"mode"|"undoSession"|pending-/);
-  assert.equal(JSON.parse(serialized).version, 1); assert.equal(JSON.parse(serialized).schemaVersion, 5);
+  assert.doesNotMatch(serialized, /"undoSession"|pending-/);
+  const disk = JSON.parse(serialized); assert.equal(disk.version, 2); assert.equal(disk.schemaVersion, 6);
+  assert.deepEqual(disk.records[0].formal.story, row.formal!.story); assert.ok(!("body" in disk.records[0].formal));
 });

@@ -112,7 +112,7 @@ test("H1 changed input runs full validation before the domain date check and con
   assert.equal(badSetting.length, original.length);
   for (const [raw, error] of [
     ["{", "STATE_CORRUPT"], [badSetting, "STATE_CORRUPT"], [JSON.stringify(unlinked), "STATE_CORRUPT"],
-    [JSON.stringify({ schemaVersion: 6, records: null }), "SCHEMA_TOO_NEW"],
+    [JSON.stringify({ schemaVersion: 7, records: null }), "SCHEMA_TOO_NEW"],
   ] as const) {
     const api = open();
     saved.data.set(KEY, raw);

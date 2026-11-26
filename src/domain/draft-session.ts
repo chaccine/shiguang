@@ -2,6 +2,7 @@ import type { AttachPhotoBytesInput, DraftFields, ShiguangApi, SaveResult } from
 import type { CommitResult, Durability, RecordRow, Snapshot } from "./types.ts";
 import { describeError } from "./errors.ts";
 import type { ErrorDescription } from "./errors.ts";
+import { isSimple, type Story } from "./story.ts";
 import { validateForCommit } from "./rules.ts";
 
 export type DraftStatus = "idle" | "dirty" | "saving" | "saved" | "savedUncertain" | "error" | "conflict";
@@ -114,7 +115,9 @@ export class DraftSession<Handle = unknown> {
       snapshot: copy(row?.draft ?? row?.formal ?? blank()), ...(row ? { lastSavedAt: row.updatedAt } : {}) };
     this.emit();
   }
-  edit(patch: DraftFields): void {
+  edit(patch: Omit<DraftFields, "story" | "expectedStory" | "editorMode">): void {
+    if (patch.body !== undefined && this.data.snapshot.story && !isSimple(this.data.snapshot.story))
+      throw problem("STORY_COMPLEX", "请在故事编辑中修改正文");
     for (const field of ["title", "body", "eventDate", "location"] as const) {
       const value = patch[field];
       if (value !== undefined) {
@@ -143,15 +146,17 @@ export class DraftSession<Handle = unknown> {
       this.data.status = "saving"; this.clearError(); this.emit();
       let result: SaveResult;
       if (this.data.recordId === null) {
-        result = await this.api.createDraft(snapshot);
+        const { story: _story, ...fields } = snapshot;
+        result = await this.api.createDraft(fields);
         this.data.recordId = result.row.recordId;
         this.baseRevision = result.row.baseRevision;
       } else {
         result = await this.api.saveDraft({ recordId: this.data.recordId, title: snapshot.title,
-          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
+          ...(snapshot.story && !isSimple(snapshot.story) ? {} : { body: snapshot.body }), eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
       }
       this.savedVersion = sentVersion;
       // 不能把响应中的旧字段写回本地：在途期间的输入仍是权威的本地内容。
+      this.data.snapshot.story = copy(result.row.draft?.story);
       this.data.snapshot.photos = copy(result.row.draft?.photos ?? snapshot.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft?.coverPhotoUseId ?? null;
       this.applyPendingPhotos();
@@ -171,6 +176,7 @@ export class DraftSession<Handle = unknown> {
         : op.action === "cover" ? await this.api.setDraftCover(id, op.id)
         : await this.api.reorderDraftPhotos(id, op.value as string[]);
       this.photoWrites.shift();
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.applyPendingPhotos();
@@ -204,12 +210,29 @@ export class DraftSession<Handle = unknown> {
         this.saved(created.durability, created.row.updatedAt);
       }
       const result = await this.api.attachPhotoBytes({ ...input, recordId: this.data.recordId });
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
       if (this.version !== this.savedVersion) this.data.status = "dirty";
       this.emit();
       if (this.version !== this.savedVersion) this.arm();
+      return result;
+    });
+  }
+  /** StoryEditor owns the working document while this queue owns durable acknowledgements. */
+  saveDocument(fields: DraftFields & { story: Story }, expectedStory: Story): Promise<SaveResult> {
+    return this.exclusive(async () => {
+      await this.drain();
+      const id = this.data.recordId;
+      this.data.status = "saving"; this.emit();
+      const result = id ? await this.api.saveDraft({ ...fields, expectedStory, recordId: id })
+        : await this.api.createDraft(fields);
+      if (!id) this.baseRevision = result.row.baseRevision;
+      this.data.recordId = result.row.recordId;
+      this.data.snapshot = copy(result.row.draft!);
+      this.saved(result.durability, result.row.updatedAt);
+      this.emit();
       return result;
     });
   }
@@ -224,13 +247,14 @@ export class DraftSession<Handle = unknown> {
   ensureDraft(): Promise<void> {
     return this.exclusive(async () => { await this.drain(); await this.materialize(); });
   }
-  removePhoto(photoUseId: string, undoSession?: string, undo = false): Promise<SaveResult> {
+  removePhoto(photoUseId: string, undoSession?: string, undo = false, expectedStory?: Story): Promise<SaveResult> {
     this.stopTimer();
     return this.exclusive(async () => {
       await this.drain();
       if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
       await this.materialize();
-      const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId, undoSession, undo);
+      const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId, undoSession, undo, expectedStory);
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);

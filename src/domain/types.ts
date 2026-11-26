@@ -18,6 +18,8 @@ export interface AppSettings { theme: ThemePreference; appLock: AppLockStatus }
 export interface SettingsResult { settings: AppSettings; durability: Durability }
 
 export interface Snapshot {
+  /** Canonical content on schema 6. Legacy inputs expose the scalar projection. */
+  story?: import("./story.ts").Story;
   title: string;
   body: string;
   eventDate: string;
@@ -26,11 +28,12 @@ export interface Snapshot {
   location: string;
   mood: Mood | null;
   coverPhotoUseId: string | null;
-  /** 唯一权威顺序，重排整个使用位及其说明。 */
+  /** Photo blocks in story order. */
   photos: PhotoUse[];
 }
 
 export interface RecordRow {
+  draftMode?: "quick" | "story";
   /** Recommendation preference; never publishes or changes content. */
   museumHidden: boolean;
   status: "active" | "trashed";

@@ -64,9 +64,21 @@ export function fromLegacy({ body, photos, coverPhotoUseId }: LegacyContent): St
   ], coverPhotoUseId });
 }
 
-export const sessionOnlyMessage = "此故事含有当前存储格式无法保存的排版。修改仅保留在本次会话，关闭或刷新后会丢失。保留至多一个开头的普通段落，其后只放照片，即可恢复自动保存。";
+export function sameStory(a: Story, b: Story): boolean {
+  return JSON.stringify(decodeStory(a)) === JSON.stringify(decodeStory(b));
+}
+
+export function storyOf(snapshot: Snapshot): Story {
+  return snapshot.story === undefined ? fromLegacy(snapshot) : decodeStory(snapshot.story);
+}
+
+export function projectStory(story: Story) {
+  return { story, body: plainText(story), photos: storyPhotos(story), coverPhotoUseId: story.coverPhotoUseId };
+}
+
+/** Used only by legacy callers that require a reversible scalar representation. */
 export function toLegacy(story: Story): LegacyContent {
   const checked = decodeStory(story);
-  if (!isSimple(checked)) throw Object.assign(new Error(sessionOnlyMessage), { code: "STORY_SESSION_ONLY" });
+  if (!isSimple(checked)) throw Object.assign(new Error("这种排版无法转换为旧版正文"), { code: "STORY_COMPLEX" });
   return { body: plainText(checked), photos: storyPhotos(checked), coverPhotoUseId: checked.coverPhotoUseId };
 }

@@ -33,7 +33,7 @@ test("shared Rust interleaved marked story projects literal text and independent
   assert.deepEqual(story, cases.mixed); assert.equal(plainText(story), cases.mixedText);
   assert.deepEqual(storyPhotos(story).map(p => p.caption), cases.mixedCaptions);
   assert.equal(isSimple(story), false);
-  assert.throws(() => toLegacy(story), { code: "STORY_SESSION_ONLY" });
+  assert.throws(() => toLegacy(story), { code: "STORY_COMPLEX" });
 });
 test("R02 depends on current order and both marks even when text projections match", () => {
   const p: StoryBlock = { kind: "paragraph", runs: [plain("one"), plain("\ntwo")] };

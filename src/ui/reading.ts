@@ -1,6 +1,6 @@
 import type { PhotoUse, RecordRow, Snapshot } from "../domain/types.ts";
 import { formatEventWhen } from "../domain/format.ts";
-import { fromLegacy, runText, storyPhotos, type Story, type TextRun } from "../domain/story.ts";
+import { storyOf, runText, storyPhotos, type Story, type TextRun } from "../domain/story.ts";
 
 type LoadPhoto = (img: HTMLImageElement, photo: PhotoUse, figure: HTMLElement) => void;
 type ReadingMeta = Pick<Snapshot, "title" | "eventDate" | "eventTime" | "location" | "mood">;
@@ -41,7 +41,7 @@ export function renderStoryReading(holder: HTMLElement, meta: ReadingMeta, story
 /** A formal reading can only obtain its blocks from row.formal. */
 export function renderReading(holder: HTMLElement, row: RecordRow, tagName: (id: string) => string, load: LoadPhoto): void {
   if (!row.formal) { holder.replaceChildren(); return; }
-  renderStoryReading(holder, row.formal, fromLegacy(row.formal), [
+  renderStoryReading(holder, row.formal, storyOf(row.formal), [
     ...(row.favorite ? ["★ 已收藏"] : []), ...row.tagIds.map(tagName),
   ], load);
 }

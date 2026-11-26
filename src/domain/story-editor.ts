@@ -2,13 +2,13 @@ import type { AttachPhotoBytesInput, ShiguangApi } from "../platform/api.ts";
 import { sha256, sniffMediaType } from "../platform/bytes.ts";
 import { describeError, type ErrorDescription } from "./errors.ts";
 import { DraftSession } from "./draft-session.ts";
-import { fromLegacy, isSimple, plain, runText, sessionOnlyMessage, toLegacy } from "./story.ts";
+import { isSimple, plain, runText, sameStory, storyOf, storyPhotos } from "./story.ts";
 import type { Story, StoryBlock, TextKind } from "./story.ts";
 import { replaceText, toggleMark } from "./story-text.ts";
 import type { PhotoUse, RecordRow, Snapshot } from "./types.ts";
 
 export type Mode = "quick" | "story";
-export type StoryMeta = Omit<Snapshot, "body" | "photos" | "coverPhotoUseId">;
+export type StoryMeta = Omit<Snapshot, "story" | "body" | "photos" | "coverPhotoUseId">;
 type PhotoInput = Omit<AttachPhotoBytesInput, "recordId" | "bytes"> & { bytes: Uint8Array };
 type Document = { meta: StoryMeta; story: Story };
 type Options = {
@@ -27,10 +27,9 @@ function samePhotos(a: PhotoState, b: PhotoState) {
         p.sha256 === q.sha256 && p.bytes === q.bytes && p.mediaType === q.mediaType;
     });
 }
-function sessionOnly(): Error { return Object.assign(new Error(sessionOnlyMessage), { code: "STORY_SESSION_ONLY" }); }
+function readOnly(): Error { return Object.assign(new Error("请先返回故事编辑"), { code: "EDITOR_READ_ONLY" }); }
 
-/** The editable document and its undo stack live for one edit session. Only a simple
- * projection reaches DraftSession. Store acknowledgements never reopen the editor. */
+/** Undo history is local. The serialized save queue persists the full working story. */
 export class StoryEditor {
   private readonly draft: DraftSession<number>;
   private doc: Document;
@@ -48,6 +47,7 @@ export class StoryEditor {
   private timer?: number;
   private running?: Promise<void>;
   private dirty = false;
+  private savedMode?: Mode;
   private syncError?: ErrorDescription;
   private listeners = new Set<() => void>();
   mode: Mode;
@@ -62,8 +62,9 @@ export class StoryEditor {
     this.draft.open(options.row);
     const source = this.draft.state.snapshot, meta = metaOf(source);
     if (!options.row) meta.eventDate = options.defaultDate;
-    this.doc = { story: fromLegacy(source), meta };
-    this.mode = options.row?.draft ? options.mode ?? "quick" : "quick";
+    this.doc = { story: storyOf(source), meta };
+    this.savedMode = options.row?.draftMode;
+    this.mode = !this.simple ? "story" : options.row?.draft ? this.savedMode ?? options.mode ?? "quick" : "quick";
     this.draft.onChange(state => {
       if (state.status === "savedUncertain") this.uncertain = true;
       this.notify();
@@ -96,7 +97,7 @@ export class StoryEditor {
   private changed() {
     this.cancelTimer();
     this.dirty = true;
-    if (this.simple && !this.needsReload && !this.running && this.draft.state.status !== "conflict") {
+    if (!this.needsReload && !this.running && this.draft.state.status !== "conflict") {
       this.timer = this.options.schedule(() => { void this.flush().catch(() => {}); }, 800);
     }
     this.notify();
@@ -112,7 +113,10 @@ export class StoryEditor {
     this.change({ meta: this.meta, story: { blocks, coverPhotoUseId } });
   }
   switchMode(mode: Mode) {
-    if (!this.preview && !this.publishing) { this.mode = mode; this.notify(); }
+    if (this.preview || this.publishing || this.mode === mode) return;
+    this.mode = mode;
+    if (this.simple && this.recordId && this.draft.state.status !== "idle") this.changed();
+    else this.notify();
   }
   resume() { this.preview = false; if (!this.simple) this.mode = "story"; this.notify(); }
   setPreview(on: boolean) { if (!this.publishing && (!on || this.editable)) { this.preview = on; this.notify(); } }
@@ -226,65 +230,69 @@ export class StoryEditor {
     this.notify();
     throw new Error("草稿照片已在其他编辑中更改，请打开最新草稿核对。");
   }
-  /** Each acknowledged operation updates DraftSession. After an await, re-read the
-   * working document before issuing anything else, including if it just became complex. */
+  /** Attach and unlink keep their original-media and undo contracts. Once all
+   * occurrences exist, save metadata, marks, positions, captions and cover together. */
   private async sync() {
     await this.draft.flush();
-    if (this.recordId && this.simple) {
+    let expected = storyOf(this.draft.state.snapshot);
+    if (this.recordId) {
       const row = await this.options.api.getRecord(this.recordId);
       const current = row.draft ?? row.formal;
-      if (current) this.checkPhotos(this.draft.state.snapshot, current);
-    }
-    while (this.dirty && this.simple) {
-      const target = { ...this.meta, ...toLegacy(this.story) }, source = this.draft.state.snapshot;
-      const { photos, coverPhotoUseId, ...fields } = target;
-      if (Object.entries(fields).some(([key, value]) => value !== source[key as keyof typeof fields])) {
-        // Do not materialize the pristine new page if undo beats its first autosave.
-        const pristine = !this.recordId && fields.eventDate === this.options.defaultDate &&
-          !fields.body && !fields.title && !fields.location && !fields.eventTime && !fields.mood && !photos.length;
-        if (!pristine) {
-          this.draft.edit(fields); await this.draft.flush();
-          this.checkPhotos(source, this.draft.state.snapshot); continue;
+      if (current) {
+        this.checkPhotos(this.draft.state.snapshot, current);
+        if (!row.draft && row.contentRevision !== this.options.row?.contentRevision) {
+          // Preserve a concurrent publication. Commit still compares the revision at entry.
+          expected = storyOf(current);
+        } else if (!sameStory(expected, storyOf(current))) {
+          this.photoConflict = true;
+          throw new Error("草稿内容已在其他编辑中更改，请打开最新草稿核对。");
         }
       }
+    }
+    while (this.dirty) {
+      const source = this.draft.state.snapshot;
+      const photos = storyPhotos(this.story);
       const missing = photos.find(p => !source.photos.some(current => current.photoUseId === p.photoUseId));
       if (missing) {
         const input = this.media.get(missing.photoUseId);
         if (input) {
-          const result = await this.draft.attachPhoto({ ...input, caption: missing.caption });
+          const result = await this.draft.attachPhoto({ ...input, caption: missing.caption, expectedStory: expected });
           const added = result.row.draft!.photos.at(-1)!;
           this.bindOccurrence(missing.photoUseId, added);
           this.checkPhotos({ photos: [...source.photos, added], coverPhotoUseId: source.coverPhotoUseId ?? added.photoUseId }, result.row.draft!);
         } else {
-          const result = await this.draft.removePhoto(missing.photoUseId, this.undoSession, true);
+          const result = await this.draft.removePhoto(missing.photoUseId, this.undoSession, true, expected);
           // The receipt restores the caption at unlink time. A subsequent caption edit
           // can still be waiting in the working document.
           const restored = result.row.draft!.photos.at(-1)!;
           this.checkPhotos({ photos: [...source.photos, restored], coverPhotoUseId: source.coverPhotoUseId ?? restored.photoUseId }, result.row.draft!);
         }
+        expected = storyOf(this.draft.state.snapshot);
         continue;
       }
       const extra = source.photos.find(p => !photos.some(wanted => wanted.photoUseId === p.photoUseId));
       if (extra) {
         const remaining = source.photos.filter(p => p.photoUseId !== extra.photoUseId);
-        const result = await this.draft.removePhoto(extra.photoUseId, this.undoSession);
+        const result = await this.draft.removePhoto(extra.photoUseId, this.undoSession, false, expected);
         this.checkPhotos({ photos: remaining, coverPhotoUseId: source.coverPhotoUseId === extra.photoUseId
           ? remaining[0]?.photoUseId ?? null : source.coverPhotoUseId }, result.row.draft!);
+        expected = storyOf(result.row.draft!);
         continue;
       }
-      const caption = photos.find(p => source.photos.find(current => current.photoUseId === p.photoUseId)?.caption !== p.caption);
-      if (caption) {
-        await this.draft.updatePhoto("caption", caption.photoUseId, caption.caption);
-        this.checkPhotos({ ...source, photos: source.photos.map(p => p.photoUseId === caption.photoUseId ? caption : p) }, this.draft.state.snapshot);
+      const { meta, story } = this.doc;
+      const pristine = !this.recordId && meta.eventDate === this.options.defaultDate &&
+        !meta.title && !meta.location && !meta.eventTime && !meta.mood && !story.blocks.length;
+      const mode = this.simple ? this.mode : "story";
+      if (!pristine && (!sameStory(story, storyOf(source)) ||
+          Object.entries(meta).some(([key, value]) => value !== source[key as keyof StoryMeta]) ||
+          mode !== (this.savedMode ?? "quick"))) {
+        const sent = this.doc;
+        const result = await this.draft.saveDocument({ ...meta, story, editorMode: mode }, expected);
+        expected = storyOf(result.row.draft!);
+        if (!sameStory(expected, story)) throw new Error("写入后的故事与编辑内容不一致");
+        this.savedMode = mode;
+        if (this.doc === sent && (this.simple ? this.mode : "story") === mode) this.dirty = false;
         continue;
-      }
-      if (coverPhotoUseId && coverPhotoUseId !== source.coverPhotoUseId) {
-        await this.draft.updatePhoto("cover", coverPhotoUseId);
-        this.checkPhotos({ ...source, coverPhotoUseId }, this.draft.state.snapshot); continue;
-      }
-      if (photos.some((p, i) => p.photoUseId !== source.photos[i].photoUseId)) {
-        await this.draft.updatePhoto("order", "", photos.map(p => p.photoUseId));
-        this.checkPhotos(target, this.draft.state.snapshot); continue;
       }
       this.dirty = false;
     }
@@ -293,31 +301,28 @@ export class StoryEditor {
   flush(): Promise<void> {
     this.cancelTimer();
     if (this.needsReload) return Promise.reject(new Error("请先打开最新草稿核对照片。"));
-    if (!this.simple) return Promise.reject(sessionOnly());
     if (!this.running && this.dirty) {
       this.syncError = undefined;
       this.running = this.sync().catch(error => {
+        if ((error as { code?: string })?.code === "STORY_CHANGED") this.photoConflict = true;
         this.syncError = describeError(error); this.notify(); throw error;
       }).finally(() => { this.running = undefined; });
     }
     if (!this.running && this.draft.state.status === "conflict") return this.draft.flush();
     return this.running ?? Promise.resolve();
   }
-  /** Navigation/background may park a complex session, never serialize it. */
   async settle() {
-    if (this.simple && !this.needsReload) await this.flush(); else await this.running;
+    if (!this.needsReload) await this.flush(); else await this.running;
   }
   async ensureTagRecord() {
-    if (!this.editable) throw sessionOnly();
-    if (this.recordId && !this.simple) return this.recordId;
-    if (!this.simple) throw sessionOnly();
+    if (!this.editable) throw readOnly();
     await this.flush();
-    if (!this.editable || !this.simple) throw sessionOnly();
+    if (!this.editable) throw readOnly();
     if (!this.recordId) await this.draft.ensureDraft();
     return this.recordId!;
   }
   async commit() {
-    if (!this.editable || !this.simple) throw sessionOnly();
+    if (!this.editable) throw readOnly();
     this.publishing = true; this.notify();
     try {
       await this.flush();
