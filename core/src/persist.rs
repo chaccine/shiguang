@@ -166,7 +166,23 @@ pub(crate) fn parent_sync(dir: &Path) -> Durability {
             },
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x02000000;
+        match OpenOptions::new()
+            .write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(dir)
+            .and_then(|handle| handle.sync_all())
+        {
+            Ok(()) => Durability::Durable,
+            Err(error) => Durability::Uncertain {
+                error: error.to_string(),
+            },
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = dir;
         Durability::ParentSyncUnsupported

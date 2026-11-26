@@ -15,9 +15,11 @@ fn dated(dates: &[&str]) -> Vec<RecordRow> {
 }
 fn photos(row: &mut RecordRow, n: usize, start: usize) {
     let f=row.formal.as_mut().unwrap();
+    edit_simple(f, |f| {
     f.photos=(0..n).map(|i| PhotoUse {photo_use_id:format!("pu-{:06}",start+i),asset_id:"ast-shared".into(),
         caption:format!("{} 使用位 {i}\n<&>",row.record_id),sha256:"0".repeat(64),bytes:1,media_type:"image/png".into()}).collect();
     f.cover_photo_use_id=f.photos.last().map(|p| p.photo_use_id.clone());
+    });
 }
 
 #[test]

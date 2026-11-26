@@ -1,7 +1,7 @@
 //! Ordered story content. Each story describes one snapshot of a record.
 
 use crate::json::Json;
-use crate::model::{req_opt_str, req_str, PhotoUse, Snapshot};
+use crate::model::{req_opt_str, req_str, CoreError, PhotoUse};
 use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,10 +109,58 @@ pub enum StoryComplexity {
     Complex,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Read-only projections used by the scalar API, queries and media inventory.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LegacyContent {
+    pub body: String,
+    pub photos: Vec<PhotoUse>,
+    pub cover_photo_use_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Story {
     blocks: Vec<StoryBlock>,
-    cover_photo_use_id: Option<String>,
+    projection: LegacyContent,
+}
+
+impl LegacyContent {
+    pub fn from_json(value: &Json) -> Result<Self, String> {
+        Ok(Self {
+            body: req_str(value, "body")?,
+            cover_photo_use_id: req_opt_str(value, "coverPhotoUseId")?,
+            photos: value
+                .get("photos")
+                .and_then(Json::as_arr)
+                .ok_or("快照 photos 必须是数组")?
+                .iter()
+                .map(PhotoUse::from_json)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::obj(vec![
+            ("body", Json::str(&self.body)),
+            (
+                "photos",
+                Json::Arr(self.photos.iter().map(PhotoUse::to_json).collect()),
+            ),
+            (
+                "coverPhotoUseId",
+                self.cover_photo_use_id
+                    .as_ref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+        ])
+    }
+}
+
+impl std::ops::Deref for Story {
+    type Target = LegacyContent;
+    fn deref(&self) -> &LegacyContent {
+        &self.projection
+    }
 }
 
 impl Story {
@@ -120,10 +168,25 @@ impl Story {
         blocks: Vec<StoryBlock>,
         cover_photo_use_id: Option<String>,
     ) -> Result<Self, String> {
-        let story = Self {
-            blocks,
+        let mut projection = LegacyContent {
             cover_photo_use_id,
+            ..Default::default()
         };
+        let mut first_text = true;
+        for block in &blocks {
+            if let StoryBlock::Photo(photo) = block {
+                projection.photos.push(photo.clone());
+            } else if let Some(runs) = block.runs() {
+                if !first_text {
+                    projection.body.push('\n');
+                }
+                for run in runs {
+                    projection.body.push_str(&run.text);
+                }
+                first_text = false;
+            }
+        }
+        let story = Self { blocks, projection };
         let mut ids = BTreeSet::new();
         for photo in story.photos() {
             if photo.photo_use_id.trim().is_empty() || photo.asset_id.trim().is_empty() {
@@ -142,7 +205,7 @@ impl Story {
     }
 
     /// Copy just the legacy content. Embedded line breaks belong to the single paragraph.
-    pub fn from_legacy(snapshot: &Snapshot) -> Result<Self, String> {
+    pub fn from_legacy(snapshot: &LegacyContent) -> Result<Self, String> {
         let mut blocks = Vec::new();
         if !snapshot.body.is_empty() {
             blocks.push(StoryBlock::Paragraph(vec![TextRun::plain(&snapshot.body)]));
@@ -164,6 +227,69 @@ impl Story {
         Self::new(blocks, req_opt_str(value, "coverPhotoUseId")?)
     }
 
+    pub fn to_json(&self) -> Json {
+        let blocks = self
+            .blocks
+            .iter()
+            .map(|block| {
+                let kind = match block {
+                    StoryBlock::Paragraph(_) => "paragraph",
+                    StoryBlock::SmallHeading(_) => "smallHeading",
+                    StoryBlock::Quote(_) => "quote",
+                    StoryBlock::Divider => return Json::obj(vec![("kind", Json::str("divider"))]),
+                    StoryBlock::Photo(p) => {
+                        return Json::obj(vec![
+                            ("kind", Json::str("photo")),
+                            ("photoUse", p.to_json()),
+                        ])
+                    }
+                };
+                let runs = block
+                    .runs()
+                    .unwrap()
+                    .iter()
+                    .map(|r| {
+                        Json::obj(vec![
+                            ("text", Json::str(&r.text)),
+                            ("bold", Json::Bool(r.bold)),
+                            ("italic", Json::Bool(r.italic)),
+                        ])
+                    })
+                    .collect();
+                Json::obj(vec![("kind", Json::str(kind)), ("runs", Json::Arr(runs))])
+            })
+            .collect();
+        Json::obj(vec![
+            ("blocks", Json::Arr(blocks)),
+            (
+                "coverPhotoUseId",
+                self.cover_photo_use_id()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+        ])
+    }
+
+    /// Apply one edit to owned blocks and refresh all projections together.
+    pub(crate) fn edit(
+        &mut self,
+        op: impl FnOnce(&mut Vec<StoryBlock>, &mut Option<String>) -> Result<(), CoreError>,
+    ) -> Result<(), CoreError> {
+        let mut blocks = self.blocks.clone();
+        let mut cover = self.cover_photo_use_id.clone();
+        op(&mut blocks, &mut cover)?;
+        *self = Self::new(blocks, cover).map_err(|e| CoreError::new("STORY_INVALID", e))?;
+        Ok(())
+    }
+
+    pub(crate) fn append_photo(&mut self, photo: PhotoUse) -> Result<(), CoreError> {
+        self.edit(|blocks, cover| {
+            cover.get_or_insert_with(|| photo.photo_use_id.clone());
+            blocks.push(StoryBlock::Photo(photo));
+            Ok(())
+        })
+    }
+
     pub fn blocks(&self) -> &[StoryBlock] {
         &self.blocks
     }
@@ -178,6 +304,18 @@ impl Story {
             StoryBlock::Photo(photo) => Some(photo),
             _ => None,
         })
+    }
+
+    pub fn is_legacy_shape(&self) -> bool {
+        self.blocks
+            .iter()
+            .enumerate()
+            .all(|(index, block)| match block {
+                StoryBlock::Photo(_) => true,
+                StoryBlock::Paragraph(runs) if index == 0 => matches!(runs.as_slice(),
+                [r] if !r.bold && !r.italic && !r.text.is_empty()),
+                _ => false,
+            })
     }
 
     pub fn complexity(&self) -> StoryComplexity {
@@ -200,16 +338,7 @@ impl Story {
     }
 
     pub fn plain_text(&self) -> String {
-        let mut text = String::new();
-        for (index, runs) in self.blocks.iter().filter_map(StoryBlock::runs).enumerate() {
-            if index > 0 {
-                text.push('\n');
-            }
-            for run in runs {
-                text.push_str(&run.text);
-            }
-        }
-        text
+        self.body.clone()
     }
 
     /// The content minimum for a formal record. Date and stored original bytes are checked at commit.

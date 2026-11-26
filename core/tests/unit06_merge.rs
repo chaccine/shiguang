@@ -13,6 +13,13 @@ fn edit_record(v: &mut Json, f: impl FnOnce(&mut Json)) {
     };
     f(&mut rows[0]);
 }
+fn edit_content(snap: &mut Json, edit: impl FnOnce(&mut shiguang_core::story::LegacyContent)) {
+    let mut snapshot = shiguang_core::Snapshot::from_json(snap).unwrap();
+    let mut projection = (*snapshot.story).clone();
+    edit(&mut projection);
+    snapshot.story = shiguang_core::story::Story::from_legacy(&projection).unwrap();
+    *snap = snapshot.to_json();
+}
 fn variant(v: &Json, revision: i64, body: &str, trashed: bool) -> Json {
     let mut v = v.clone();
     edit_record(&mut v, |r| {
@@ -32,7 +39,7 @@ fn variant(v: &Json, revision: i64, body: &str, trashed: bool) -> Json {
             },
         );
         let mut s = r.get("formal").unwrap().clone();
-        set(&mut s, "body", Json::str(body));
+        edit_content(&mut s, |p| p.body = body.into());
         set(r, "formal", s);
     });
     v
@@ -100,15 +107,7 @@ fn collisions_remap_records_photos_conflicts_and_remain_idempotent() {
     let rows = v.get("records").unwrap().as_arr().unwrap();
     assert_ne!(rows[0].get("recordId"), rows[1].get("recordId"));
     let photos = |row: &Json| {
-        row.get("formal")
-            .unwrap()
-            .get("photos")
-            .unwrap()
-            .as_arr()
-            .unwrap()[0]
-            .get("photoUseId")
-            .unwrap()
-            .clone()
+        shiguang_core::Snapshot::from_json(row.get("formal").unwrap()).unwrap().photos[0].photo_use_id.clone()
     };
     assert_ne!(photos(&rows[0]), photos(&rows[1]));
     let copies = v.get("conflictCopies").unwrap().as_arr().unwrap();
@@ -134,14 +133,14 @@ fn drafts_preserve_local_import_current_and_conflict_stale() {
         let mut incoming = base.clone();
         edit_record(&mut incoming, |r| {
             let mut d = r.get("formal").unwrap().clone();
-            set(&mut d, "body", Json::str("incoming draft"));
+            edit_content(&mut d, |p| p.body = "incoming draft".into());
             set(r, "draft", d);
             set(r, "baseRevision", Json::Num(incoming_base));
         });
         if local_draft {
             edit_record(&mut local, |r| {
                 let mut d = r.get("formal").unwrap().clone();
-                set(&mut d, "body", Json::str("local draft"));
+                edit_content(&mut d, |p| p.body = "local draft".into());
                 set(r, "draft", d);
             });
         }
@@ -336,9 +335,8 @@ fn dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts() {
         .unwrap()
         .clone();
     let mut snap = snap;
-    set(&mut snap, "photos", Json::Arr(vec![]));
+    edit_content(&mut snap, |p| {p.photos.clear(); p.cover_photo_use_id = None;});
     // v4: this synthetic no-photo snapshot must also clear its cover reference.
-    set(&mut snap, "coverPhotoUseId", Json::Null);
     set(&mut v, "seq", Json::Num(100));
     set(
         &mut v,
@@ -442,8 +440,11 @@ fn strict_validation_covers_conflict_ids_and_logical_photo_ownership() {
     let mut v = base;
     edit_record(&mut v, |r| {
         let mut snap = r.get("formal").unwrap().clone();
-        let photo = snap.get("photos").unwrap().as_arr().unwrap()[0].clone();
-        set(&mut snap, "photos", Json::Arr(vec![photo.clone(), photo]));
+        let mut story = snap.get("story").unwrap().clone();
+        let mut blocks = story.get("blocks").unwrap().as_arr().unwrap().to_vec();
+        blocks.push(blocks.iter().find(|b| b.get("photoUse").is_some()).unwrap().clone());
+        set(&mut story, "blocks", Json::Arr(blocks));
+        set(&mut snap, "story", story);
         set(r, "formal", snap);
     });
     assert!(State::from_json(&v).is_err());
@@ -466,9 +467,7 @@ fn synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes() {
         set(r, "createdAt", Json::str(&creation));
         set(r, "contentRevision", Json::Num(2));
         let mut snap = r.get("formal").unwrap().clone();
-        let mut photo = snap.get("photos").unwrap().as_arr().unwrap()[0].clone();
-        set(&mut photo, "assetId", Json::str(&lp.asset_id));
-        set(&mut snap, "photos", Json::Arr(vec![photo]));
+        edit_content(&mut snap, |p| p.photos[0].asset_id = lp.asset_id.clone());
         set(r, "formal", snap);
     });
     drop(foreign);

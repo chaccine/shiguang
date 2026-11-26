@@ -165,3 +165,41 @@ fn cli_platform_local_date_is_passed_into_pure_query() {
     assert_eq!(items[1].get("isFuture"), Some(&Json::Bool(false)));
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn typed_draft_survives_separate_cli_processes() {
+    let root = std::env::temp_dir().join(format!("sg-cli-schema6-{}", std::process::id()));
+    let heading = r#"{"blocks":[{"kind":"smallHeading","runs":[{"text":"literal","bold":true,"italic":false}]}],"coverPhotoUseId":null}"#;
+    let changed = heading.replace("smallHeading", "quote");
+    let result = call(
+        &root,
+        &["draft-new", "--date", "2026-11-25", "--story", heading],
+        true,
+    );
+    let id = result
+        .get("record")
+        .unwrap()
+        .get("recordId")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        call(
+            &root,
+            &["draft-save", id, "--story", &changed, "--body", "bad"],
+            false
+        )
+        .get("code"),
+        Some(&Json::str("STORY_INVALID"))
+    );
+    call(&root, &["draft-save", id, "--story", &changed], true);
+    call(&root, &["commit", id, "--expect-base", "0"], true);
+    let formal = call(&root, &["get", id], true);
+    let snap = formal.get("record").unwrap().get("formal").unwrap();
+    assert_eq!(
+        snap.get("story").unwrap().get("blocks"),
+        json::parse(&changed).unwrap().get("blocks")
+    );
+    assert_eq!(snap.get("body"), Some(&Json::str("literal")));
+    fs::remove_dir_all(root).unwrap();
+}

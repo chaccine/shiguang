@@ -8,28 +8,30 @@ fn ids(p: &SearchPage) -> Vec<String> { p.page.items.iter().map(|r| r.record_id.
 fn rid(n: usize) -> String { format!("rec-{n:06}") }
 fn photos(r: &mut RecordRow) {
     let f = r.formal.as_mut().unwrap();
+    edit_simple(f, |f| {
     f.photos.push(PhotoUse { photo_use_id: format!("pu-{}",r.record_id), asset_id: "ast-shared".into(), caption: "neutral".into(),
         sha256: "0".repeat(64), bytes: 1, media_type: "image/png".into() });
     f.cover_photo_use_id = Some(f.photos[0].photo_use_id.clone());
+    });
 }
 #[test]
 fn each_field_literal_unicode_and_unique_record_matching() {
     let t=Temp::new("u012-fields"); let mut s=Store::open(&t.0).unwrap(); let tag=s.create_tag("Needle校园").unwrap();
     let mut rows=synthetic_rows(8);
-    for r in &mut rows { let f=r.formal.as_mut().unwrap(); f.title.clear(); f.body="neutral".into(); }
+    for r in &mut rows { let f=r.formal.as_mut().unwrap(); f.title.clear(); edit_simple(f, |f| f.body="neutral".into()); }
     rows[0].formal.as_mut().unwrap().title="Needle标题".into();
-    rows[1].formal.as_mut().unwrap().body="正文Needle".into();
-    photos(&mut rows[2]); rows[2].formal.as_mut().unwrap().body.clear(); rows[2].formal.as_mut().unwrap().photos[0].caption="Needle说明".into();
+    edit_simple(rows[1].formal.as_mut().unwrap(), |f| f.body="正文Needle".into());
+    photos(&mut rows[2]); edit_simple(rows[2].formal.as_mut().unwrap(), |f| f.body.clear()); edit_simple(rows[2].formal.as_mut().unwrap(), |f| f.photos[0].caption="Needle说明".into());
     rows[3].formal.as_mut().unwrap().location="Needle车站".into(); rows[4].tag_ids=vec![tag.tag_id.clone()];
-    rows[5].formal.as_mut().unwrap().body="Needle".into(); rows[5].formal.as_mut().unwrap().title="Needle".into(); rows[5].tag_ids=vec![tag.tag_id];
-    rows[6].formal.as_mut().unwrap().title="Nee".into(); rows[6].formal.as_mut().unwrap().body="dle".into();
-    photos(&mut rows[7]); rows[7].formal.as_mut().unwrap().photos[0].asset_id="Needle-image-name".into();
+    edit_simple(rows[5].formal.as_mut().unwrap(), |f| f.body="Needle".into()); rows[5].formal.as_mut().unwrap().title="Needle".into(); rows[5].tag_ids=vec![tag.tag_id];
+    rows[6].formal.as_mut().unwrap().title="Nee".into(); edit_simple(rows[6].formal.as_mut().unwrap(), |f| f.body="dle".into());
+    photos(&mut rows[7]); edit_simple(rows[7].formal.as_mut().unwrap(), |f| f.photos[0].asset_id="Needle-image-name".into());
     let state=with_rows(&s,&rows);
     let run=|q:&str| search_page(&state,&filter(q),None,50,TODAY).unwrap();
     let mut got=ids(&run(" \u{feff}nEeDlE　\n")); got.sort(); assert_eq!(got,(1..=6).map(rid).collect::<Vec<_>>());
     for (q,n) in [("标题",1),("正文nE",2),("说明",3),("车站",4)] { assert_eq!(ids(&run(q)),vec![rid(n)]); }
     assert_eq!(run("校园").page.total,2); assert_eq!(run("Needle-image-name").page.total,0); assert_eq!(run("").page.total,8);
-    rows[0].formal.as_mut().unwrap().body="第一次坐火车 café e\u{301} 🚂👩‍👩‍👧‍👦 [a-z]+ .* ^$ \\d (x|y) <script>alert(\"x\")</script> %_".into();
+    edit_simple(rows[0].formal.as_mut().unwrap(), |f| f.body="第一次坐火车 café e\u{301} 🚂👩‍👩‍👧‍👦 [a-z]+ .* ^$ \\d (x|y) <script>alert(\"x\")</script> %_".into());
     let state=with_rows(&s,&rows);
     for q in ["次坐火","café","e\u{301}","🚂","👩‍👩‍👧‍👦","[a-z]+",".*","^$","\\d","(x|y)","<script>alert(\"x\")</script>","%_"] {
         assert_eq!(search_page(&state,&filter(q),None,50,TODAY).unwrap().page.total,1,"{q}");
@@ -44,7 +46,7 @@ fn all_192_filter_combinations_and_reset() {
     let a=s.create_tag("Alpha").unwrap().tag_id; let b=s.create_tag("Beta").unwrap().tag_id;
     let mut rows=synthetic_rows(32);
     for (i,r) in rows.iter_mut().enumerate() {
-        let f=r.formal.as_mut().unwrap(); f.body=if i&1!=0 {"Needle"}else{"neutral"}.into();
+        let f=r.formal.as_mut().unwrap(); edit_simple(f, |f| f.body=if i&1!=0 {"Needle"}else{"neutral"}.into());
         f.event_date=if i&4!=0 {"2024-02-29"}else{"2024-03-01"}.into();
         r.tag_ids=if i&2!=0 {vec![a.clone(),b.clone()]}else if i&4!=0 {vec![b.clone()]}else{vec![]};
         r.favorite=i&8!=0; if i&16!=0 {photos(r);}
@@ -124,13 +126,13 @@ fn source_generation_covers_equal_revision_changes_but_ignores_drafts_and_hidden
     let base=with_rows(&s,&rows);let first=search_page(&base,&filter(""),None,1,TODAY).unwrap();
     for field in 0..9 {
         let mut changed=rows.clone();let r=&mut changed[0];let f=r.formal.as_mut().unwrap();
-        match field {0=>f.title.push('x'),1=>f.body.push('x'),2=>f.location.push('x'),3=>f.event_date="2024-02-29".into(),
-            4=>f.photos[0].caption.push('x'),5=>r.favorite=true,6=>f.event_time=Some("23:59".into()),
+        match field {0=>f.title.push('x'),1=>edit_simple(f, |f| f.body.push('x')),2=>f.location.push('x'),3=>f.event_date="2024-02-29".into(),
+            4=>edit_simple(f, |f| f.photos[0].caption.push('x')),5=>r.favorite=true,6=>f.event_time=Some("23:59".into()),
             7=>{r.status=RecordStatus::Trashed;r.trashed_at=Some("synthetic".into());},_=>{changed.pop();}}
         let state=with_rows(&s,&changed);
         assert_eq!(search_page(&state,&filter(""),first.page.next_cursor.clone(),1,TODAY).unwrap_err().code,"SEARCH_CURSOR_STALE");
     }
-    rows[0].draft=rows[0].formal.clone();rows[0].draft.as_mut().unwrap().body="draft secret".into();rows[0].museum_hidden=true;
+    rows[0].draft=rows[0].formal.clone();edit_simple(rows[0].draft.as_mut().unwrap(), |f| f.body="draft secret".into());rows[0].museum_hidden=true;
     let state=with_rows(&s,&rows);assert_eq!(search_page(&state,&filter(""),first.page.next_cursor,1,TODAY).unwrap().page.items.len(),1);
     assert_eq!(search_page(&state,&filter("draft secret"),None,50,TODAY).unwrap().page.total,0);
 }

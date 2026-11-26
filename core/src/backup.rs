@@ -1194,7 +1194,6 @@ mod tests {
 }
 
 const MERGE_JOURNAL: &str = ".merge-journal.json";
-#[cfg(test)]
 pub(crate) fn import_pending(root: &Path) -> Result<bool, CoreError> {
     for name in [JOURNAL, MERGE_JOURNAL] {
         let path = root.join(name);

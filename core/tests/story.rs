@@ -2,7 +2,7 @@
 use shiguang_core::{
     json::{self, Json},
     sha256,
-    story::{Story, StoryBlock, StoryComplexity, TextRun},
+    story::{LegacyContent, Story, StoryBlock, StoryComplexity, TextRun},
     Mood, PhotoUse, Snapshot,
 };
 use StoryBlock::{Divider, Paragraph, Photo, Quote, SmallHeading};
@@ -37,14 +37,13 @@ fn document(blocks: Vec<Json>, cover: Option<&str>) -> Json {
     ])
 }
 
-fn legacy_round_trip(source: &Snapshot) -> Story {
+fn legacy_round_trip(source: &LegacyContent) -> Story {
     let before = source.to_json().dump();
     let story = Story::from_legacy(source).unwrap();
-    let rebuilt = Snapshot {
+    let rebuilt = LegacyContent {
         body: story.plain_text(),
         photos: story.photos().cloned().collect(),
         cover_photo_use_id: story.cover_photo_use_id().map(str::to_owned),
-        ..source.clone()
     };
     assert_eq!(rebuilt.to_json().dump(), before);
     assert_eq!(source.to_json().dump(), before);
@@ -60,18 +59,22 @@ fn legacy_content_matches_the_v5_writer_including_repeated_uses_and_non_first_co
         "<script>合成</script>\r\n🌱",
     );
     let body = " \t\r\n**字** <b>字</b> e\u{301}\n\n末尾 \n";
-    let source = Snapshot {
+    let source = LegacyContent {
+        body: body.into(),
+        cover_photo_use_id: Some(b.photo_use_id.clone()),
+        photos: vec![a.clone(), b.clone()],
+    };
+    let source = LegacyContent::from_json(&source.to_json()).unwrap();
+    let story = legacy_round_trip(&source);
+    let snapshot = Snapshot {
         title: "旧记录".into(),
         event_date: "2026-11-09".into(),
         event_time: Some("08:15".into()),
         location: "合成地点".into(),
         mood: Some(Mood::Calm),
-        body: body.into(),
-        cover_photo_use_id: Some(b.photo_use_id.clone()),
-        photos: vec![a.clone(), b.clone()],
+        story: story.clone(),
     };
-    let source = Snapshot::from_json(&source.to_json()).unwrap();
-    let story = legacy_round_trip(&source);
+    assert_eq!(Snapshot::from_json(&snapshot.to_json()).unwrap(), snapshot);
     assert_eq!(story.cover_photo_use_id(), Some("pu-000002"));
     assert_eq!(
         story.blocks(),
@@ -83,9 +86,9 @@ fn legacy_content_matches_the_v5_writer_including_repeated_uses_and_non_first_co
 #[test]
 fn legacy_empty_whitespace_and_line_endings_preserve_literal_paragraph_boundaries() {
     for body in ["", " ", "\t\u{3000}\r\n", "\n", "\n\n", "\rfirst\r\n\n末\n"] {
-        let source = Snapshot {
+        let source = LegacyContent {
             body: body.into(),
-            ..Snapshot::default()
+            ..Default::default()
         };
         let story = legacy_round_trip(&source);
         if body.is_empty() {
@@ -98,10 +101,10 @@ fn legacy_empty_whitespace_and_line_endings_preserve_literal_paragraph_boundarie
         assert_eq!(story.complexity(), Simple);
     }
     let p = photo("pu-000003", "photo only", "");
-    let story = legacy_round_trip(&Snapshot {
+    let story = legacy_round_trip(&LegacyContent {
         cover_photo_use_id: Some(p.photo_use_id.clone()),
         photos: vec![p.clone()],
-        ..Snapshot::default()
+        ..Default::default()
     });
     assert_eq!(story.blocks(), &[Photo(p)]);
     assert!(story.has_content());
@@ -306,10 +309,10 @@ fn bad_photo_identities_and_cover_references_fail_at_each_entry_point() {
         ),
     ] {
         let raw = document(photos.iter().map(photo_block).collect(), cover);
-        let snapshot = Snapshot {
+        let snapshot = LegacyContent {
             photos,
             cover_photo_use_id: cover.map(str::to_owned),
-            ..Snapshot::default()
+            ..Default::default()
         };
         assert!(Story::from_json(&raw).is_err());
         assert!(Story::from_legacy(&snapshot).is_err());
@@ -361,13 +364,13 @@ fn formal_and_draft_can_describe_the_same_occurrence_with_different_originals() 
 #[test]
 fn shared_editor_fixture_round_trips_v5_and_projects_ordered_runs_and_captions() {
     let cases = json::parse(include_str!("fixtures/story-parity.json")).unwrap();
-    let legacy = Snapshot::from_json(cases.get("legacy").unwrap()).unwrap();
+    let legacy = LegacyContent::from_json(cases.get("legacy").unwrap()).unwrap();
     let converted = legacy_round_trip(&legacy);
     assert_eq!(converted.complexity(), Simple);
     assert_eq!(converted.cover_photo_use_id(), Some("pu-000002"));
     for body in cases.get("legacyBodies").unwrap().as_arr().unwrap() {
         let body = body.as_str().unwrap();
-        let story = legacy_round_trip(&Snapshot {
+        let story = legacy_round_trip(&LegacyContent {
             body: body.into(),
             ..Default::default()
         });

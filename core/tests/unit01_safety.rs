@@ -275,8 +275,10 @@ fn t_c2_missing_fields_no_silent_default() {
                 Step::Key("records"),
                 Step::Index(0),
                 Step::Key("formal"),
-                Step::Key("photos"),
-                Step::Index(0),
+                Step::Key("story"),
+                Step::Key("blocks"),
+                Step::Index(1),
+                Step::Key("photoUse"),
                 Step::Key("caption"),
             ],
         ),
@@ -286,8 +288,10 @@ fn t_c2_missing_fields_no_silent_default() {
                 Step::Key("records"),
                 Step::Index(0),
                 Step::Key("formal"),
-                Step::Key("photos"),
-                Step::Index(0),
+                Step::Key("story"),
+                Step::Key("blocks"),
+                Step::Index(1),
+                Step::Key("photoUse"),
                 Step::Key("bytes"),
             ],
         ),
@@ -297,8 +301,10 @@ fn t_c2_missing_fields_no_silent_default() {
                 Step::Key("records"),
                 Step::Index(0),
                 Step::Key("formal"),
-                Step::Key("photos"),
-                Step::Index(0),
+                Step::Key("story"),
+                Step::Key("blocks"),
+                Step::Index(1),
+                Step::Key("photoUse"),
                 Step::Key("mediaType"),
             ],
         ),
@@ -393,7 +399,7 @@ fn t_c4_future_version_refused() {
     let original = fs::read_to_string(&path).unwrap();
     let mut value = json::parse(&original).unwrap();
     let version = value_mut(&mut value, &[Step::Key("version")]).unwrap();
-    *version = Json::Num(2);
+    *version = Json::Num(3);
     let modified = value.dump();
     fs::write(&path, modified.as_bytes()).unwrap();
 

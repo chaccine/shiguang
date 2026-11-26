@@ -280,65 +280,71 @@ fn normalize_photos(
     snapshot: &mut Snapshot,
 ) -> Result<(), CoreError> {
     let mut use_mapping = BTreeMap::new();
-    for p in &mut snapshot.photos {
-        let old_id = p.photo_use_id.clone();
-        let source = incoming
-            .merge_origins
-            .iter()
-            .find(|o| {
-                o.kind == "photo" && o.local_id == p.photo_use_id && o.created_at == key.created_at
-            })
-            .map(|o| o.source_id.clone())
-            .unwrap_or_else(|| {
-                Json::Arr(vec![
-                    Json::str(&key.record_id),
-                    Json::str(&p.photo_use_id),
-                    Json::str(&p.asset_id),
-                    Json::str(&p.sha256),
-                ])
-                .dump()
+    snapshot.story.edit(|blocks, cover| {
+        for block in blocks {
+            let crate::story::StoryBlock::Photo(p) = block else {
+                continue;
+            };
+            let old_id = p.photo_use_id.clone();
+            let source = incoming
+                .merge_origins
+                .iter()
+                .find(|o| {
+                    o.kind == "photo"
+                        && o.local_id == p.photo_use_id
+                        && o.created_at == key.created_at
+                })
+                .map(|o| o.source_id.clone())
+                .unwrap_or_else(|| {
+                    Json::Arr(vec![
+                        Json::str(&key.record_id),
+                        Json::str(&p.photo_use_id),
+                        Json::str(&p.asset_id),
+                        Json::str(&p.sha256),
+                    ])
+                    .dump()
+                });
+            let source_value =
+                crate::json::parse(&source).map_err(|_| bad("无效的照片来源映射"))?;
+            let source_fields = source_value
+                .as_arr()
+                .filter(|a| a.len() == 4)
+                .ok_or_else(|| bad("无效的照片来源映射"))?;
+            let original_id = source_fields[1]
+                .as_str()
+                .ok_or_else(|| bad("无效的照片来源 ID"))?;
+            p.photo_use_id = original_id.to_owned();
+            if let Some(o) = s.merge_origins.iter().find(|o| {
+                o.kind == "photo" && o.source_id == source && o.created_at == key.created_at
+            }) {
+                p.photo_use_id = o.local_id.clone();
+                use_mapping.insert(old_id, p.photo_use_id.clone());
+                continue;
+            }
+            let collision = s.photo_refs().iter().any(|(r, x)| {
+                x.photo_use_id == p.photo_use_id
+                    && (*r != target || x.asset_id != p.asset_id || x.sha256 != p.sha256)
             });
-        let source_value = crate::json::parse(&source).map_err(|_| bad("无效的照片来源映射"))?;
-        let source_fields = source_value
-            .as_arr()
-            .filter(|a| a.len() == 4)
-            .ok_or_else(|| bad("无效的照片来源映射"))?;
-        let original_id = source_fields[1]
-            .as_str()
-            .ok_or_else(|| bad("无效的照片来源 ID"))?;
-        p.photo_use_id = original_id.to_owned();
-        if let Some(o) = s
-            .merge_origins
-            .iter()
-            .find(|o| o.kind == "photo" && o.source_id == source && o.created_at == key.created_at)
-        {
-            p.photo_use_id = o.local_id.clone();
+            if collision {
+                let new = allocate(s, "pu")?;
+                s.merge_origins.push(MergeOrigin {
+                    kind: "photo".into(),
+                    source_id: source,
+                    created_at: key.created_at.clone(),
+                    local_id: new.clone(),
+                });
+                p.photo_use_id = new;
+            }
             use_mapping.insert(old_id, p.photo_use_id.clone());
-            continue;
         }
-        let collision = s.photo_refs().iter().any(|(r, x)| {
-            x.photo_use_id == p.photo_use_id
-                && (*r != target || x.asset_id != p.asset_id || x.sha256 != p.sha256)
-        });
-        if collision {
-            let new = allocate(s, "pu")?;
-            s.merge_origins.push(MergeOrigin {
-                kind: "photo".into(),
-                source_id: source,
-                created_at: key.created_at.clone(),
-                local_id: new.clone(),
-            });
-            p.photo_use_id = new;
+        if let Some(cover) = cover {
+            *cover = use_mapping
+                .get(cover)
+                .ok_or_else(|| bad("封面不属于当前快照"))?
+                .clone();
         }
-        use_mapping.insert(old_id, p.photo_use_id.clone());
-    }
-    if let Some(cover) = &mut snapshot.cover_photo_use_id {
-        *cover = use_mapping
-            .get(cover)
-            .ok_or_else(|| bad("封面不属于当前快照"))?
-            .clone();
-    }
-    Ok(())
+        Ok(())
+    })
 }
 fn conflict(
     s: &mut State,
@@ -477,6 +483,7 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
                 conflict(&mut s, &l, d, "merge-incoming-draft", &mut p)?;
             } else {
                 l.draft = Some(d.clone());
+                l.draft_mode = r.draft_mode;
                 l.base_revision = l.content_revision;
             }
         }

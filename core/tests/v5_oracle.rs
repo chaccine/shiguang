@@ -116,7 +116,11 @@ fn archived_envelopes_decrypt_to_the_exact_plain_package_and_source_files() {
             let path = entry.get("path").unwrap().as_str().unwrap();
             assert_eq!(payload, fs::read(dir.join(path)).unwrap(), "{path}");
         }
-        let state = json::parse(&fs::read_to_string(dir.join("state.json")).unwrap()).unwrap();
+        let bytes = fs::read(dir.join("state.json")).unwrap();
+        assert_eq!(sha256::hex_digest(&bytes), if schema == 5 {
+            "b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb"
+        } else { "2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936" });
+        let state = json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
         assert_eq!(state.get("version"), Some(&Json::Num(1)));
         assert_eq!(state.get("schemaVersion"), Some(&Json::Num(schema)));
     }
@@ -179,8 +183,19 @@ fn exercise_imports(schema: i64) {
     assert_eq!(media_hashes(source.root()), originals);
     if schema == 5 {
         let frozen = fs::read(archive.join("state.json")).unwrap();
-        assert_eq!(fs::read(source.root().join("state.json")).unwrap(), frozen);
-        assert_eq!(expected.pretty().as_bytes(), frozen);
+        let hash = "b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb";
+        let backup = fs::read(source.root().join(format!("backups/state.schema-v5.{hash}.json"))).unwrap();
+        assert_eq!(backup, frozen);
+        assert_eq!(sha256::hex_digest(&backup), hash);
+        let live = json::parse(&fs::read_to_string(source.root().join("state.json")).unwrap()).unwrap();
+        assert_eq!(live.get("version"), Some(&Json::Num(2)));
+        assert_eq!(live.get("schemaVersion"), Some(&Json::Num(6)));
+        for r in array(&live, "records") {
+            for snap in ["formal", "draft"].iter().filter_map(|k| r.get(k)).filter(|v| **v != Json::Null) {
+                shiguang_core::story::Story::from_json(snap.get("story").unwrap()).unwrap();
+                assert!(snap.get("body").is_none() && snap.get("photos").is_none());
+            }
+        }
         assert_v5_content(&source);
     }
     for name in ["plain.sgbak", "encrypted.sgbak"] {
@@ -258,7 +273,7 @@ fn exercise_imports(schema: i64) {
         }
         assert_eq!(backup::is_encrypted(&exported), name == "encrypted.sgbak");
         let info = backup::verify_backup_with_password(&exported, PASSWORD).unwrap();
-        assert_eq!(info.schema_version, 5);
+        assert_eq!(info.schema_version, 6);
         assert!(info.missing_media.is_empty());
         let final_root = temp.0.join("roundtrip");
         Store::open_exclusive(&final_root)

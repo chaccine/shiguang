@@ -1,5 +1,4 @@
-//! State-only migration. The v5 Store only fences writers. The candidate entry
-//! points compile in unit tests until the reader and import gates are complete.
+//! Locked schema upgrade with verified preimage, rollback and commit witness.
 
 use crate::CoreError;
 use std::{fs, io, path::Path};
@@ -34,15 +33,14 @@ pub(crate) fn require_idle(root: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
-#[cfg(test)]
-mod candidate {
+pub(crate) mod candidate {
     use super::*;
     use crate::{
         backup::{self, hash_file, no_link},
         fault::{self, FaultPoint},
         json::Json,
         persist::{self, Durability},
-        schema, sha256, store,
+        schema, sha256,
     };
     use std::{io::Write, path::PathBuf};
 
@@ -50,7 +48,7 @@ mod candidate {
         CoreError::new("MIGRATION_FAILED", message)
     }
 
-    #[cfg(feature = "fault-injection")]
+    #[cfg(all(test, feature = "fault-injection"))]
     std::thread_local! {
         pub(super) static ON_SYNC_FAILURE: std::cell::Cell<Option<Box<dyn FnOnce()>>> =
             const { std::cell::Cell::new(None) };
@@ -60,7 +58,7 @@ mod candidate {
         match result {
             Durability::Durable => Ok(()),
             other => {
-                #[cfg(feature = "fault-injection")]
+                #[cfg(all(test, feature = "fault-injection"))]
                 if let Some(action) = ON_SYNC_FAILURE.take() {
                     action();
                 }
@@ -91,6 +89,15 @@ mod candidate {
         } else {
             Err(invalid("候选状态版本不符"))
         }
+    }
+
+    fn sync_file(path: &Path) -> io::Result<()> {
+        // FlushFileBuffers on Windows requires a handle with write access.
+        fs::OpenOptions::new()
+            .read(true)
+            .write(cfg!(windows))
+            .open(path)?
+            .sync_all()
     }
 
     fn digest(path: &Path) -> Result<String, CoreError> {
@@ -141,8 +148,7 @@ mod candidate {
             if !backup::digest_valid(&record.old)
                 || !backup::digest_valid(&record.new)
                 || record.old == record.new
-                || !(1..=schema::CURRENT_SCHEMA_VERSION)
-                    .any(|v| record.backup == backup_name(v, &record.old))
+                || !(1..=5).any(|v| record.backup == backup_name(v, &record.old))
             {
                 return Err(invalid("迁移日志字段、摘要或备份名称无效"));
             }
@@ -154,7 +160,8 @@ mod candidate {
             no_link(&backups)?;
             let path = backups.join(&self.backup);
             let (value, hash) = read_json(&path)?;
-            if hash != self.old || self.backup != backup_name(schema::version(&value)?, &hash) {
+            let from = schema::version(&value)?;
+            if from > 5 || hash != self.old || self.backup != backup_name(from, &hash) {
                 return Err(invalid("迁移备份摘要或版本不符"));
             }
             crate::State::from_json(&schema::migrate(value)?)?;
@@ -193,7 +200,7 @@ mod candidate {
     }
 
     // Never choose between contradictory intents, or follow a path from one.
-    fn location(root: &Path) -> Result<Option<&'static str>, CoreError> {
+    pub(crate) fn location(root: &Path) -> Result<Option<&'static str>, CoreError> {
         let mut found = None;
         for name in NAMES {
             if present(&root.join(name))? {
@@ -206,11 +213,15 @@ mod candidate {
         Ok(found)
     }
 
-    // Reopen without invoking the v5 Store's eager v3-to-v5 upgrade.
+    #[cfg(test)]
     pub(super) fn recover(root: &Path) -> Result<(), CoreError> {
         no_link(root)?;
-        let _owner = store::instance_lock(root)?;
-        let _writer = store::acquire_write_lock(root)?;
+        let _owner = crate::store::instance_lock(root)?;
+        let _writer = crate::store::acquire_write_lock(root)?;
+        recover_locked(root)
+    }
+
+    pub(crate) fn recover_locked(root: &Path) -> Result<(), CoreError> {
         let Some(location) = location(root)? else {
             return Ok(());
         };
@@ -234,7 +245,7 @@ mod candidate {
             }
             // The witness proves the installer's sync. Flush the observed
             // witness itself before unlink, in case its writer died mid-flush.
-            fs::File::open(&path)?.sync_all()?;
+            sync_file(&path)?;
         } else {
             if current == record.new {
                 durable(persist::write_atomic_restore(&state, &backup)?)?;
@@ -242,7 +253,7 @@ mod candidate {
             if digest(&state)? != record.old {
                 return Err(invalid("迁移回滚校验失败"));
             }
-            fs::File::open(&state)?.sync_all()?;
+            sync_file(&state)?;
         }
         durable(persist::parent_sync(root))?;
         fs::remove_file(path)?;
@@ -251,14 +262,24 @@ mod candidate {
 
     /// Build from the exact locked preimage. The caller validates the decoded
     /// on-disk representation against that source before anything can install it.
+    #[cfg(test)]
     pub(super) fn install(
         root: &Path,
         build: impl FnOnce(&Json) -> Result<Json, CoreError>,
         validate: impl FnOnce(&Json, &Json) -> Result<(), CoreError>,
     ) -> Result<(), CoreError> {
         no_link(root)?;
-        let _owner = store::instance_lock(root)?;
-        let _writer = store::acquire_write_lock(root)?;
+        let _owner = crate::store::instance_lock(root)?;
+        let _writer = crate::store::acquire_write_lock(root)?;
+        install_locked(root, build, validate)
+    }
+
+    pub(crate) fn install_locked(
+        root: &Path,
+        build: impl FnOnce(&Json) -> Result<Json, CoreError>,
+        validate: impl FnOnce(&Json, &Json) -> Result<(), CoreError>,
+    ) -> Result<(), CoreError> {
+        no_link(root)?;
         require_idle(root)?;
         let state = root.join("state.json");
         // Preflight before import recovery, which can itself switch state.
@@ -270,6 +291,12 @@ mod candidate {
             (source, old) = read_json(&state)?;
             from = schema::version(&source)?;
         }
+        if from >= schema::CURRENT_SCHEMA_VERSION {
+            return Err(invalid("迁移源必须是旧版本"));
+        }
+        fault::hit(FaultPoint::MigrationBackup).map_err(|e| {
+            CoreError::with_stage("MIGRATION_BACKUP_FAILED", "migration_backup", e.to_string())
+        })?;
         let name = backup_name(from, &old);
         let backups = root.join("backups");
         no_link(&backups)?;
@@ -283,7 +310,7 @@ mod candidate {
             return Err(invalid("迁移备份摘要不符"));
         }
         // Also sync a verified copy left by an interrupted previous attempt.
-        fs::File::open(&dest)?.sync_all()?;
+        sync_file(&dest)?;
         durable(persist::parent_sync(&backups))?;
         durable(persist::parent_sync(root))?;
 
@@ -308,7 +335,9 @@ mod candidate {
             &root.join(PENDING),
             record.encode(false).as_bytes(),
         )?)?;
-        fault::hit(FaultPoint::MigrationWrite)?;
+        fault::hit(FaultPoint::MigrationWrite).map_err(|e| {
+            CoreError::with_stage("MIGRATION_FAILED", "migration_write", e.to_string())
+        })?;
         durable(persist::write_atomic(&state, bytes.as_bytes())?)?;
         fault::hit(FaultPoint::MigrationAfterInstall)?;
         if digest(&state)? != record.new {

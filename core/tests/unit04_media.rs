@@ -167,6 +167,6 @@ fn editor_unlink_inverse_retains_exact_use_is_scoped_and_never_publishes() {
     store.discard_draft(&id).unwrap();
     store.create_draft(Some(&id), "", "", "", None).unwrap();
     assert!(store.editor_photo_unlink(&id, use_id, "one", true).is_err());
-    assert_eq!(t.json().get("version").unwrap().as_i64(), Some(1));
-    assert_eq!(t.json().get("schemaVersion").unwrap().as_i64(), Some(5));
+    assert_eq!(t.json().get("version").unwrap().as_i64(), Some(2));
+    assert_eq!(t.json().get("schemaVersion").unwrap().as_i64(), Some(6));
 }

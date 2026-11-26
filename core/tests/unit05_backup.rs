@@ -356,6 +356,7 @@ fn legacy_v1_container_restores_and_migrates_to_v2() {
     s.export_backup(&dest, "old").unwrap();
     let (mut m, mut p) = unpack(&fs::read(&dest).unwrap());
     let mut state = shiguang_core::json::parse(std::str::from_utf8(&p[0]).unwrap()).unwrap();
+    legacy_snapshots(&mut state);
     let Json::Obj(fields) = &mut state else {
         panic!()
     };

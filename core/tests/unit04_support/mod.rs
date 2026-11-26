@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+#[path = "../unit05_support/legacy.rs"]
+mod legacy_format;
 use shiguang_core::{
     json::{self, Json},
     Store,
@@ -60,6 +62,7 @@ pub fn legacy(tmp: &TempRoot) -> Vec<u8> {
     let mut s = Store::open(tmp.path()).unwrap();
     formal(&mut s);
     let mut value = s.state_json();
+    legacy_format::legacy_snapshots(&mut value);
     if let Json::Obj(entries) = &mut value {
         entries.retain(|(k, _)| {
             !["schemaVersion", "deletionMarkers", "conflictCopies"].contains(&k.as_str())

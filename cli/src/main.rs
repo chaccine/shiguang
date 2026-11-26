@@ -191,7 +191,7 @@ fn run() -> Result<Json, CoreError> {
                     store
                         .list_trash()?
                         .into_iter()
-                        .map(RecordRow::to_json)
+                        .map(RecordRow::view_json)
                         .collect(),
                 ),
             ),
@@ -223,7 +223,7 @@ fn run() -> Result<Json, CoreError> {
                     store
                         .list_conflict_copies()?
                         .iter()
-                        .map(|c| c.to_json())
+                        .map(|c| c.view_json())
                         .collect(),
                 ),
             ),
@@ -236,29 +236,12 @@ fn run() -> Result<Json, CoreError> {
         "draft-new" => {
             let opts = Options::parse(rest)?;
             let base = opts.get("base");
-            let row = store.create_draft(
-                base,
-                opts.get("title").unwrap_or(""),
-                opts.get("body").unwrap_or(""),
-                opts.get("date").unwrap_or(""),
-                opts.get("time"),
-            )?;
+            let row = store.create_draft_with_fields(base, &draft_fields(&opts)?)?;
             Ok(ok_record(&row, Some(store.last_durability().as_str())))
         }
         "draft-save" => {
             let (id, opts) = first_positional(rest)?;
-            let time_patch = if opts.has("clear-time") {
-                Some(None)
-            } else {
-                opts.get("time").map(Some)
-            };
-            let row = store.save_draft(
-                &id,
-                opts.get("title"),
-                opts.get("body"),
-                opts.get("date"),
-                time_patch,
-            )?;
+            let row = store.save_draft_patch(&id, &draft_fields(&opts)?)?;
             if let Some(ms) = opts.get("hold-ms").and_then(|v| v.parse::<u64>().ok()) {
                 // 已落盘后保持进程存活，供验收脚本做 kill -9 演练。
                 println!(
@@ -430,10 +413,33 @@ fn run() -> Result<Json, CoreError> {
     }
 }
 
+fn draft_fields(opts: &Options) -> Result<shiguang_core::DraftPatch, CoreError> {
+    let story = opts
+        .get("story")
+        .map(|raw| {
+            let value = shiguang_core::json::parse(raw)?;
+            shiguang_core::story::Story::from_json(&value)
+        })
+        .transpose()
+        .map_err(|e| CoreError::new("STORY_INVALID", e))?;
+    Ok(shiguang_core::DraftPatch {
+        title: opts.get("title").map(str::to_owned),
+        body: opts.get("body").map(str::to_owned),
+        event_date: opts.get("date").map(str::to_owned),
+        event_time: if opts.has("clear-time") {
+            Some(None)
+        } else {
+            opts.get("time").map(|v| Some(v.to_owned()))
+        },
+        story,
+        ..Default::default()
+    })
+}
+
 fn ok_record(row: &RecordRow, durability: Option<&str>) -> Json {
     let mut entries = vec![
         ("ok", Json::Bool(true)),
-        ("record", row.to_json()),
+        ("record", row.view_json()),
         (
             "draftContentHash",
             match &row.draft {
@@ -472,6 +478,7 @@ fn formal_view(store: &Store, row: &RecordRow) -> Json {
         ("contentRevision", Json::Num(row.content_revision as i64)),
         ("title", Json::str(formal.title.clone())),
         ("body", Json::str(formal.body.clone())),
+        ("story", formal.story.to_json()),
         ("eventDate", Json::str(formal.event_date.clone())),
         (
             "eventTime",
@@ -584,8 +591,8 @@ fn usage() -> String {
         "  restore-conflict-copy ID",
         "  hold-lock <ms> [--kind instance|write]   持锁测试驱动（stdout ready 后才持锁成功）",
         "  create-draft [--count N] [--start-file FILE]  并发测试驱动",
-        "  draft-new [--title T] [--body B] [--date YYYY-MM-DD] [--time HH:MM] [--base REC]",
-        "  draft-save ID [--title T] [--body B] [--date D] [--time T] [--clear-time]",
+        "  draft-new [--title T] [--body B | --story JSON] [--date YYYY-MM-DD] [--time HH:MM] [--base REC]",
+        "  draft-save ID [--title T] [--body B | --story JSON] [--date D] [--time T] [--clear-time]",
         "  attach ID --asset FILE [--caption C] [--media-type M]",
         "  commit ID [--expect-base N]             存入时光（默认使用草稿基线版本）",
         "  list                                    正式列表（不含草稿）",

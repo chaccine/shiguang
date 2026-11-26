@@ -56,11 +56,14 @@ fn shared_state() -> AppState {
         .clone()
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CreateDraftInput {
     pub title: String,
-    pub body: String,
+    pub body: Option<String>,
+    pub story: Option<serde_json::Value>,
+    pub expected_story: Option<serde_json::Value>,
+    pub editor_mode: Option<String>,
     pub event_date: String,
     pub event_time: Option<String>,
     pub location: String,
@@ -68,48 +71,21 @@ pub struct CreateDraftInput {
     pub base_record_id: Option<String>,
 }
 
-impl Default for CreateDraftInput {
-    fn default() -> Self {
-        Self {
-            title: String::new(),
-            body: String::new(),
-            event_date: String::new(),
-            event_time: None,
-            location: String::new(),
-            mood: None,
-            base_record_id: None,
-        }
-    }
-}
-
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SaveDraftInput {
     pub record_id: String,
     pub title: Option<String>,
     pub body: Option<String>,
+    pub story: Option<serde_json::Value>,
+    pub expected_story: Option<serde_json::Value>,
+    pub editor_mode: Option<String>,
     pub event_date: Option<String>,
     pub event_time: Option<String>,
     pub clear_event_time: bool,
     pub location: Option<String>,
     pub mood: Option<String>,
     pub clear_mood: bool,
-}
-
-impl Default for SaveDraftInput {
-    fn default() -> Self {
-        Self {
-            record_id: String::new(),
-            title: None,
-            body: None,
-            event_date: None,
-            event_time: None,
-            clear_event_time: false,
-            location: None,
-            mood: None,
-            clear_mood: false,
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -141,6 +117,7 @@ pub struct AttachPhotoBytesInput {
     pub caption: String,
     pub media_type: Option<String>,
     pub bytes: Vec<u8>,
+    pub expected_story: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -180,13 +157,26 @@ fn to_value(json: Json) -> Result<serde_json::Value, CommandError> {
     })
 }
 
+fn input_story(
+    value: Option<serde_json::Value>,
+) -> Result<Option<shiguang_core::story::Story>, CommandError> {
+    value
+        .map(|value| {
+            let json = shiguang_core::json::parse(&value.to_string())
+                .map_err(|e| command_error("STORY_INVALID", e))?;
+            shiguang_core::story::Story::from_json(&json)
+                .map_err(|e| command_error("STORY_INVALID", e))
+        })
+        .transpose()
+}
+
 fn record_value(row: &RecordRow) -> Result<serde_json::Value, CommandError> {
-    to_value(row.to_json())
+    to_value(row.view_json())
 }
 
 fn save_value(row: Option<&RecordRow>, store: &Store) -> Result<serde_json::Value, CommandError> {
     to_value(Json::obj(vec![
-        ("row", row.map(RecordRow::to_json).unwrap_or(Json::Null)),
+        ("row", row.map(RecordRow::view_json).unwrap_or(Json::Null)),
         ("durability", Json::str(store.last_durability().as_str())),
     ]))
 }
@@ -219,14 +209,7 @@ fn purge_value(outcome: &PurgeOutcome, store: &Store) -> serde_json::Value {
 }
 
 fn conflict_value(copy: &ConflictCopy) -> Result<serde_json::Value, CommandError> {
-    Ok(serde_json::json!({
-        "conflictId": copy.conflict_id,
-        "recordId": copy.record_id,
-        "baseRevision": copy.base_revision,
-        "snapshot": to_value(copy.snapshot.to_json())?,
-        "createdAt": copy.created_at,
-        "reason": copy.reason,
-    }))
+    to_value(copy.view_json())
 }
 
 fn report_value(report: &MediaReport) -> serde_json::Value {
@@ -415,7 +398,14 @@ fn create_draft(
             input.base_record_id.as_deref(),
             &shiguang_core::DraftPatch {
                 title: Some(input.title),
-                body: Some(input.body),
+                body: input.body,
+                story: input_story(input.story)?,
+                expected_story: input_story(input.expected_story)?,
+                editor_mode: input
+                    .editor_mode
+                    .as_deref()
+                    .map(shiguang_core::model::EditorMode::parse)
+                    .transpose()?,
                 event_date: Some(input.event_date),
                 event_time: Some(input.event_time),
                 location: Some(input.location),
@@ -450,6 +440,13 @@ fn save_draft(
             &shiguang_core::DraftPatch {
                 title: input.title,
                 body: input.body,
+                story: input_story(input.story)?,
+                expected_story: input_story(input.expected_story)?,
+                editor_mode: input
+                    .editor_mode
+                    .as_deref()
+                    .map(shiguang_core::model::EditorMode::parse)
+                    .transpose()?,
                 event_date: input.event_date,
                 event_time: time_patch,
                 location: input.location,
@@ -496,12 +493,13 @@ fn attach_photo_bytes(
     let mut slot = state.store.wait_lock()?;
     let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
     store
-        .attach_photo_bytes(
+        .attach_photo_bytes_checked(
             &input.record_id,
             &input.file_name,
             &input.bytes,
             &input.caption,
             input.media_type.as_deref(),
+            input_story(input.expected_story)?.as_ref(),
         )
         .map_err(CommandError::from)?;
     save_value(
@@ -516,15 +514,23 @@ fn remove_draft_photo(
     photo_use_id: String,
     undo_session: Option<String>,
     undo: Option<bool>,
+    expected_story: Option<serde_json::Value>,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
     let mut slot = state.store.wait_lock()?;
     let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let expected = input_story(expected_story)?;
     let row = match (undo_session, undo.unwrap_or(false)) {
-        (Some(session), restore) if !session.is_empty() => {
-            store.editor_photo_unlink(&record_id, &photo_use_id, &session, restore)
+        (Some(session), restore) if !session.is_empty() => store.editor_photo_unlink_checked(
+            &record_id,
+            &photo_use_id,
+            &session,
+            restore,
+            expected.as_ref(),
+        ),
+        (None, false) => {
+            store.remove_draft_photo_checked(&record_id, &photo_use_id, expected.as_ref())
         }
-        (None, false) => store.remove_draft_photo(&record_id, &photo_use_id),
         _ => Err(CoreError::new("PHOTO_UNDO_EXPIRED", "照片撤销记录已失效")),
     }?;
     save_value(Some(&row), store)

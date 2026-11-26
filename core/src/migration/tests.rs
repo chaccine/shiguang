@@ -1,11 +1,11 @@
-//! Only this harness encodes ordered fixture states. Store still reads/writes v5.
+//! Exercise production migration on disposable copies of frozen libraries.
 use super::{candidate, require_idle, PENDING};
 use crate::{
     backup,
     json::{self, Json},
     schema, sha256,
-    story::{Story, StoryBlock},
-    CoreError, Snapshot, State, Store,
+    story::Story,
+    CoreError, Store,
 };
 use std::{
     collections::BTreeMap,
@@ -14,163 +14,12 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-fn bad(message: impl Into<String>) -> CoreError {
-    CoreError::new("CANDIDATE_INVALID", message)
-}
-
-fn field_mut<'a>(v: &'a mut Json, key: &str) -> Result<&'a mut Json, CoreError> {
-    if let Json::Obj(fields) = v {
-        if let Some((_, child)) = fields.iter_mut().find(|(k, _)| k == key) {
-            return Ok(child);
-        }
-    }
-    Err(bad(format!("missing {key}")))
-}
-
-fn snapshots(
-    state: &mut Json,
-    mut visit: impl FnMut(&mut Json) -> Result<(), CoreError>,
-) -> Result<(), CoreError> {
-    for (array, slots) in [
-        ("records", &["formal", "draft"][..]),
-        ("conflictCopies", &["snapshot"][..]),
-    ] {
-        let Json::Arr(rows) = field_mut(state, array)? else {
-            return Err(bad(array));
-        };
-        for row in rows {
-            for key in slots {
-                let snapshot = field_mut(row, key)?;
-                if *snapshot != Json::Null {
-                    visit(snapshot)?;
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn remove_fields(v: &mut Json, keys: &[&str]) -> Result<(), CoreError> {
-    let Json::Obj(fields) = v else {
-        return Err(bad("expected object"));
-    };
-    fields.retain(|(k, _)| !keys.contains(&k.as_str()));
-    Ok(())
-}
+use schema::{bad, field_mut, snapshots, validate};
+#[cfg(feature = "fault-injection")]
+use schema::remove_fields;
 
 fn build(source: &Json) -> Result<Json, CoreError> {
-    let mut value = schema::migrate(source.clone())?;
-    State::from_json(&value)?;
-    snapshots(&mut value, |v| {
-        let snap = Snapshot::from_json(v).map_err(bad)?;
-        let story = Story::from_legacy(&snap).map_err(bad)?;
-        let mut blocks = Vec::new();
-        for block in story.blocks() {
-            blocks.push(match block {
-                StoryBlock::Paragraph(runs) => Json::obj(vec![
-                    ("kind", Json::str("paragraph")),
-                    (
-                        "runs",
-                        Json::Arr(
-                            runs.iter()
-                                .map(|r| {
-                                    Json::obj(vec![
-                                        ("text", Json::str(&r.text)),
-                                        ("bold", Json::Bool(r.bold)),
-                                        ("italic", Json::Bool(r.italic)),
-                                    ])
-                                })
-                                .collect(),
-                        ),
-                    ),
-                ]),
-                StoryBlock::Photo(p) => Json::obj(vec![
-                    ("kind", Json::str("photo")),
-                    ("photoUse", p.to_json()),
-                ]),
-                _ => return Err(bad("unexpected legacy block")),
-            });
-        }
-        let contents = Json::obj(vec![
-            ("blocks", Json::Arr(blocks)),
-            (
-                "coverPhotoUseId",
-                story
-                    .cover_photo_use_id()
-                    .map(Json::str)
-                    .unwrap_or(Json::Null),
-            ),
-        ]);
-        remove_fields(v, &["body", "photos", "coverPhotoUseId"])?;
-        schema::set(v, "story", contents)
-    })?;
-    *field_mut(&mut value, "version")? = Json::Num(2);
-    *field_mut(&mut value, "schemaVersion")? = Json::Num(6);
-    Ok(value)
-}
-
-// Compare every field at its original row/slot/array index. Object member
-// ordering alone has no meaning in JSON.
-fn sort_keys(v: &mut Json) {
-    match v {
-        Json::Obj(fields) => {
-            fields.sort_by(|a, b| a.0.cmp(&b.0));
-            for (_, item) in fields {
-                sort_keys(item);
-            }
-        }
-        Json::Arr(items) => items.iter_mut().for_each(sort_keys),
-        _ => {}
-    }
-}
-
-fn validate(source: &Json, encoded: &Json) -> Result<(), CoreError> {
-    if encoded.get("version") != Some(&Json::Num(2))
-        || encoded.get("schemaVersion") != Some(&Json::Num(6))
-    {
-        return Err(bad("wrong candidate version pair"));
-    }
-    let mut rebuilt = encoded.clone();
-    snapshots(&mut rebuilt, |v| {
-        if ["body", "photos", "coverPhotoUseId"]
-            .iter()
-            .any(|k| v.get(k).is_some())
-        {
-            return Err(bad("two representations of one snapshot"));
-        }
-        let story =
-            Story::from_json(v.get("story").ok_or_else(|| bad("missing story"))?).map_err(bad)?;
-        remove_fields(v, &["story"])?;
-        schema::set(v, "body", Json::str(story.plain_text()))?;
-        schema::set(
-            v,
-            "photos",
-            Json::Arr(story.photos().map(|p| p.to_json()).collect()),
-        )?;
-        schema::set(
-            v,
-            "coverPhotoUseId",
-            story
-                .cover_photo_use_id()
-                .map(Json::str)
-                .unwrap_or(Json::Null),
-        )?;
-        let snapshot = Snapshot::from_json(v).map_err(bad)?;
-        if Story::from_legacy(&snapshot).map_err(bad)? != story {
-            return Err(bad("changed blocks or marks"));
-        }
-        Ok(())
-    })?;
-    *field_mut(&mut rebuilt, "version")? = Json::Num(1);
-    *field_mut(&mut rebuilt, "schemaVersion")? = Json::Num(5);
-    State::from_json(&rebuilt)?;
-    let mut expected = schema::migrate(source.clone())?;
-    sort_keys(&mut expected);
-    sort_keys(&mut rebuilt);
-    if rebuilt != expected {
-        return Err(bad("legacy state differs after story round trip"));
-    }
-    Ok(())
+    schema::migrate(source.clone())
 }
 
 // Use the archived scalar fields directly as the content oracle. In v3 the
@@ -334,9 +183,9 @@ fn frozen_stories_install_and_remain_committed_after_reopen() {
         require_idle(&f.root).unwrap();
         candidate::recover(&f.root).unwrap();
         f.assert_candidate();
-        assert!(
-            matches!(Store::open_exclusive(&f.root), Err(e) if e.code == "STATE_VERSION_UNSUPPORTED")
-        );
+        let store = Store::open_exclusive(&f.root).unwrap();
+        assert_frozen_snapshots(&f.source(), &store.state_json());
+        drop(store);
         f.assert_candidate();
         eprintln!(
             "v{schema} durable candidate {} preimage {} originals {}",
@@ -427,6 +276,30 @@ fn ownership_and_source_version_refusal_precede_candidate_writes() {
         f.assert_media();
         fs::write(f.state(), &f.old).unwrap();
         f.reopen_old();
+    }
+}
+
+#[test]
+fn production_open_rejects_unknown_pairs_before_receipts_cleanup_or_writes() {
+    for (outer, schema) in [(3, Some(6)), (2, Some(7)), (2, Some(5)), (2, None), (1, Some(6))] {
+        let f = Fixture::new(5);
+        let mut raw = f.source();
+        *field_mut(&mut raw, "version").unwrap() = Json::Num(outer);
+        crate::schema::remove_fields(&mut raw, &["schemaVersion"]).unwrap();
+        if let Some(n) = schema { schema::set(&mut raw, "schemaVersion", Json::Num(n)).unwrap(); }
+        let bytes = raw.pretty();
+        fs::write(f.state(), &bytes).unwrap();
+        for name in [PENDING, ".tmp-preserve"] { fs::write(f.root.join(name), b"sentinel").unwrap(); }
+        fs::create_dir(f.root.join(".restore-staging-preserve")).unwrap();
+        for result in [Store::open(&f.root), Store::open_exclusive(&f.root)] {
+            assert!(matches!(result, Err(e) if matches!(e.code, "SCHEMA_TOO_NEW" | "STATE_VERSION_UNSUPPORTED")));
+        }
+        assert_eq!(fs::read(f.state()).unwrap(), bytes.as_bytes());
+        for name in [PENDING, ".tmp-preserve"] { assert_eq!(fs::read(f.root.join(name)).unwrap(), b"sentinel"); }
+        assert!(f.root.join(".restore-staging-preserve").is_dir());
+        assert!(!f.root.join("backups").exists());
+        assert!(!f.root.join(".write.lock").exists());
+        f.assert_media();
     }
 }
 

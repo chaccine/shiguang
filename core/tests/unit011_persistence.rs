@@ -8,27 +8,28 @@ const DAY:&str="2026-11-12";
 fn remove(v:&mut Json,key:&str){let Json::Obj(f)=v else{panic!()};f.retain(|(k,_)|k!=key);}
 fn canonical(v:Json)->Json{match v{Json::Obj(f)=>{let mut f:Vec<_>=f.into_iter().map(|(k,v)|(k,canonical(v))).collect();f.sort_by(|a,b|a.0.cmp(&b.0));Json::Obj(f)},Json::Arr(a)=>Json::Arr(a.into_iter().map(canonical).collect()),v=>v}}
 fn as_v4(mut v:Json)->Json{
+    legacy_snapshots(&mut v);
     let mut r=rows(&v).to_vec();for r in &mut r{remove(r,"museumHidden");}
     set(&mut v,"records",Json::Arr(r));set(&mut v,"schemaVersion",Json::Num(4));v
 }
 fn rec(s:&mut Store)->String{s.create_draft(None,"","合成正式文字","2024-11-12",None).map(|r|{let id=r.record_id;s.commit(&id,0).unwrap();id}).unwrap()}
 
 #[test]
-fn v4_to_v5_is_lossless_once_with_exact_backup_and_v3_chain_defaults() {
+fn v4_to_current_is_lossless_once_with_exact_backup_and_v3_chain_defaults() {
     let t=Temp::new("u011-migration");let mut s=Store::open(&t.0).unwrap();let id=rec(&mut s);
     photo(&mut s,&id,"synthetic-original");s.commit(&id,1).unwrap();
     s.set_draft_photo_caption(&id,&s.formal(&id).unwrap().photos[0].photo_use_id.clone(),"未发布说明").unwrap();
     s.set_favorite(&id,true,None).unwrap();let tag=s.create_tag("合成标签").unwrap();s.set_record_tags(&id,&[tag.tag_id],None).unwrap();
     let old=as_v4(s.state_json());drop(s);let bytes=old.pretty().into_bytes();fs::write(t.0.join("state.json"),&bytes).unwrap();
     let s=Store::open(&t.0).unwrap();assert!(!s.row(&id).unwrap().museum_hidden);
-    assert_eq!(s.state_json().get("schemaVersion"),Some(&Json::Num(5)));
+    assert_eq!(s.state_json().get("schemaVersion"),Some(&Json::Num(6)));
     assert_eq!(canonical(as_v4(s.state_json())),canonical(old));
     let backups:Vec<_>=fs::read_dir(t.0.join("backups")).unwrap().map(|e|e.unwrap().path()).filter(|p|p.file_name().unwrap().to_string_lossy().starts_with("state.schema-v4.")).collect();
     assert_eq!(backups.len(),1);assert_eq!(fs::read(&backups[0]).unwrap(),bytes);
     drop(s);Store::open(&t.0).unwrap();assert_eq!(fs::read_dir(t.0.join("backups")).unwrap().count(),1);
     let v3=fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v3/state.json")).unwrap();
     let t=Temp::new("u011-v3-chain");fs::write(t.0.join("state.json"),v3).unwrap();let s=Store::open(&t.0).unwrap();
-    assert_eq!(s.state_json().get("schemaVersion"),Some(&Json::Num(5)));
+    assert_eq!(s.state_json().get("schemaVersion"),Some(&Json::Num(6)));
     assert!(rows(&s.state_json()).iter().all(|r|r.get("museumHidden")==Some(&Json::Bool(false))));
     assert_eq!((s.list_formal().len(),s.list_drafts().len(),s.list_trash().unwrap().len()),(2,2,1));
 }
@@ -41,7 +42,7 @@ fn v5_flag_is_strictly_boolean_and_future_schema_does_not_write() {
         fs::write(t.0.join("state.json"),v.pretty()).unwrap();let disk=tree(&t.0);
         assert_eq!(Store::open(&t.0).err().unwrap().code,"STATE_CORRUPT");assert_eq!(tree(&t.0),disk);
     }
-    let mut v=base;set(&mut v,"schemaVersion",Json::Num(6));fs::write(t.0.join("state.json"),v.pretty()).unwrap();let disk=tree(&t.0);
+    let mut v=base;set(&mut v,"schemaVersion",Json::Num(7));fs::write(t.0.join("state.json"),v.pretty()).unwrap();let disk=tree(&t.0);
     assert_eq!(Store::open(&t.0).err().unwrap().code,"SCHEMA_TOO_NEW");assert_eq!(tree(&t.0),disk);
 }
 
@@ -81,14 +82,14 @@ fn reset_clears_only_preferences_including_trash_and_never_restores_deleted_cont
 }
 
 #[test]
-fn plain_and_encrypted_v5_backups_restore_hidden_flags_and_independent_drafts_losslessly() {
+fn plain_and_encrypted_current_backups_restore_hidden_flags_and_independent_drafts_losslessly() {
     let t=Temp::new("u011-backups");let mut src=Store::open_exclusive(t.0.join("src")).unwrap();let id=rec(&mut src);
     photo(&mut src,&id,"synthetic-backup");src.commit(&id,1).unwrap();src.set_museum_hidden(&id,true).unwrap();
     src.save_draft(&id,None,Some("合成未提交"),Some("2030-01-01"),None).unwrap();
     for encrypted in [false,true] {
         let file=t.0.join(if encrypted{"encrypted.sgbak"}else{"plain.sgbak"});
         let report=if encrypted{src.export_backup_encrypted(&file,"0.1.11","synthetic-pass",KdfParams::fast()).unwrap()}else{src.export_backup(&file,"0.1.11").unwrap()};
-        assert_eq!(report.manifest.schema_version,5);
+        assert_eq!(report.manifest.schema_version,6);
         let target=t.0.join(if encrypted{"target-encrypted"}else{"target-plain"});let mut dst=Store::open_exclusive(&target).unwrap();rec(&mut dst);
         if encrypted{dst.restore_backup_overwrite_with_password(&file,"synthetic-pass").unwrap();}else{dst.restore_backup_overwrite(&file).unwrap();}
         assert_eq!(dst.state_json(),src.state_json());assert_eq!(dst.museum_reunion_preview(DAY).unwrap().total,0);

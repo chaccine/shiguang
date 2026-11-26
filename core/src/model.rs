@@ -2,6 +2,7 @@
 
 use crate::json::Json;
 use crate::sha256;
+use crate::story::{LegacyContent, Story, StoryComplexity};
 use crate::time;
 use std::fmt;
 
@@ -147,11 +148,15 @@ impl Mood {
     }
 }
 
-/// Scalar content changes. None = unchanged; Some(None) clears an optional field.
+/// Draft edits. None leaves a field untouched, and Some(None) clears an optional field.
 #[derive(Clone, Debug, Default)]
 pub struct DraftPatch {
     pub title: Option<String>,
     pub body: Option<String>,
+    pub story: Option<Story>,
+    /// Compare under the write lock before replacing an edited document.
+    pub expected_story: Option<Story>,
+    pub editor_mode: Option<EditorMode>,
     pub event_date: Option<String>,
     pub event_time: Option<Option<String>>,
     pub location: Option<String>,
@@ -169,21 +174,24 @@ pub fn validate_location(value: &str) -> Result<(), CoreError> {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
     pub title: String,
-    pub body: String,
+    pub story: Story,
     pub event_date: String,
     pub event_time: Option<String>,
     pub location: String,
     pub mood: Option<Mood>,
-    pub cover_photo_use_id: Option<String>,
-    /// The array is the sole authoritative photo order; no second ordering list.
-    pub photos: Vec<PhotoUse>,
+}
+
+impl std::ops::Deref for Snapshot {
+    type Target = LegacyContent;
+    fn deref(&self) -> &LegacyContent {
+        &self.story
+    }
 }
 
 impl Snapshot {
     pub fn to_json(&self) -> Json {
         Json::obj(vec![
-            ("title", Json::str(self.title.clone())),
-            ("body", Json::str(self.body.clone())),
+            ("title", Json::str(&self.title)),
             ("location", Json::str(&self.location)),
             (
                 "mood",
@@ -191,51 +199,108 @@ impl Snapshot {
                     .map(|m| Json::str(m.as_str()))
                     .unwrap_or(Json::Null),
             ),
+            ("eventDate", Json::str(&self.event_date)),
             (
-                "coverPhotoUseId",
+                "eventTime",
+                self.event_time
+                    .as_ref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+            ("story", self.story.to_json()),
+        ])
+    }
+    pub fn view_json(&self) -> Json {
+        let Json::Obj(mut fields) = self.to_json() else {
+            unreachable!()
+        };
+        fields.extend([
+            ("body".into(), Json::str(&self.body)),
+            (
+                "photos".into(),
+                Json::Arr(self.photos.iter().map(PhotoUse::to_json).collect()),
+            ),
+            (
+                "coverPhotoUseId".into(),
                 self.cover_photo_use_id
                     .as_ref()
                     .map(Json::str)
                     .unwrap_or(Json::Null),
             ),
-            ("eventDate", Json::str(self.event_date.clone())),
-            (
-                "eventTime",
-                match &self.event_time {
-                    Some(t) => Json::str(t.clone()),
-                    None => Json::Null,
-                },
-            ),
-            (
-                "photos",
-                Json::Arr(self.photos.iter().map(PhotoUse::to_json).collect()),
-            ),
-        ])
+        ]);
+        Json::Obj(fields)
     }
-
     pub fn from_json(value: &Json) -> Result<Self, String> {
-        let photos = match value.get("photos") {
-            Some(Json::Arr(items)) => items
-                .iter()
-                .map(PhotoUse::from_json)
-                .collect::<Result<Vec<_>, _>>()?,
-            Some(_) => return Err("字段 photos 必须是数组".to_string()),
-            None => return Err("字段 photos 缺失".to_string()),
-        };
-        let snapshot = Snapshot {
+        if ["body", "photos", "coverPhotoUseId"]
+            .iter()
+            .any(|k| value.get(k).is_some())
+        {
+            return Err("故事快照含有重复的内容字段".into());
+        }
+        let snapshot = Self {
             title: req_str(value, "title")?,
-            body: req_str(value, "body")?,
+            story: Story::from_json(value.get("story").ok_or("快照缺少 story")?)?,
             event_date: req_str(value, "eventDate")?,
             event_time: req_opt_str(value, "eventTime")?.filter(|s| !s.is_empty()),
             location: req_str(value, "location")?,
             mood: req_opt_str(value, "mood")?
                 .map(|s| Mood::parse(&s).map_err(|e| e.message))
                 .transpose()?,
-            cover_photo_use_id: req_opt_str(value, "coverPhotoUseId")?,
-            photos,
         };
         snapshot.validate_details().map_err(|e| e.message)?;
         Ok(snapshot)
+    }
+
+    pub(crate) fn check_expected_story(&self, expected: Option<&Story>) -> Result<(), CoreError> {
+        if expected.is_some_and(|old| old != &self.story) {
+            return Err(CoreError::new(
+                "STORY_CHANGED",
+                "草稿内容已更改，请打开最新草稿核对",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn patch_story(&mut self, fields: &DraftPatch) -> Result<(), CoreError> {
+        self.check_expected_story(fields.expected_story.as_ref())?;
+        if let Some(story) = &fields.story {
+            if fields.body.is_some() {
+                return Err(CoreError::new(
+                    "STORY_INVALID",
+                    "不能同时设置 story 和 body",
+                ));
+            }
+            // Only attach/unlink may introduce or retire an occurrence. The layout
+            // can move an existing use and edit its caption, never switch its original.
+            let originals: std::collections::BTreeMap<_, _> =
+                self.photos.iter().map(|p| (&p.photo_use_id, p)).collect();
+            if story.photos.len() != originals.len()
+                || story.photos().any(|p| {
+                    originals.get(&p.photo_use_id).is_none_or(|q| {
+                        (p.asset_id.as_str(), &p.sha256, p.bytes, &p.media_type)
+                            != (q.asset_id.as_str(), &q.sha256, q.bytes, &q.media_type)
+                    })
+                })
+            {
+                return Err(CoreError::new(
+                    "PHOTO_ORDER_INVALID",
+                    "故事照片必须对应当前草稿中的原图和使用位",
+                ));
+            }
+            self.story = story.clone();
+        } else if let Some(body) = &fields.body {
+            if self.story.complexity() != StoryComplexity::Simple {
+                return Err(CoreError::new("STORY_COMPLEX", "请在故事编辑中修改正文"));
+            }
+            if body != &self.body {
+                self.story = Story::from_legacy(&LegacyContent {
+                    body: body.clone(),
+                    ..(**self).clone()
+                })
+                .map_err(|e| CoreError::new("STORY_INVALID", e))?;
+            }
+        }
+        Ok(())
     }
 
     pub fn cover(&self) -> Option<&PhotoUse> {
@@ -292,7 +357,7 @@ impl Snapshot {
                 ));
             }
         }
-        if self.body.trim().is_empty() && self.photos.is_empty() {
+        if !self.story.has_content() {
             return Err(CoreError::new(
                 "EMPTY_CONTENT",
                 "缺少正文或照片，无法存入时光（仅标题不能提交）",
@@ -341,9 +406,31 @@ pub(crate) fn req_opt_str(value: &Json, key: &str) -> Result<Option<String>, Str
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorMode {
+    Quick,
+    Story,
+}
+impl EditorMode {
+    pub fn parse(raw: &str) -> Result<Self, CoreError> {
+        match raw {
+            "quick" => Ok(Self::Quick),
+            "story" => Ok(Self::Story),
+            _ => Err(CoreError::new("STORY_INVALID", "编辑模式无效")),
+        }
+    }
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Quick => "quick",
+            Self::Story => "story",
+        }
+    }
+}
+
 /// 记录的持久化形态：正式快照与草稿分字段保存。
 #[derive(Clone, Debug, Default)]
 pub struct RecordRow {
+    pub draft_mode: Option<EditorMode>,
     /// Recommendation preference only; independent of content and draft revisions.
     pub museum_hidden: bool,
     pub favorite: bool,
@@ -369,7 +456,13 @@ impl RecordRow {
     }
 
     pub fn to_json(&self) -> Json {
-        Json::obj(vec![
+        self.encode(Snapshot::to_json)
+    }
+    pub fn view_json(&self) -> Json {
+        self.encode(Snapshot::view_json)
+    }
+    fn encode(&self, snapshot: fn(&Snapshot) -> Json) -> Json {
+        let mut fields = vec![
             ("museumHidden", Json::Bool(self.museum_hidden)),
             ("favorite", Json::Bool(self.favorite)),
             ("favoriteRevision", Json::Num(self.favorite_revision as i64)),
@@ -401,18 +494,22 @@ impl RecordRow {
             (
                 "formal",
                 match &self.formal {
-                    Some(s) => s.to_json(),
+                    Some(s) => snapshot(s),
                     None => Json::Null,
                 },
             ),
             (
                 "draft",
                 match &self.draft {
-                    Some(s) => s.to_json(),
+                    Some(s) => snapshot(s),
                     None => Json::Null,
                 },
             ),
-        ])
+        ];
+        if let (Some(_), Some(mode)) = (&self.draft, self.draft_mode) {
+            fields.push(("draftMode", Json::str(mode.as_str())));
+        }
+        Json::obj(fields)
     }
 
     pub fn from_json(value: &Json) -> Result<Self, String> {
@@ -428,7 +525,15 @@ impl RecordRow {
             Some(v @ Json::Obj(_)) => Some(Snapshot::from_json(v)?),
             Some(_) => return Err("字段 draft 必须是对象或 null".to_string()),
         };
+        let draft_mode = match value.get("draftMode") {
+            None => None,
+            Some(Json::Str(s)) if draft.is_some() => {
+                Some(EditorMode::parse(s).map_err(|e| e.message)?)
+            }
+            _ => return Err("draftMode 需要有效的草稿".into()),
+        };
         Ok(RecordRow {
+            draft_mode,
             museum_hidden: match value.get("museumHidden") {
                 Some(Json::Bool(v)) => *v,
                 _ => return Err("字段 museumHidden 必须是布尔值".into()),
@@ -574,11 +679,17 @@ impl DeletionMarker {
 }
 impl ConflictCopy {
     pub fn to_json(&self) -> Json {
+        self.encode(self.snapshot.to_json())
+    }
+    pub fn view_json(&self) -> Json {
+        self.encode(self.snapshot.view_json())
+    }
+    fn encode(&self, snapshot: Json) -> Json {
         Json::obj(vec![
             ("conflictId", Json::str(&self.conflict_id)),
             ("recordId", Json::str(&self.record_id)),
             ("baseRevision", Json::Num(self.base_revision as i64)),
-            ("snapshot", self.snapshot.to_json()),
+            ("snapshot", snapshot),
             ("createdAt", Json::str(&self.created_at)),
             ("reason", Json::str(&self.reason)),
         ])

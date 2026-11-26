@@ -21,9 +21,12 @@ fn interrupt(f: &Fixture, installed: bool) {
 
 fn fenced(f: &Fixture) {
     assert_eq!(require_idle(&f.root).unwrap_err().code, "MIGRATION_PENDING");
+    assert_eq!(crate::store::write_lock(&f.root).err().unwrap().code, "MIGRATION_PENDING");
+    assert_eq!(f.install().unwrap_err().code, "MIGRATION_PENDING");
+    // Only a fresh owner may resolve a recoverable receipt.
+    let _owner = crate::store::instance_lock(&f.root).unwrap();
     assert!(Store::open(&f.root).is_err());
     assert!(Store::open_exclusive(&f.root).is_err());
-    assert_eq!(f.install().unwrap_err().code, "MIGRATION_PENDING");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -258,9 +261,10 @@ fn symlinked_state_backup_pending_or_directory_never_reaches_its_target() {
 }
 
 #[test]
-fn already_open_v5_writer_cannot_save_through_pending_even_when_old_bytes_are_visible() {
+fn already_open_writer_cannot_save_through_pending_even_when_old_bytes_are_visible() {
     let f = Fixture::new(5);
     let mut writer = Store::open(&f.root).unwrap();
+    fs::write(f.state(), &f.old).unwrap();
     interrupt(&f, false);
     assert_eq!(writer.persist().unwrap_err().code, "MIGRATION_PENDING");
     f.assert_old();
@@ -269,7 +273,7 @@ fn already_open_v5_writer_cannot_save_through_pending_even_when_old_bytes_are_vi
         Store::open(&f.root).unwrap().state_json(),
         writer.state_json()
     );
-    f.assert_old();
+    f.assert_candidate();
 }
 
 fn recover_after_failed_confirmation(f: &Fixture) {
@@ -529,5 +533,30 @@ fn conflicting_intents_and_wrong_version_pairs_stay_fenced() {
             f.reopen_old();
             eprintln!("v{schema} {damage} rejected_without_mutation repaired_reopen=exact_old originals={}", f.media.len());
         }
+    }
+}
+
+#[test]
+fn ordinary_open_recovers_before_a_fresh_upgrade_can_begin() {
+    for schema in [3, 5] {
+        let f = Fixture::new(schema);
+        interrupt(&f, true);
+        fault::set(MigrationBackup);
+        assert!(Store::open_exclusive(&f.root).is_err());
+        fault::clear();
+        f.assert_old();
+        f.assert_backup();
+        require_idle(&f.root).unwrap();
+        Store::open_exclusive(&f.root).unwrap();
+        f.assert_candidate();
+
+        fs::write(f.state(), &f.old).unwrap();
+        fault::set(MigrationAfterCommit);
+        assert!(Store::open(&f.root).is_err());
+        fault::clear();
+        assert!(f.root.join(SYNCED).is_file());
+        Store::open(&f.root).unwrap();
+        require_idle(&f.root).unwrap();
+        f.assert_candidate();
     }
 }

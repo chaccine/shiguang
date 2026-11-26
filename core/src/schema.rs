@@ -1,12 +1,13 @@
 //! 有序迁移链；容器 version 与数据结构 schemaVersion 分开演进。
 use crate::{json::Json, CoreError};
-pub const CURRENT_SCHEMA_VERSION: i64 = 5;
+pub const CURRENT_SCHEMA_VERSION: i64 = 6;
 pub type Migration = fn(Json) -> Result<Json, CoreError>;
 pub const MIGRATIONS: &[(i64, Migration)] = &[
     (1, migrate_v1_to_v2),
     (2, migrate_v2_to_v3),
     (3, migrate_v3_to_v4),
     (4, migrate_v4_to_v5),
+    (5, migrate_v5_to_v6),
 ];
 
 pub(crate) fn set(value: &mut Json, key: &str, item: Json) -> Result<(), CoreError> {
@@ -39,8 +40,8 @@ pub fn migrate_v1_to_v2(mut value: Json) -> Result<Json, CoreError> {
 
 pub(crate) fn version(value: &Json) -> Result<i64, CoreError> {
     // 保留容器格式错误的既有错误码和优先级。
-    match value.get("version").and_then(Json::as_i64) {
-        Some(1) => {}
+    let outer = match value.get("version").and_then(Json::as_i64) {
+        Some(n @ (1 | 2)) => n,
         Some(n) => {
             return Err(CoreError::new(
                 "STATE_VERSION_UNSUPPORTED",
@@ -53,7 +54,7 @@ pub(crate) fn version(value: &Json) -> Result<i64, CoreError> {
                 "状态文件缺少 version 或不是整数",
             ))
         }
-    }
+    };
     let n = match value.get("schemaVersion") {
         None => 1,
         Some(Json::Num(n)) if *n >= 1 => *n,
@@ -64,18 +65,24 @@ pub(crate) fn version(value: &Json) -> Result<i64, CoreError> {
             ))
         }
     };
-    if n > CURRENT_SCHEMA_VERSION {
+    if n > CURRENT_SCHEMA_VERSION || (outer == 1 && n > 5) {
         return Err(CoreError::new(
             "SCHEMA_TOO_NEW",
             "这份数据由更新版本的拾光写入，当前版本无法安全读取。请升级拾光；原数据未改动。",
         ));
     }
+    if outer == 2 && n != CURRENT_SCHEMA_VERSION {
+        return Err(CoreError::new("STATE_VERSION_UNSUPPORTED", "状态容器与数据结构版本不匹配"));
+    }
     Ok(n)
 }
 
-pub(crate) fn migrate(mut value: Json) -> Result<Json, CoreError> {
+pub(crate) fn migrate(value: Json) -> Result<Json, CoreError> {
+    migrate_to(value, CURRENT_SCHEMA_VERSION)
+}
+pub(crate) fn migrate_to(mut value: Json, target: i64) -> Result<Json, CoreError> {
     let mut current = version(&value)?;
-    while current < CURRENT_SCHEMA_VERSION {
+    while current < target {
         let (_, migration) = MIGRATIONS
             .iter()
             .find(|(from, _)| *from == current)
@@ -180,4 +187,131 @@ pub fn migrate_v4_to_v5(mut value: Json) -> Result<Json, CoreError> {
     set(&mut value, "records", Json::Arr(rows))?;
     set(&mut value, "schemaVersion", Json::Num(5))?;
     Ok(value)
+}
+
+use crate::{story::{Story, LegacyContent}, State};
+pub(super) fn bad(message: impl Into<String>) -> CoreError {
+    CoreError::new("CANDIDATE_INVALID", message)
+}
+
+pub(super) fn field_mut<'a>(v: &'a mut Json, key: &str) -> Result<&'a mut Json, CoreError> {
+    if let Json::Obj(fields) = v {
+        if let Some((_, child)) = fields.iter_mut().find(|(k, _)| k == key) {
+            return Ok(child);
+        }
+    }
+    Err(bad(format!("missing {key}")))
+}
+
+pub(super) fn snapshots(
+    state: &mut Json,
+    mut visit: impl FnMut(&mut Json) -> Result<(), CoreError>,
+) -> Result<(), CoreError> {
+    for (array, slots) in [
+        ("records", &["formal", "draft"][..]),
+        ("conflictCopies", &["snapshot"][..]),
+    ] {
+        let Json::Arr(rows) = field_mut(state, array)? else {
+            return Err(bad(array));
+        };
+        for row in rows {
+            for key in slots {
+                let snapshot = field_mut(row, key)?;
+                if *snapshot != Json::Null {
+                    visit(snapshot)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn remove_fields(v: &mut Json, keys: &[&str]) -> Result<(), CoreError> {
+    let Json::Obj(fields) = v else {
+        return Err(bad("expected object"));
+    };
+    fields.retain(|(k, _)| !keys.contains(&k.as_str()));
+    Ok(())
+}
+
+fn legacy_story(v: &Json) -> Result<Story, CoreError> {
+    if v.get("story").is_some() {
+        return Err(bad("legacy snapshot has a story"));
+    }
+    let content = LegacyContent::from_json(v).map_err(bad)?;
+    Story::from_legacy(&content).map_err(bad)
+}
+
+pub fn migrate_v5_to_v6(mut value: Json) -> Result<Json, CoreError> {
+    snapshots(&mut value, |v| {
+        let story = legacy_story(v)?;
+        remove_fields(v, &["body", "photos", "coverPhotoUseId"])?;
+        set(v, "story", story.to_json())
+    })?;
+    *field_mut(&mut value, "version")? = Json::Num(2);
+    *field_mut(&mut value, "schemaVersion")? = Json::Num(6);
+    Ok(value)
+}
+
+// Compare every field at its original row/slot/array index. Object member
+// ordering alone has no meaning in JSON.
+fn sort_keys(v: &mut Json) {
+    match v {
+        Json::Obj(fields) => {
+            fields.sort_by(|a, b| a.0.cmp(&b.0));
+            for (_, item) in fields {
+                sort_keys(item);
+            }
+        }
+        Json::Arr(items) => items.iter_mut().for_each(sort_keys),
+        _ => {}
+    }
+}
+
+pub(super) fn validate(source: &Json, encoded: &Json) -> Result<(), CoreError> {
+    if encoded.get("version") != Some(&Json::Num(2))
+        || encoded.get("schemaVersion") != Some(&Json::Num(6))
+    {
+        return Err(bad("wrong candidate version pair"));
+    }
+    let mut rebuilt = encoded.clone();
+    snapshots(&mut rebuilt, |v| {
+        if ["body", "photos", "coverPhotoUseId"]
+            .iter()
+            .any(|k| v.get(k).is_some())
+        {
+            return Err(bad("two representations of one snapshot"));
+        }
+        let story =
+            Story::from_json(v.get("story").ok_or_else(|| bad("missing story"))?).map_err(bad)?;
+        remove_fields(v, &["story"])?;
+        set(v, "body", Json::str(story.plain_text()))?;
+        set(
+            v,
+            "photos",
+            Json::Arr(story.photos().map(|p| p.to_json()).collect()),
+        )?;
+        set(
+            v,
+            "coverPhotoUseId",
+            story
+                .cover_photo_use_id()
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        )?;
+        if legacy_story(v)? != story {
+            return Err(bad("changed blocks or marks"));
+        }
+        Ok(())
+    })?;
+    *field_mut(&mut rebuilt, "version")? = Json::Num(1);
+    *field_mut(&mut rebuilt, "schemaVersion")? = Json::Num(5);
+    State::from_json(encoded)?;
+    let mut expected = migrate_to(source.clone(), 5)?;
+    sort_keys(&mut expected);
+    sort_keys(&mut rebuilt);
+    if rebuilt != expected {
+        return Err(bad("legacy state differs after story round trip"));
+    }
+    Ok(())
 }

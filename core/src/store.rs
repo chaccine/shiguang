@@ -1,12 +1,14 @@
 //! 本地持久化：状态文件原子写入 + media 原图目录 + 派生预览缓存。
 
 use crate::json::{self, Json};
+use crate::migration::candidate;
 use crate::model::{
     ConflictChoice, ConflictCopy, CoreError, DeletionMarker, MediaIssue, MediaReport, PhotoStatus,
     PhotoUse, PurgeOutcome, QuarantinedMedia, RecordRow, RecordStatus, Snapshot,
 };
 use crate::persist::{self, Durability};
 use crate::sha256;
+use crate::story::{Story, StoryBlock};
 use crate::time;
 use crate::{
     fault::{self, FaultPoint},
@@ -19,7 +21,7 @@ use std::time::{Duration, Instant};
 const STATE_FILE: &str = "state.json";
 const MEDIA_DIR: &str = "media";
 const PREVIEW_DIR: &str = "previews";
-const STATE_VERSION: i64 = 1;
+const STATE_VERSION: i64 = 2;
 
 pub struct StoreConfig {
     pub root: PathBuf,
@@ -78,13 +80,7 @@ pub struct CommitOutcome {
 
 impl Store {
     pub fn open_exclusive(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
-        let root = root.into();
-        preflight(&root)?;
-        fs::create_dir_all(&root)?;
-        let lock = instance_lock(&root)?;
-        let mut store = Self::open(root)?;
-        store.instance_lock = Some(lock);
-        Ok(store)
+        Self::open_inner(root.into(), true)
     }
     pub fn trash_record(&mut self, record_id: &str) -> Result<RecordRow, CoreError> {
         self.transact(|state| {
@@ -368,6 +364,7 @@ impl Store {
                         }
                         let row = state.row_mut(record_id)?;
                         row.draft = None;
+                        row.draft_mode = None;
                         row.base_revision = row.content_revision;
                     }
                 }
@@ -438,10 +435,34 @@ impl Store {
     }
 
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, CoreError> {
-        let root = root.into();
-        preflight(&root)?;
+        Self::open_inner(root.into(), false)
+    }
+
+    fn open_inner(root: PathBuf, exclusive: bool) -> Result<Self, CoreError> {
+        crate::backup::no_link(&root)?;
+        let needs_owner = |from: Option<i64>| -> Result<bool, CoreError> {
+            Ok(from.is_some_and(|v| v < schema::CURRENT_SCHEMA_VERSION)
+                || candidate::location(&root)?.is_some()
+                || crate::backup::import_pending(&root)?)
+        };
+        let from = preflight(&root)?;
         fs::create_dir_all(&root)?;
-        let _write_lock = write_lock(&root)?;
+        let mut owner = if exclusive || needs_owner(from)? {
+            Some(instance_lock(&root)?)
+        } else {
+            None
+        };
+        let mut writer = acquire_write_lock(&root)?;
+        // A different owner could have published an intent between preflight and lock.
+        let from = preflight(&root)?;
+        if owner.is_none() && needs_owner(from)? {
+            drop(writer);
+            owner = Some(instance_lock(&root)?);
+            writer = acquire_write_lock(&root)?;
+            preflight(&root)?;
+        }
+        let _writer = writer;
+        candidate::recover_locked(&root)?;
         crate::backup::recover(&root)?;
         crate::backup::recover_merge(&root)?;
         let mut seed = std::env::var("SHIGUANG_SEED").unwrap_or_else(|_| "20261109".to_string());
@@ -456,48 +477,12 @@ impl Store {
                 .to_string();
             let from = schema::version(&value)?;
             if from < schema::CURRENT_SCHEMA_VERSION {
-                let backup_error = |e| {
-                    CoreError::with_stage(
-                        "MIGRATION_BACKUP_FAILED",
-                        "migration_backup",
-                        format!("迁移备份失败：{e}"),
-                    )
-                };
-                fault::hit(FaultPoint::MigrationBackup).map_err(|e| backup_error(e.to_string()))?;
-                let backup_dir = root.join("backups");
-                fs::create_dir_all(&backup_dir).map_err(|e| backup_error(e.to_string()))?;
-                let backup = unique_path(
-                    &backup_dir,
-                    &format!("state.schema-v{from}.{}", timestamp()),
-                    ".json",
-                );
-                let durability = persist::write_atomic(&backup, text.as_bytes())
-                    .map_err(|e| backup_error(e.to_string()))?;
-                if let Durability::Uncertain { error } = durability {
-                    return Err(backup_error(error));
-                }
-                // backups/ 可能刚创建；同步根目录后才允许替换原状态。
-                if let Durability::Uncertain { error } = persist::parent_sync(&root) {
-                    return Err(backup_error(error));
-                }
-                let migration_error = |e| {
-                    CoreError::with_stage(
-                        "MIGRATION_FAILED",
-                        "migration_write",
-                        format!("迁移失败：{e}"),
-                    )
-                };
-                let value = schema::migrate(value).map_err(|e| migration_error(e.to_string()))?;
-                let state = State::from_json(&value).map_err(|e| migration_error(e.to_string()))?;
-                // 使用迁移后的原 JSON 保留 seed 及所有旧字段，严格校验后替换。
-                let encoded = value.pretty();
-                State::from_json(&parse_state(&encoded)?)
-                    .map_err(|e| migration_error(e.to_string()))?;
-                fault::hit(FaultPoint::MigrationWrite)
-                    .map_err(|e| migration_error(e.to_string()))?;
-                persist::write_atomic(&state_path, encoded.as_bytes())
-                    .map_err(|e| migration_error(e.to_string()))?;
-                state
+                candidate::install_locked(
+                    &root,
+                    |source| schema::migrate(source.clone()),
+                    schema::validate,
+                )?;
+                State::from_json(&parse_state(&fs::read_to_string(&state_path)?)?)?
             } else {
                 State::from_json(&value)?
             }
@@ -530,7 +515,7 @@ impl Store {
             root,
             seed,
             state,
-            instance_lock: None,
+            instance_lock: if exclusive { owner } else { None },
             pending_conflicts: std::collections::BTreeMap::new(),
             photo_undo: Default::default(),
             last_durability: Durability::Uncertain {
@@ -669,6 +654,12 @@ impl Store {
                         row.draft = Some(formal);
                         row.base_revision = row.content_revision;
                     }
+                    if fields.story.is_some() || fields.expected_story.is_some() {
+                        row.draft.as_mut().unwrap().patch_story(fields)?;
+                    }
+                    if let Some(mode) = fields.editor_mode {
+                        row.draft_mode = Some(mode);
+                    }
                     row.updated_at = now.clone();
                     Ok(row.clone())
                 })
@@ -677,17 +668,17 @@ impl Store {
         crate::model::validate_location(fields.location.as_deref().unwrap_or(""))?;
         self.transact(|state| {
             let record_id = state.allocate_id("rec");
-            let snapshot = Snapshot {
+            let mut snapshot = Snapshot {
                 title: fields.title.clone().unwrap_or_default(),
-                body: fields.body.clone().unwrap_or_default(),
+                story: Default::default(),
                 event_date: fields.event_date.clone().unwrap_or_default(),
                 event_time: normalize_time(fields.event_time.as_ref().and_then(|v| v.as_deref())),
                 location: fields.location.clone().unwrap_or_default(),
                 mood: fields.mood.flatten(),
-                cover_photo_use_id: None,
-                photos: Vec::new(),
             };
+            snapshot.patch_story(fields)?;
             let row = RecordRow {
+                draft_mode: fields.editor_mode,
                 museum_hidden: false,
                 favorite: false,
                 favorite_revision: 0,
@@ -737,7 +728,6 @@ impl Store {
         fields: &crate::DraftPatch,
     ) -> Result<RecordRow, CoreError> {
         let title = fields.title.as_deref();
-        let body = fields.body.as_deref();
         let event_date = fields.event_date.as_deref();
         let event_time = fields.event_time.as_ref().map(|v| v.as_deref());
         if let Some(location) = &fields.location {
@@ -780,8 +770,9 @@ impl Store {
             if let Some(v) = title {
                 draft.title = v.to_string();
             }
-            if let Some(v) = body {
-                draft.body = v.to_string();
+            draft.patch_story(fields)?;
+            if let Some(mode) = fields.editor_mode {
+                row.draft_mode = Some(mode);
             }
             if let Some(v) = event_date {
                 draft.event_date = v.to_string();
@@ -819,7 +810,7 @@ impl Store {
             .file_name()
             .and_then(|s| s.to_str())
             .ok_or_else(|| CoreError::new("INVALID_ASSET_NAME", "图片文件名无效"))?;
-        self.attach_photo_data(record_id, file_name, &bytes, caption, media_type)
+        self.attach_photo_bytes(record_id, file_name, &bytes, caption, media_type)
     }
 
     /// 字节通道与路径通道共享校验、asset / photoUse 分配及原子状态写入。
@@ -832,16 +823,17 @@ impl Store {
         caption: &str,
         media_type: Option<&str>,
     ) -> Result<PhotoUse, CoreError> {
-        self.attach_photo_data(record_id, file_name, bytes, caption, media_type)
+        self.attach_photo_bytes_checked(record_id, file_name, bytes, caption, media_type, None)
     }
 
-    fn attach_photo_data(
+    pub fn attach_photo_bytes_checked(
         &mut self,
         record_id: &str,
         file_name: &str,
         bytes: &[u8],
         caption: &str,
         media_type: Option<&str>,
+        expected_story: Option<&Story>,
     ) -> Result<PhotoUse, CoreError> {
         if file_name.is_empty()
             || file_name == "."
@@ -879,6 +871,10 @@ impl Store {
             })?);
             row.base_revision = row.content_revision;
         }
+        row.draft
+            .as_ref()
+            .unwrap()
+            .check_expected_story(expected_story)?;
         let use_ref = PhotoUse {
             photo_use_id: candidate.allocate_id("pu"),
             asset_id,
@@ -889,10 +885,7 @@ impl Store {
         };
         let row = candidate.row_mut(record_id)?;
         let draft = row.draft.as_mut().expect("draft just ensured");
-        draft.photos.push(use_ref.clone());
-        if draft.cover_photo_use_id.is_none() {
-            draft.cover_photo_use_id = Some(use_ref.photo_use_id.clone());
-        }
+        draft.story.append_photo(use_ref.clone())?;
         row.updated_at = time::now_rfc3339();
 
         let asset_durability = if dest.exists() {
@@ -925,7 +918,16 @@ impl Store {
         record_id: &str,
         photo_use_id: &str,
     ) -> Result<RecordRow, CoreError> {
-        self.unlink_draft_photo(record_id, photo_use_id)
+        self.remove_draft_photo_checked(record_id, photo_use_id, None)
+    }
+
+    pub fn remove_draft_photo_checked(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+        expected_story: Option<&Story>,
+    ) -> Result<RecordRow, CoreError> {
+        self.unlink_draft_photo(record_id, photo_use_id, expected_story)
             .map(|(row, _)| row)
     }
 
@@ -933,6 +935,7 @@ impl Store {
         &mut self,
         record_id: &str,
         photo_use_id: &str,
+        expected_story: Option<&Story>,
     ) -> Result<(RecordRow, PhotoUse), CoreError> {
         self.transact(|state| {
             let row = state.row_mut(record_id)?;
@@ -940,15 +943,25 @@ impl Store {
                 .draft
                 .as_mut()
                 .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
-            let index = draft
+            draft.check_expected_story(expected_story)?;
+            let photo = draft
                 .photos
                 .iter()
-                .position(|p| p.photo_use_id == photo_use_id)
-                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
-            let photo = draft.photos.remove(index);
-            if draft.cover_photo_use_id.as_deref() == Some(photo_use_id) {
-                draft.cover_photo_use_id = draft.photos.first().map(|p| p.photo_use_id.clone());
-            }
+                .find(|p| p.photo_use_id == photo_use_id)
+                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?
+                .clone();
+            draft.story.edit(|blocks, cover| {
+                blocks.retain(
+                    |b| !matches!(b, StoryBlock::Photo(p) if p.photo_use_id == photo_use_id),
+                );
+                if cover.as_deref() == Some(photo_use_id) {
+                    *cover = blocks.iter().find_map(|b| match b {
+                        StoryBlock::Photo(p) => Some(p.photo_use_id.clone()),
+                        _ => None,
+                    });
+                }
+                Ok(())
+            })?;
             row.updated_at = time::now_rfc3339();
             Ok((row.clone(), photo))
         })
@@ -964,9 +977,20 @@ impl Store {
         session: &str,
         undo: bool,
     ) -> Result<RecordRow, CoreError> {
+        self.editor_photo_unlink_checked(record_id, photo_use_id, session, undo, None)
+    }
+
+    pub fn editor_photo_unlink_checked(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+        session: &str,
+        undo: bool,
+        expected_story: Option<&Story>,
+    ) -> Result<RecordRow, CoreError> {
         let expired = || CoreError::new("PHOTO_UNDO_EXPIRED", "照片撤销记录已失效");
         if !undo {
-            let (row, photo) = self.unlink_draft_photo(record_id, photo_use_id)?;
+            let (row, photo) = self.unlink_draft_photo(record_id, photo_use_id, expected_story)?;
             let entry = self.photo_undo.entry(record_id.into()).or_default();
             if entry.session != session {
                 entry.session = session.into();
@@ -999,14 +1023,11 @@ impl Store {
                 return Err(expired());
             }
             let draft = row.draft.as_mut().ok_or_else(expired)?;
+            draft.check_expected_story(expected_story)?;
             if draft.photos.iter().any(|p| p.photo_use_id == photo_use_id) {
                 return Err(expired());
             }
-            draft
-                .cover_photo_use_id
-                .get_or_insert(photo.photo_use_id.clone());
-            draft.photos.push(photo);
-            draft.validate_details()?;
+            draft.story.append_photo(photo)?;
             row.updated_at = time::now_rfc3339();
             Ok(row.clone())
         })?;
@@ -1047,13 +1068,17 @@ impl Store {
         caption: &str,
     ) -> Result<RecordRow, CoreError> {
         self.edit_draft_photos(record_id, |draft| {
-            let photo = draft
-                .photos
-                .iter_mut()
-                .find(|p| p.photo_use_id == photo_use_id)
-                .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "记录中没有这张照片"))?;
-            photo.caption = caption.to_owned();
-            Ok(())
+            draft.story.edit(|blocks, _| {
+                let photo = blocks
+                    .iter_mut()
+                    .find_map(|b| match b {
+                        StoryBlock::Photo(p) if p.photo_use_id == photo_use_id => Some(p),
+                        _ => None,
+                    })
+                    .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "记录中没有这张照片"))?;
+                photo.caption = caption.to_owned();
+                Ok(())
+            })
         })
     }
     pub fn set_draft_cover(
@@ -1068,8 +1093,10 @@ impl Store {
                     "封面必须是当前记录中的照片",
                 ));
             }
-            draft.cover_photo_use_id = Some(photo_use_id.to_owned());
-            Ok(())
+            draft.story.edit(|_, cover| {
+                *cover = Some(photo_use_id.to_owned());
+                Ok(())
+            })
         })
     }
     pub fn reorder_draft_photos(
@@ -1094,11 +1121,19 @@ impl Store {
                     "请提供所有照片的顺序，不能重复或遗漏",
                 ));
             }
-            draft.photos = photo_use_ids
+            let ordered: Vec<_> = photo_use_ids
                 .iter()
                 .map(|id| by_id[id.as_str()].clone())
                 .collect();
-            Ok(())
+            draft.story.edit(|blocks, _| {
+                let slots = blocks
+                    .iter_mut()
+                    .filter(|b| matches!(b, StoryBlock::Photo(_)));
+                for (slot, photo) in slots.zip(ordered) {
+                    *slot = StoryBlock::Photo(photo);
+                }
+                Ok(())
+            })
         })
     }
 
@@ -1111,6 +1146,7 @@ impl Store {
                 Ok(None)
             } else {
                 row.draft = None;
+                row.draft_mode = None;
                 row.base_revision = row.content_revision;
                 row.updated_at = time::now_rfc3339();
                 Ok(Some(row.clone()))
@@ -1236,6 +1272,7 @@ impl Store {
         row.committed_at = Some(now.clone());
         row.updated_at = now.clone();
         row.draft = None;
+        row.draft_mode = None;
         row.base_revision = row.content_revision;
         let record_id = row.record_id.clone();
         let content_revision = row.content_revision;
@@ -1641,16 +1678,13 @@ impl State {
     }
 
     pub fn from_json(value: &Json) -> Result<Self, CoreError> {
-        let version = value
-            .get("version")
-            .and_then(Json::as_i64)
-            .ok_or_else(|| CoreError::new("STATE_CORRUPT", "状态文件缺少 version 或不是整数"))?;
-        if version != STATE_VERSION {
+        if schema::version(value)? != schema::CURRENT_SCHEMA_VERSION {
             return Err(CoreError::new(
                 "STATE_VERSION_UNSUPPORTED",
-                format!("不支持的状态版本：{version}"),
+                "需要先迁移旧状态",
             ));
         }
+        let version = STATE_VERSION;
         let seq = match value.get("seq").and_then(Json::as_i64) {
             Some(n) if n >= 0 => n as u64,
             Some(n) => {
@@ -1782,13 +1816,10 @@ fn parse_state(text: &str) -> Result<Json, CoreError> {
     json::parse(text).map_err(|e| CoreError::new("STATE_CORRUPT", format!("状态文件无法解析：{e}")))
 }
 
-fn preflight(root: &Path) -> Result<(), CoreError> {
+fn preflight(root: &Path) -> Result<Option<i64>, CoreError> {
     match fs::read_to_string(root.join(STATE_FILE)) {
-        Ok(text) => {
-            schema::version(&parse_state(&text)?)?;
-            Ok(())
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(text) => schema::version(&parse_state(&text)?).map(Some),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     }
 }
