@@ -1,0 +1,5 @@
+2026-11-26T21:36:54+00:00 | cargo +1.90.0 test --locked --workspace | exit=0 | 41.51s
+2026-11-26T21:37:36+00:00 | cargo +1.90.0 test --locked -p shiguang_core --features fault-injection | exit=0 | 46.03s
+2026-11-26T21:38:22+00:00 | npm test | exit=0 | 2.36s
+2026-11-26T21:38:24+00:00 | npm run typecheck | exit=0 | 2.34s
+2026-11-26T21:38:26+00:00 | npm run build | exit=0 | 1.79s

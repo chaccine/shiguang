@@ -1,0 +1,29 @@
+HEAD 0338ae98d20a4cd19a2bf68e20e3a6e4234cf753 feat/mobile-stage23
+rustc +1.90.0 --version rustc 1.90.0 (1159e78c4 2025-09-14)
+cargo +1.90.0 --version cargo 1.90.0 (840b83a10 2025-07-30)
+node --version v24.22.1
+npm --version 11.21.1
+CARGO_NET_OFFLINE=true
+MATCH HEAD 2e4c7626d5899675541d139a02d01d7bfbc0b1821d897efee66791d36a34099c core/tests/fixtures/v3/README.md
+MATCH HEAD 3a9faaaaae7508c93ce919c3e563276b5b1b5d455e4299237b68e41be80d40d4 core/tests/fixtures/v3/encrypted.sgbak
+MATCH HEAD 00c2072079ed2cd020b5fe3eb687feb0c556c8aee947e8a3d2836971e30be115 core/tests/fixtures/v3/media/ast-00c2072079ed2cd0.png
+MATCH HEAD 22bc14a2983efb7a47d62f8c5d61675fe3faf6412ec566a15d9a9da08cf981bc core/tests/fixtures/v3/media/ast-22bc14a2983efb7a.png
+MATCH HEAD 712228abd53de6ebd84c5dd22779591f0cc0e04646c48e9c0b9678254ed1f238 core/tests/fixtures/v3/media/ast-712228abd53de6eb.png
+MATCH HEAD 7855dea458cee20f92c4fc65fde447bab8688497f29e7741e7abda188c6b08a1 core/tests/fixtures/v3/media/ast-7855dea458cee20f.png
+MATCH HEAD 800b8c3f88a08913eaf158c0ffb52a2058be6c27276e3b5741a4568dd01c7b2a core/tests/fixtures/v3/media/ast-800b8c3f88a08913.png
+MATCH HEAD 86ca1edaf7944720c73edb33b0f1d3320324c55afdda49cce1e2308123b1eb2a core/tests/fixtures/v3/media/ast-86ca1edaf7944720.png
+MATCH HEAD bae4c974bce18ec7fa4dd98989cba28c8f0acfa61d8e60f21a6d15923adb222b core/tests/fixtures/v3/media/ast-bae4c974bce18ec7.png
+MATCH HEAD a36c6395d12f14029bc445dd25572327c5a99f4311a77d5c01710e8cb32b89b9 core/tests/fixtures/v3/plain.sgbak
+MATCH HEAD 2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 core/tests/fixtures/v3/state.json
+MATCH HEAD ee63e120c01ab959e8990d7f2cd11aab2e5f27bc191f20c39a95f04063e4976f core/tests/fixtures/v5/encrypted.sgbak
+MATCH HEAD 336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8 core/tests/fixtures/v5/media/ast-336cf1dd4efe5ef1.png
+MATCH HEAD 5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076 core/tests/fixtures/v5/media/ast-5be0e93dd09a92cb.png
+MATCH HEAD 1e6219684710aa3ed5676fb4950713def97f106e9dee161f2ae677a905a2384b core/tests/fixtures/v5/plain.sgbak
+MATCH HEAD b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb core/tests/fixtures/v5/state.json
+MATCH HEAD b8a3bd1405b8f8621199ce84454e0b0d97c44285daf5c51ef447b0a89ffe6240 tests/unit011-museum.test.ts
+MATCH HEAD 14de2a54a94c2f825038649abe265ffb8b6820cda5b692aa9894646bec7e6480 package.json
+MATCH HEAD 3057b45535369aeaa4c14ec94f558766093f41ba1c35bbc243997064059cf023 Cargo.lock
+MATCH HEAD fcb0eb750b475b8a05b70df2a16ae1d7cd66e6bfd7cb748ec204e3993edcab38 evidence/mobile-stage23/t4-editor-ui/worker-output.txt
+npm test worker-output preload matches archived transport byte-for-byte. No scheduling flags.
+UNTRACKED src-tauri/gen/
+UNTRACKED evidence/mobile-stage23/migration-safety/

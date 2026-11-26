@@ -1,0 +1,5 @@
+PASS | independent CLI processes: draft-new, attach twice, commit, get, replace-photo (reused original), reorder-photos, commit, get
+Durability: durable | published revision: 2 | cover: pu-000002
+Order and original digests: [('pu-000003', '5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076'), ('pu-000002', '5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076')]
+Both archived synthetic original hashes match disk: {'ast-336cf1dd4efe5ef1': '336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8', 'ast-5be0e93dd09a92cb': '5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076'}
+Writer: 2 6

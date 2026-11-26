@@ -1,0 +1,46 @@
+git diff --check: exit 0
+New T-5 text files: no trailing whitespace
+Report and checklist local links resolve
+
+Modified tracked files
+cli/src/main.rs
+core/src/merge.rs
+core/src/schema.rs
+core/src/store.rs
+src-tauri/src/lib.rs
+src/domain/draft-session.ts
+src/domain/story-editor.ts
+src/platform/api.ts
+src/platform/memory-adapter.ts
+src/platform/tauri-adapter.ts
+src/ui/main.ts
+src/ui/mobile-preview.ts
+src/ui/story-controls.ts
+src/ui/styles.css
+
+New T-5 files
+core/tests/t5_photos.rs
+evidence/mobile-stage23/T5_PHOTOS.md
+evidence/mobile-stage23/t5-photos/BROWSER_CHECKLIST.md
+evidence/mobile-stage23/t5-photos/build.txt
+evidence/mobile-stage23/t5-photos/cli.txt
+evidence/mobile-stage23/t5-photos/core-check.txt
+evidence/mobile-stage23/t5-photos/fault.txt
+evidence/mobile-stage23/t5-photos/files.txt
+evidence/mobile-stage23/t5-photos/focused-controls.txt
+evidence/mobile-stage23/t5-photos/focused-core.txt
+evidence/mobile-stage23/t5-photos/focused-editor.txt
+evidence/mobile-stage23/t5-photos/focused-ts.txt
+evidence/mobile-stage23/t5-photos/integrity.txt
+evidence/mobile-stage23/t5-photos/npm-test.txt
+evidence/mobile-stage23/t5-photos/tauri-check.txt
+evidence/mobile-stage23/t5-photos/typecheck.txt
+evidence/mobile-stage23/t5-photos/verification.txt
+evidence/mobile-stage23/t5-photos/workspace.txt
+src/ui/photo-drag.ts
+tests/t5-photo-controls.test.ts
+tests/t5-photos.test.ts
+
+Pre-existing untracked directories
+evidence/mobile-stage23/migration-safety/
+src-tauri/gen/

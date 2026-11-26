@@ -1,0 +1,12 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.56s
+     Running tests/t5_photos.rs (target/debug/deps/t5_photos-4a4ec580bcf4edbc)
+
+running 4 tests
+test rejected_replacement_and_reorder_leave_exact_state_and_media ... ok
+test history_pins_original_until_release_and_last_unlink_preserves_shared_media ... ok
+test interrupted_or_uncertain_original_never_switches_or_overwrites_media ... ok
+test replacement_order_and_both_snapshots_round_trip_in_backups ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

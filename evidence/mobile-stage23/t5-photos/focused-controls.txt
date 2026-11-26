@@ -1,0 +1,12 @@
+✔ labelled movement and touch hold/drop share a persisted move; early lift and pointer cancellation preserve order and scroll (839.518704ms)
+✔ quick replacement picker cancel, retry, caption review, new thumbnail, undo and cover fallback (129.112362ms)
+✔ story replacement picker cancel, retry, caption review, new thumbnail, undo and cover fallback (128.230492ms)
+✔ T-5 opt-in fixtures are RAM-only and the shared fault is consumed exactly once (10.288188ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1284.777642
