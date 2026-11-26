@@ -1,0 +1,28 @@
+{
+  "at": "2026-11-26T11:44:05+08:00",
+  "officialCatalog": "codex debug models, live",
+  "modelId": "gpt-6.2-astra",
+  "displayName": "GPT-6.2-Astra",
+  "reasoningEffortRequested": "ultra",
+  "reasoningEffortOfficial": true,
+  "fastOfficialServiceTierId": "priority",
+  "fastOfficialName": "Fast",
+  "probeBanner": {
+    "model": "gpt-6.2-astra",
+    "reasoning_effort": "ultra"
+  },
+  "probeThreadSettings": {
+    "model": "gpt-6.2-astra",
+    "reasoning_effort": "ultra",
+    "service_tier": "priority"
+  },
+  "session": "01a215f3-fa1a-7141-99a4-75040ea0b467",
+  "quotaAfterProbe": {
+    "usedPercent": 29,
+    "planType": "prolite",
+    "ordinaryUsageAllowed": true,
+    "windowDurationMins": 10080
+  },
+  "configTomlHasInheritedModelOrTier": false,
+  "noAccountOrAuthChange": true
+}
