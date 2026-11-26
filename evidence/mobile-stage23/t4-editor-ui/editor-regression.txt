@@ -1,0 +1,12 @@
+✔ tests/mobile-visual.test.ts (1563.352774ms)
+✔ tests/unit010-accessibility.test.ts (210.679003ms)
+✔ tests/unit010-boot.test.ts (408.701675ms)
+✔ tests/unit010-ui.test.ts (206.804795ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1574.933489

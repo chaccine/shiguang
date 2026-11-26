@@ -1,0 +1,32 @@
+✔ new record, calendar default, empty preview and opening the tag dialog create no draft (259.818434ms)
+✔ real controls group Chinese composition into one undo, survive autosave, and restore selection and scroll after preview (105.468628ms)
+✔ complex formal edit protects tags, fields, photo actions and publish in quick; preview, parking and simplification preserve the separate saved draft (158.042635ms)
+✔ formal Edit offers continue, restart with confirmation, or cancel; untouched restart creates no draft (109.136082ms)
+✔ new interleaved photo stays in the session draft box; simplification binds the actual original without interrupting caption composition (124.286744ms)
+✔ new opens quick; mode, preview and accepting the prefilled date create no record (26.194704ms)
+✔ autosave retains undo/redo and exact v5 bytes after typed, formatted and ordered edits (11.899506ms)
+✔ complex quick protects the whole document and publish, including after navigation or preview (2.238643ms)
+✔ complex changes, including metadata and a contextual new photo, stay in RAM until simplified (4.128987ms)
+✔ undo/redo persisted insertion and deletion restore the same occurrence, caption, order and cover (6.877282ms)
+✔ complex transition during an in-flight simple save cannot send a scalar projection or lose newer input (2.931937ms)
+✔ failed durable photo operation retains the working story and a retry is idempotent (3.372712ms)
+✔ late formal publication still uses the revision observed when Edit opened (1.935267ms)
+✔ native undo sends only an editor token and the occurrence ID over the existing unlink command (0.938643ms)
+✔ later scalar acknowledgements keep uncertain durability from the same photo save visible (1.70036ms)
+✔ simplifying a parked story preserves a newer saved draft's photo, caption and cover (1.460336ms)
+✔ shared Rust v5 fixture preserves exact bytes, occurrence order, captions, integrity and non-first cover (8.650488ms)
+✔ shared Rust empty/whitespace/CRLF and photo-only boundaries (0.747435ms)
+✔ shared Rust interleaved marked story projects literal text and independent captions in occurrence order (4.566643ms)
+✔ R02 depends on current order and both marks even when text projections match (0.375096ms)
+✔ empty textual blocks still separate lines and dividers alone do not meet the content minimum (0.519049ms)
+✔ Rust malformed block, run, occurrence, cover and metadata cases are rejected (6.126391ms)
+✔ separate stories can describe independent snapshots of the same occurrence (0.290182ms)
+✔ textarea and UTF-16 selection edits keep untouched CRLF, combining text and independent emphasis (0.585019ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1142.897858
