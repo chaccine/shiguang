@@ -142,7 +142,7 @@
           </section>
           <section id="view-reading" class="view" data-testid="reading-view" hidden>
             <button class="button ghost" data-testid="reading-back">返回</button>
-            <button class="button" data-testid="reading-edit">编辑</button><article data-testid="reading-content"></article>
+            <button class="button" data-testid="reading-edit">编辑</button><article data-testid="reading-content" class="story-reading"></article>
           </section>
           <section id="view-drafts" class="view" hidden>
             <header class="view-head">
@@ -156,46 +156,68 @@
           </section>
 
           <section id="view-editor" class="view" hidden>
-            <div class="editor-head">
-              <div>
-                <button type="button" class="back-button" id="back-to-drafts" data-testid="back-to-drafts">← 全部草稿</button>
-                <span id="editor-badge" class="pill is-modifying editor-badge" hidden>修改中</span>
-              </div>
-              <div data-testid="save-status" id="save-status" class="save-status" aria-live="polite"></div>
-            </div>
-            <div id="conflict-actions" data-testid="conflict-actions" class="conflict-panel" hidden>
-              <p class="conflict-text">先核对两个版本，再选择如何处理：</p>
-              <div class="conflict-buttons">
-                <button type="button" class="button" data-testid="keep-mine" id="keep-mine">以我的草稿为准</button>
-                <button type="button" class="button ghost" data-testid="keep-formal" id="keep-formal">保留现在的正式版</button>
-              </div>
-            </div>
-            <div class="editor-card">
-              <input id="editor-title" data-testid="editor-title" class="editor-title" type="text" maxlength="120" placeholder="给这段时光起个名字（可留空）" aria-label="标题（可留空）" autocomplete="off" />
-              <div class="when-row">
-                <label class="field">事件日期
-                  <input id="editor-date" data-testid="editor-date" type="date" />
-                </label>
-                <label class="field">事件时刻（可留空）
-                  <input id="editor-time" data-testid="editor-time" type="time" />
-                </label>
-              </div>
-              <div class="when-row"><label>地点（手写）<input data-testid="editor-location" type="text" /></label>
-              <label>心情<select data-testid="editor-mood"><option value="">未选择</option><option>开心</option><option>平静</option><option>感动</option><option>想念</option><option>疲惫</option><option>难过</option></select></label></div>
-              <div data-testid="editor-tag-row" class="editor-tag-row"><span>标签</span><div data-testid="editor-tag-chips" class="editor-tag-chips"></div><button type="button" class="button ghost" data-testid="editor-tag-add">＋ 添加 / 新建标签</button></div>
-              <textarea id="editor-body" data-testid="editor-body" class="editor-body" placeholder="写下此刻的小事……" aria-label="时光正文"></textarea>
-              <div class="photo-section">
-                <div class="photo-head">
-                  <span class="photo-label">照片</span>
-                  <button type="button" class="photo-pick" data-testid="add-photos">＋ 添加照片</button>
-                  <input id="photo-input" data-testid="photo-input" type="file" accept="image/*" aria-label="选择照片文件" multiple hidden />
+            <div id="editor-work">
+              <div class="editor-head">
+                <div>
+                  <button type="button" class="back-button" id="back-to-drafts" data-testid="back-to-drafts">← 全部草稿</button>
+                  <span id="editor-badge" class="pill is-modifying editor-badge" hidden>修改中</span>
                 </div>
-                <div id="photo-grid" class="photo-grid"></div>
+                <div data-testid="save-status" id="save-status" class="save-status" aria-live="polite"></div>
               </div>
-              <div class="editor-foot">
-                <span class="editor-hint">日期必填，时刻可以留空；正文或至少一张照片，就能存入时光。</span>
-                <button type="button" class="button commit-button" data-testid="commit-button" id="commit-button">存入时光</button>
+              <div id="conflict-actions" data-testid="conflict-actions" class="conflict-panel" hidden>
+                <p class="conflict-text">先核对两个版本，再选择如何处理：</p>
+                <div class="conflict-buttons">
+                  <button type="button" class="button" data-testid="keep-mine" id="keep-mine">以我的草稿为准</button>
+                  <button type="button" class="button ghost" data-testid="keep-formal" id="keep-formal">保留现在的正式版</button>
+                </div>
               </div>
+              <div class="story-bar" role="group" aria-label="编辑模式">
+                <button type="button" class="button ghost" data-testid="mode-quick" aria-pressed="true">速记</button>
+                <button type="button" class="button ghost" data-testid="mode-story" aria-pressed="false">故事编辑</button>
+                <button type="button" class="button ghost" data-testid="draft-preview-open">预览草稿</button>
+              </div>
+              <p id="story-limit" role="status" class="story-limit" hidden></p>
+              <button type="button" class="button" data-testid="enter-story" hidden>进入故事编辑</button>
+              <button type="button" class="button" data-testid="reload-editor" hidden>打开最新草稿</button>
+              <fieldset id="editor-fields" class="editor-card" aria-label="编辑时光">
+                <input id="editor-title" data-testid="editor-title" class="editor-title" type="text" maxlength="120" placeholder="给这段时光起个名字（可留空）" aria-label="标题（可留空）" autocomplete="off" />
+                <div class="when-row">
+                  <label class="field">事件日期
+                    <input id="editor-date" data-testid="editor-date" type="date" />
+                  </label>
+                  <label class="field">事件时刻（可留空）
+                    <input id="editor-time" data-testid="editor-time" type="time" />
+                  </label>
+                </div>
+                <div class="when-row"><label>地点（手写）<input data-testid="editor-location" type="text" /></label>
+                <label>心情<select data-testid="editor-mood"><option value="">未选择</option><option>开心</option><option>平静</option><option>感动</option><option>想念</option><option>疲惫</option><option>难过</option></select></label></div>
+                <div data-testid="editor-tag-row" class="editor-tag-row"><span>标签</span><div data-testid="editor-tag-chips" class="editor-tag-chips"></div><button type="button" class="button ghost" data-testid="editor-tag-add">＋ 添加 / 新建标签</button></div>
+                <div class="story-history" role="group" aria-label="本次编辑历史">
+                  <button type="button" class="button ghost" data-testid="story-undo">撤销</button>
+                  <button type="button" class="button ghost" data-testid="story-redo">重做</button>
+                </div>
+                <div id="story-blocks" aria-label="故事顺序" hidden></div>
+                <input id="photo-input" data-testid="photo-input" type="file" accept="image/*" aria-label="选择照片文件" multiple hidden />
+                <div id="quick-content">
+                  <textarea id="editor-body" data-testid="editor-body" class="editor-body" placeholder="写下此刻的小事……" aria-label="时光正文"></textarea>
+                  <div class="photo-section">
+                    <div class="photo-head">
+                      <span class="photo-label">照片</span>
+                      <button type="button" class="photo-pick" data-testid="add-photos">＋ 添加照片</button>
+                    </div>
+                    <div id="photo-grid" class="photo-grid"></div>
+                  </div>
+                </div>
+                <div class="editor-foot">
+                  <span class="editor-hint">日期必填，时刻可以留空；正文或至少一张照片，就能存入时光。</span>
+                  <button type="button" class="button commit-button" data-testid="commit-button" id="commit-button">存入时光</button>
+                </div>
+              </fieldset>
+            </div>
+            <div id="draft-preview" hidden>
+              <button type="button" class="back-button" data-testid="draft-preview-back">← 返回编辑</button>
+              <span class="editor-hint">草稿预览</span>
+              <article data-testid="draft-preview-content" class="story-reading"></article>
             </div>
           </section>
 
@@ -402,6 +424,15 @@
         </div>
       </main>
     </div>
+
+    <dialog id="choose-draft" class="confirm-dialog" aria-modal="true" aria-labelledby="choose-draft-title">
+      <h2 id="choose-draft-title">这段时光已有修改草稿</h2>
+      <div class="confirm-actions">
+        <button type="button" class="button" data-testid="choose-continue">继续草稿</button>
+        <button type="button" class="button ghost" data-testid="choose-restart">从正式版重编</button>
+        <button type="button" class="button ghost" data-testid="choose-cancel">取消</button>
+      </div>
+    </dialog>
 
     <dialog id="confirm-dialog" data-testid="confirm-dialog" class="confirm-dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
       <h2 id="confirm-title">确认操作</h2>

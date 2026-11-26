@@ -3,14 +3,17 @@ import type { UiPreferences } from "./appearance.ts";
 import { mobilePreview } from "./mobile-preview.ts";
 import { bindLocalBack, type BackLayer } from "./local-back.ts";
 import { bindTimelineSheet } from "./timeline-sheet.ts";
-import { renderReading } from "./reading.ts";
+import { renderReading, renderStoryReading } from "./reading.ts";
 import { PersonalUi } from "./personal.ts";
 import { MuseumUi } from "./museum.ts";
 import { SearchUi } from "./search.ts";
 import { searchAwareApi } from "./search-source.ts";
 import { SEARCH_DEMO_STORAGE_KEY, searchDemoClock, searchDemoMode, seedSearchDemo } from "./search-demo.ts";
 import type { Mood } from "../domain/types.ts";
-import { DraftSession, recoverLastDraft } from "../domain/draft-session.ts";
+import { recoverLastDraft } from "../domain/draft-session.ts";
+import { StoryEditor, type Mode } from "../domain/story-editor.ts";
+import { plainText, sessionOnlyMessage, storyPhotos } from "../domain/story.ts";
+import { bindTyping, showValue, StoryBlocksUi } from "./story-controls.ts";
 import type { DraftSessionSnapshot } from "../domain/draft-session.ts";
 import { describeError } from "../domain/errors.ts";
 import type { ErrorDescription } from "../domain/errors.ts";
@@ -195,26 +198,20 @@ const api: ShiguangApi = searchAwareApi(memory ?? createTauriApi(invoke!), () =>
 let currentView: View = "timeline";
 let photoKey: string | null = null;
 
-function createSession(): DraftSession<number> {
-  const created = new DraftSession<number>({
-    api,
-    schedule: (fn, ms) => window.setTimeout(fn, ms),
-    cancel: (handle) => window.clearTimeout(handle),
-    debounceMs: 800,
-  });
-  created.onChange((state) => {
-    renderStatus(state);
-    renderPhotos(state.snapshot.photos, state.snapshot.coverPhotoUseId);
-    const recordId = state.recordId;
-    if (recordId !== null && currentView === "editor"
-      && (state.status === "saved" || state.status === "savedUncertain")) {
-      uiPreferences.setItem(LAST_DRAFT_KEY, recordId);
-    }
-  });
-  return created;
-}
+const blocksUi = new StoryBlocksUi(byId("story-blocks"));
+const parked = new Set<StoryEditor>();
+const draftModes = new Map<string, Mode>();
+const pendingUrls = new Map<string, string>();
+const chooseDraft = byId<HTMLDialogElement>("choose-draft");
+let editor = makeEditor(null, "");
+let unsubscribeEditor: (() => void) | undefined;
+let originHasFormal = false;
+let lastEditorFocus: HTMLElement | null = null;
 
-let session: DraftSession<number> = createSession();
+function makeEditor(row: RecordRow | null, defaultDate: string) {
+  return new StoryEditor({ api, row, defaultDate, mode: row ? draftModes.get(row.recordId) : undefined,
+    schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle) });
+}
 
 function two(value: number): string {
   return String(value).padStart(2, "0");
@@ -517,12 +514,14 @@ function renderStatus(state: DraftSessionSnapshot): void {
       text.textContent = `${description.title}：${description.detail}`;
       saveStatus.classList.add("is-error");
       showErrorDescription(description);
+      if (editor.needsReload) { saveStatus.append(text); return; }
       const retry = document.createElement("button");
       retry.type = "button";
       retry.className = "retry";
       retry.textContent = "重试";
       retry.addEventListener("click", () => {
-        void session.retry().catch((error: unknown) => { showError(error); });
+        if (!canChangeEditor() || !editor.simple) return;
+        void editor.flush().catch((error: unknown) => { showError(error); });
       });
       saveStatus.append(text, retry);
       return;
@@ -577,92 +576,182 @@ async function loadPhoto(img: HTMLImageElement, assetId: string, holder: HTMLEle
   }
 }
 
+function canChangeEditor() {
+  return currentView === "editor" && editor.editable && !byId("app-shell").inert;
+}
+
+function pendingPhotoUrl(photo: PhotoUse): string | undefined {
+  const input = editor.pendingPhoto(photo.photoUseId);
+  if (!input) return;
+  let url = pendingUrls.get(photo.photoUseId);
+  if (!url) {
+    url = URL.createObjectURL(new Blob([Uint8Array.from(input.bytes)], { type: photo.mediaType }));
+    pendingUrls.set(photo.photoUseId, url);
+  }
+  return url;
+}
+
 function editorPhotoCell(photo: PhotoUse): HTMLElement {
   const cell = document.createElement("div");
   cell.className = "photo-cell";
   const img = createPhotoThumb(photo.assetId, photo.caption);
   cell.append(img);
-  void loadPhoto(img, photo.assetId, cell);
-
+  const local = pendingPhotoUrl(photo);
+  if (local) img.src = local; else void loadPhoto(img, photo.assetId, cell);
+  const id = photo.photoUseId;
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "photo-remove";
   remove.textContent = "×";
   remove.title = "移除这张照片";
   remove.setAttribute("aria-label", "移除这张照片");
-  remove.addEventListener("click", () => {
-    for (const control of cell.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement>("button, textarea")) control.disabled = true;
-    void session.removePhoto(photo.photoUseId).catch((error: unknown) => {
-      photoKey = null; renderPhotos(session.state.snapshot.photos); showError(error);
-    });
-  });
+  remove.addEventListener("click", () => { void confirmRemove(editor.photoIndex(id)); });
   const caption = document.createElement("textarea");
-  caption.dataset.testid = "photo-caption"; caption.setAttribute("aria-label", "照片说明"); caption.placeholder = "为这张照片写点说明"; caption.value = photo.caption;
-  caption.addEventListener("input", () => { void session.updatePhoto("caption", photo.photoUseId, caption.value).catch(showError); });
+  caption.dataset.testid = "photo-caption"; caption.setAttribute("aria-label", "照片说明"); caption.placeholder = "为这张照片写点说明";
+  showValue(caption, photo.caption);
+  bindTyping(caption, () => { if (canChangeEditor()) editor.caption(id, caption.value, caption.selectionEnd); });
   const controls = document.createElement("div"); controls.className = "photo-controls";
   const cover = document.createElement("button"); cover.type = "button"; cover.dataset.testid = "photo-cover";
-  cover.textContent = session.state.snapshot.coverPhotoUseId === photo.photoUseId ? "封面 ✓" : "设为封面";
-  cover.setAttribute("aria-pressed", String(session.state.snapshot.coverPhotoUseId === photo.photoUseId));
-  cover.addEventListener("click", () => { void session.updatePhoto("cover", photo.photoUseId).catch(showError); }); controls.append(cover);
+  cover.textContent = editor.story.coverPhotoUseId === id ? "封面 ✓" : "设为封面";
+  cover.setAttribute("aria-pressed", String(editor.story.coverPhotoUseId === id));
+  cover.addEventListener("click", () => { if (canChangeEditor()) editor.cover(id); }); controls.append(cover);
   for (const [delta, label] of [[-1, "上移"], [1, "下移"]] as const) {
     const move = document.createElement("button"); move.type = "button"; move.textContent = label; move.dataset.testid = delta < 0 ? "photo-up" : "photo-down";
-    const photos = session.state.snapshot.photos; const index = photos.findIndex(p => p.photoUseId === photo.photoUseId);
-    move.disabled = index + delta < 0 || index + delta >= photos.length;
-    move.setAttribute("aria-label", `第 ${index + 1} 张照片${label}`);
+    const index = editor.photoIndex(id), neighbor = editor.story.blocks[index + delta];
+    move.disabled = !neighbor || (editor.mode === "quick" && neighbor.kind !== "photo");
+    const ordinal = storyPhotos(editor.story).findIndex(p => p.photoUseId === id) + 1;
+    move.setAttribute("aria-label", editor.mode === "quick" ? `第 ${ordinal} 张照片${label}` : `第 ${index + 1} 块照片${label}`);
     move.addEventListener("click", () => {
-      const ids = session.state.snapshot.photos.map(p => p.photoUseId); const i = ids.indexOf(photo.photoUseId);
-      [ids[i], ids[i + delta]] = [ids[i + delta], ids[i]];
-      void session.updatePhoto("order", photo.photoUseId, ids).then(() => {
-        photoGrid.querySelector<HTMLButtonElement>(`[data-photo-id="${photo.photoUseId}"] [data-testid="${move.dataset.testid}"]`)?.focus();
-      }).catch(showError);
+      if (!canChangeEditor()) return;
+      editor.move(editor.photoIndex(id), delta);
+      const area = editor.mode === "story" ? byId("story-blocks") : photoGrid;
+      const moved = Array.from(area.querySelectorAll<HTMLElement>(".photo-cell")).find(node => node.dataset.photoKey === editor.photoKey(id));
+      (moved?.querySelector<HTMLButtonElement>(`[data-testid="${move.dataset.testid}"]:not(:disabled)`) ?? moved?.querySelector("textarea"))?.focus();
     }); controls.append(move);
   }
-  cell.dataset.photoId = photo.photoUseId;
+  cell.dataset.photoId = id; cell.dataset.photoKey = editor.photoKey(id);
   cell.append(remove, caption, controls);
   return cell;
 }
 
-function renderPhotos(photos: readonly PhotoUse[], coverId = session.state.snapshot.coverPhotoUseId): void {
-  const key = photos.map((photo) => photo.photoUseId).join("|") + coverId;
+function renderPhotos(photos: PhotoUse[]) {
+  const key = JSON.stringify(photos.map(p => editor.photoKey(p.photoUseId)));
   if (key === photoKey) return;
   photoKey = key;
-  if (photos.length === 0) {
+  if (!photos.length) {
     const empty = document.createElement("p");
-    empty.className = "photo-empty";
-    empty.textContent = "还没有照片，可以附上几张。";
+    empty.className = "photo-empty"; empty.textContent = "还没有照片，可以附上几张。";
     photoGrid.replaceChildren(empty);
-    return;
+  } else photoGrid.replaceChildren(...photos.map(editorPhotoCell));
+}
+
+function focusBlock(index: number) {
+  const block = byId("story-blocks").querySelectorAll<HTMLElement>('[data-testid="story-block"]')[index];
+  (block?.querySelector<HTMLElement>("textarea") ?? block?.querySelector<HTMLElement>("button") ??
+    byId("story-blocks").querySelector<HTMLElement>("select"))?.focus();
+}
+
+async function confirmRemove(index: number) {
+  const owner = editor, block = editor.story.blocks[index];
+  if (!canChangeEditor() || !block) return;
+  const description = block.kind === "photo" ? "这张照片及其说明" : "这个故事块";
+  if (await askConfirm(`移除${description}？`, "可以在本次编辑中撤销。", "移除") &&
+      editor === owner && canChangeEditor() && editor.story.blocks[index] === block) {
+    editor.remove(index);
+    if (editor.mode === "story") focusBlock(Math.min(index, editor.story.blocks.length - 1));
   }
-  photoGrid.replaceChildren(...photos.map(editorPhotoCell));
 }
 
-function fillEditor(): void {
-  const snapshot = session.state.snapshot;
-  editorTitle.value = snapshot.title;
-  editorBody.value = snapshot.body;
-  editorDate.value = snapshot.eventDate;
-  editorTime.value = snapshot.eventTime ?? "";
-  byTestId<HTMLInputElement>("editor-location").value = snapshot.location;
-  byTestId<HTMLSelectElement>("editor-mood").value = snapshot.mood ?? "";
+function renderEditor() {
+  const state = editor.saveState, { meta } = editor, protectedMode = editor.protected;
+  if (editor.simple && !editor.needsReload) parked.delete(editor);
+  const storyView = editor.mode === "story" || protectedMode;
+  const photos = storyPhotos(editor.story);
+  byId("editor-work").hidden = editor.preview;
+  byId("draft-preview").hidden = !editor.preview;
+  byId<HTMLFieldSetElement>("editor-fields").disabled = !editor.editable;
+  byTestId("mode-quick").setAttribute("aria-pressed", String(editor.mode === "quick"));
+  byTestId("mode-story").setAttribute("aria-pressed", String(editor.mode === "story"));
+  byTestId("enter-story").hidden = !protectedMode;
+  byTestId("reload-editor").hidden = !editor.needsReload || protectedMode;
+  byTestId<HTMLButtonElement>("draft-preview-open").disabled = protectedMode || editor.publishing;
+  const limit = byId("story-limit");
+  limit.hidden = editor.simple;
+  limit.textContent = editor.simple ? "" : (protectedMode ? "速记已锁定全部编辑操作。 " : "") + sessionOnlyMessage;
+  byTestId<HTMLButtonElement>("story-undo").disabled = !editor.canUndo;
+  byTestId<HTMLButtonElement>("story-redo").disabled = !editor.canRedo;
+  commitButton.disabled = !editor.editable || !editor.simple || editor.needsReload;
+  byTestId<HTMLButtonElement>("editor-tag-add").disabled = !editor.editable || (!editor.simple && !state.recordId);
+  showValue(editorTitle, meta.title); editorDate.value = meta.eventDate; editorTime.value = meta.eventTime ?? "";
+  showValue(byTestId<HTMLInputElement>("editor-location"), meta.location);
+  byTestId<HTMLSelectElement>("editor-mood").value = meta.mood ?? "";
+  byId("quick-content").hidden = storyView;
+  byId("story-blocks").hidden = !storyView;
+  if (storyView) {
+    if (photoKey !== null) { photoKey = null; photoGrid.replaceChildren(); }
+    blocksUi.render(editor, { photo: index => {
+      const block = editor.story.blocks[index];
+      if (block.kind !== "photo") throw new Error("照片位置无效");
+      return editorPhotoCell(block.photoUse);
+    }, pick: pickPhotos, remove: index => { void confirmRemove(index); }, focusBlock });
+  } else {
+    if (byId("story-blocks").children.length) blocksUi.reset();
+    showValue(editorBody, plainText(editor.story)); renderPhotos(photos);
+  }
+  const area = storyView ? byId("story-blocks") : photoGrid;
+  const byKey = new Map(photos.map(photo => [editor.photoKey(photo.photoUseId), photo]));
+  for (const cell of area.querySelectorAll<HTMLElement>(".photo-cell")) {
+    const photo = byKey.get(cell.dataset.photoKey!);
+    if (!photo) continue;
+    const caption = cell.querySelector("textarea"), cover = cell.querySelector('[data-testid="photo-cover"]');
+    if (caption) showValue(caption, photo.caption);
+    const on = editor.story.coverPhotoUseId === photo.photoUseId;
+    if (cover && cover.getAttribute("aria-pressed") !== String(on)) {
+      cover.setAttribute("aria-pressed", String(on)); cover.textContent = on ? "封面 ✓" : "设为封面";
+    }
+    const img = cell.querySelector("img");
+    if (img) {
+      img.alt = photo.caption || "时光照片";
+      if (cell.dataset.photoId !== photo.photoUseId) void loadPhoto(img, photo.assetId, cell);
+    }
+    cell.dataset.photoId = photo.photoUseId;
+  }
+  const status = editor.pending && editor.simple && ["idle", "saved", "savedUncertain"].includes(state.status)
+    ? { ...state, status: "dirty" as const } : state;
+  renderStatus(status);
+  if (!editor.simple) {
+    saveStatus.textContent = "仅本次会话 · 自动保存已暂停";
+    conflictActions.hidden = true;
+  }
+  if (currentView === "editor" && state.recordId && (state.status === "saved" || state.status === "savedUncertain") && !editor.publishing) {
+    uiPreferences.setItem(LAST_DRAFT_KEY, state.recordId);
+  }
+  editorBadge.hidden = !(originHasFormal && (editor.pending || state.status !== "idle"));
 }
 
-function openInEditor(row: RecordRow | null): void {
-  photoKey = null;
-  session.open(row);
-  fillEditor();
+function openInEditor(row: RecordRow | null, date = calendarToday(), retained?: StoryEditor) {
+  unsubscribeEditor?.();
+  for (const url of pendingUrls.values()) URL.revokeObjectURL(url);
+  pendingUrls.clear(); byTestId("draft-preview-content").replaceChildren();
+  editor = retained ?? makeEditor(row, date);
+  parked.delete(editor);
+  editor.resume();
+  originHasFormal = !!row?.formal;
+  lastEditorFocus = null;
+  blocksUi.reset(); photoKey = null;
+  renderEditor();
+  unsubscribeEditor = editor.subscribe(renderEditor);
   void refreshEditorTags();
-  editorBadge.hidden = !(row !== null && row.formal !== null && row.draft !== null);
-  if (row !== null) uiPreferences.setItem(LAST_DRAFT_KEY, row.recordId);
 }
 
 async function refreshEditorTags(): Promise<void> {
   const rowElement = byTestId<HTMLDivElement>("editor-tag-chips");
-  const id = session.state.recordId;
+  const id = editor.recordId;
   rowElement.replaceChildren();
   if (!id || blockedDescription !== null) return;
   try {
     const [row, tags] = await Promise.all([api.getRecord(id), api.listTags()]);
-    if (session.state.recordId !== id) return;
+    if (editor.recordId !== id) return;
     rowElement.replaceChildren(...row.tagIds.map((tagId) => {
       const chip = document.createElement("span");
       chip.className = "tag-chip";
@@ -675,21 +764,20 @@ async function refreshEditorTags(): Promise<void> {
 
 byTestId<HTMLButtonElement>("editor-tag-add").addEventListener("click", () => {
   void (async () => {
-    if (!ensureWritable()) return;
-    await session.flush();
-    let id = session.state.recordId;
-    if (!id) {
-      const created = await api.createDraft(session.state.snapshot);
-      openInEditor(created.row);
-      id = created.row.recordId;
-    }
-    await openTagPicker(await api.getRecord(id));
+    if (!ensureWritable() || !canChangeEditor()) return;
+    const owner = editor, id = editor.recordId;
+    if (!id && !editor.simple) return;
+    const row = id ? await api.getRecord(id) : null;
+    if (editor === owner && canChangeEditor()) await openTagPicker(row, owner);
   })().catch(showError);
 });
 
 async function flushBeforeLeave(): Promise<boolean> {
   try {
-    await session.flush();
+    if (editor.publishing) return false;
+    await editor.settle();
+    if (!editor.simple || editor.needsReload) parked.add(editor);
+    if (editor.recordId) draftModes.set(editor.recordId, editor.mode);
     return true;
   } catch (error) {
     showError(error);
@@ -701,8 +789,10 @@ async function openDraft(row: RecordRow): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
+    const fresh = await api.getRecord(row.recordId);
+    if (!fresh.draft || fresh.status !== "active" || byId("app-shell").inert) return;
     readingId = null;
-    openInEditor(row);
+    openInEditor(fresh, calendarToday(), [...parked].find(item => item.recordId === row.recordId));
     clearAppNotice();
     clearErrorBox();
     setView("editor");
@@ -727,14 +817,42 @@ async function startNewDraft(): Promise<void> {
   }
 }
 
+type DraftChoice = "continue" | "restart" | "cancel";
+let settleDraftChoice: ((choice: DraftChoice) => void) | undefined;
+function chooseExistingDraft(): Promise<DraftChoice> {
+  return new Promise(resolve => {
+    settleDraftChoice?.("cancel"); settleDraftChoice = resolve; chooseDraft.showModal(); syncBack();
+  });
+}
+for (const choice of ["continue", "restart", "cancel"] as const) {
+  byTestId("choose-" + choice).addEventListener("click", () => {
+    settleDraftChoice?.(choice); settleDraftChoice = undefined; chooseDraft.close();
+  });
+}
+chooseDraft.addEventListener("close", () => { settleDraftChoice?.("cancel"); settleDraftChoice = undefined; });
 async function openModification(recordId: string): Promise<void> {
   if (!(await flushBeforeLeave())) return;
   if (!ensureWritable()) return;
   try {
     const origin = currentView;
-    const created = await api.createDraft({ baseRecordId: recordId });
-    if (currentView !== origin || byId("app-shell").inert) return;
-    openInEditor(created.row);
+    let row = await api.getRecord(recordId);
+    let retained = [...parked].find(item => item.recordId === recordId);
+    const active = () => currentView === origin && readingId === recordId && !byId("app-shell").inert;
+    if (!active()) return;
+    if (row.draft || retained) {
+      const choice = await chooseExistingDraft();
+      if (!active() || choice === "cancel") return;
+      if (choice === "restart") {
+        if (!await askConfirm("从正式版重新编辑？", "放弃这份修改草稿和本次会话的排版，重新打开正式版。", "放弃草稿并重编") || !active()) return;
+        if (row.draft) await api.discardDraft(recordId);
+        if (retained) parked.delete(retained);
+        retained = undefined;
+        draftModes.delete(recordId);
+        row = await api.getRecord(recordId);
+      }
+    }
+    if (!active()) return;
+    openInEditor(row, calendarToday(), retained);
     clearAppNotice();
     clearErrorBox();
     setView("editor");
@@ -863,7 +981,20 @@ async function restoreCopy(copy: ConflictCopy): Promise<void> {
 
 function renderDrafts(rows: readonly RecordRow[], copies: readonly ConflictCopy[]): void {
   const nodes: HTMLElement[] = [];
-  if (rows.length === 0) {
+  const inMemory = [...parked].filter(item => !item.simple || item.needsReload);
+  for (const item of inMemory) {
+    const card = document.createElement("button"); card.type = "button"; card.className = "draft-card";
+    card.dataset.testid = "session-draft"; card.textContent = (item.meta.title || "未命名故事") + " · 仅本次会话";
+    card.addEventListener("click", () => { void (async () => {
+      if (!ensureWritable() || !await flushBeforeLeave()) return;
+      const row = item.recordId ? await api.getRecord(item.recordId) : null;
+      if (row && row.status !== "active") return;
+      readingId = null; openInEditor(row, calendarToday(), item); setView("editor");
+    })().catch(showError); });
+    nodes.push(card);
+  }
+  rows = rows.filter(row => !inMemory.some(item => item.recordId === row.recordId));
+  if (nodes.length === 0 && rows.length === 0) {
     nodes.push(emptyCard({
       title: "还没有草稿",
       message: "没写完的小事可以先放在这里，之后再慢慢补。",
@@ -1545,9 +1676,7 @@ async function startNewDraftAt(date: string): Promise<void> {
   if (!ensureWritable()) return;
   try {
     readingId = null;
-    openInEditor(null);
-    session.edit({ eventDate: date });
-    editorDate.value = date;
+    openInEditor(null, date);
     uiPreferences.removeItem(LAST_DRAFT_KEY);
     clearAppNotice();
     clearErrorBox();
@@ -1761,7 +1890,7 @@ async function openTagManager(): Promise<void> {
   }
 }
 
-interface PickerState { item: Pick<RecordRow, "recordId" | "favorite" | "favoriteRevision" | "tagIds" | "tagRevision"> | null; revision: number; selected: Set<string> }
+interface PickerState { owner?: StoryEditor; item: Pick<RecordRow, "recordId" | "favorite" | "favoriteRevision" | "tagIds" | "tagRevision"> | null; revision: number; selected: Set<string> }
 const picker: PickerState = { item: null, revision: 0, selected: new Set<string>() };
 
 async function renderTagPickerOptions(): Promise<void> {
@@ -1794,12 +1923,12 @@ async function renderTagPickerOptions(): Promise<void> {
   }
 }
 
-async function openTagPicker(item: NonNullable<PickerState["item"]>): Promise<void> {
+async function openTagPicker(item: PickerState["item"], owner?: StoryEditor): Promise<void> {
   if (!ensureWritable()) return;
   clearErrorBox();
-  picker.item = item;
-  picker.revision = item.tagRevision;
-  picker.selected = new Set(item.tagIds);
+  picker.owner = owner; picker.item = item;
+  picker.revision = item?.tagRevision ?? 0;
+  picker.selected = new Set(item?.tagIds);
   setDialogStatus(tagPickerStatus, "", "calm");
   tagPickerNew.value = "";
   try {
@@ -1811,6 +1940,7 @@ async function openTagPicker(item: NonNullable<PickerState["item"]>): Promise<vo
 }
 
 async function createTagForPicker(): Promise<void> {
+  if (currentView === "editor" && !canChangeEditor()) return;
   try {
     const tag = await api.createTag(tagPickerNew.value);
     picker.selected.add(tag.tagId);
@@ -1830,10 +1960,16 @@ async function createTagForPicker(): Promise<void> {
 }
 
 async function savePickerTags(): Promise<void> {
-  const item = picker.item;
-  if (item === null) return;
+  if (picker.owner && (picker.owner !== editor || !canChangeEditor())) return;
   tagPickerSave.disabled = true;
   try {
+    let item = picker.item;
+    if (!item) {
+      if (!picker.owner || !picker.selected.size) { tagPickerDialog.close(); return; }
+      item = await api.getRecord(await picker.owner.ensureTagRecord());
+      if (editor !== picker.owner || !canChangeEditor()) return;
+      picker.item = item; picker.revision = item.tagRevision;
+    }
     const result = await api.setRecordTags(item.recordId, [...picker.selected], picker.revision);
     item.favorite = result.favorite;
     item.favoriteRevision = result.favoriteRevision;
@@ -2265,10 +2401,11 @@ async function mergeBackupNow(): Promise<void> {
   mergeBackupButton.textContent = "正在合并…";
   try {
     if (!(await flushBeforeLeave())) return;
+    if (!await mayResetSessions()) return;
     const result = await api.mergeBackup(token);
     pickedToken = null;
     pickedBackup.hidden = true;
-    session = createSession();
+    resetEditorLibrary();
     const m = result.plan.counts;
     showAppNotice(`合并完成：新增 ${m.added} 条、更新 ${m.updated} 条、冲突副本 ${m.conflictCopiesAdded} 份、已删除未复活 ${m.skippedDeleted} 条。合并前的数据已保存在 ${result.safetyBackup}`, "ok");
     await refreshDrafts();
@@ -2298,10 +2435,11 @@ async function restoreBackupNow(): Promise<void> {
   restoreBackupButton.textContent = "正在恢复…";
   try {
     if (!(await flushBeforeLeave())) return;
+    if (!await mayResetSessions()) return;
     const result = await api.restoreBackup(token);
     pickedToken = null;
     pickedBackup.hidden = true;
-    session = createSession();
+    resetEditorLibrary();
     uiPreferences.removeItem(LAST_DRAFT_KEY);
     const r = result.restored;
     showAppNotice(`恢复完成：${r.formal} 条正式记录、${r.drafts} 份草稿、${r.trashed} 条回收站记录。恢复前的数据已保存在 ${result.safetyBackup}`, "ok");
@@ -2320,16 +2458,18 @@ async function restoreBackupNow(): Promise<void> {
 
 async function commitCurrent(): Promise<void> {
   if (!ensureWritable()) return;
-  if (currentView !== "editor") return;
+  if (!canChangeEditor() || !editor.simple) return;
   clearErrorBox();
   commitButton.disabled = true;
   commitButton.textContent = "正在存入…";
   try {
-    const result = await session.commit();
+    const result = await editor.commit();
+    parked.delete(editor); draftModes.delete(result.recordId);
     uiPreferences.removeItem(LAST_DRAFT_KEY);
     unfinishedDraft = null;
     refreshResumeNotice();
-    showAppNotice(durabilityLabel(result.durability), result.durability === "uncertain" ? "warn" : "ok");
+    const durability = editor.saveState.status === "savedUncertain" ? "uncertain" : result.durability;
+    showAppNotice(durabilityLabel(durability), durability === "uncertain" ? "warn" : "ok");
     // M05 refreshes its retained result pages in SearchUi.resume().
     if (readingId && readingOrigin === "search") await openReading(readingId, true);
     else if (readingId) await leaveEditor();
@@ -2339,20 +2479,19 @@ async function commitCurrent(): Promise<void> {
     if (description.kind === "validation" && isFieldIssue(error)) showFieldIssue(error);
     else showError(error);
   } finally {
-    commitButton.disabled = false;
+    commitButton.disabled = !editor.editable || !editor.simple || editor.needsReload;
     commitButton.textContent = "存入时光";
   }
 }
 
 async function resolveKeepMine(): Promise<void> {
-  const recordId = session.state.recordId;
-  if (recordId === null) return;
+  const recordId = editor.recordId;
+  if (recordId === null || !canChangeEditor() || !editor.simple) return;
   clearErrorBox();
   keepMineButton.disabled = true;
   keepFormalButton.disabled = true;
   try {
     const result = await api.resolveConflict(recordId, "keepMine");
-    session = createSession();
     openInEditor(result.row);
     showAppNotice("已以你的草稿为准，确认无误后再点“存入时光”", "ok");
     setView("editor");
@@ -2365,14 +2504,14 @@ async function resolveKeepMine(): Promise<void> {
 }
 
 async function resolveKeepFormal(): Promise<void> {
-  const recordId = session.state.recordId;
-  if (recordId === null) return;
+  const recordId = editor.recordId;
+  if (recordId === null || !canChangeEditor() || !editor.simple) return;
   clearErrorBox();
   keepMineButton.disabled = true;
   keepFormalButton.disabled = true;
   try {
     await api.resolveConflict(recordId, "keepFormal");
-    session = createSession();
+    openInEditor(null);
     uiPreferences.removeItem(LAST_DRAFT_KEY);
     showAppNotice("你的草稿已另存为冲突副本，不会丢失", "ok");
     await showDrafts();
@@ -2384,25 +2523,33 @@ async function resolveKeepFormal(): Promise<void> {
   }
 }
 
-async function attachSelectedPhotos(): Promise<void> {
-  const files = photoInput.files ? Array.from(photoInput.files) : [];
-  photoInput.value = "";
-  clearErrorBox();
-  for (const file of files) {
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await session.attachPhoto({
-        fileName: file.name,
-        bytes,
-        caption: "",
-        mediaType: file.type,
-      });
-    } catch (error) {
-      showError(error);
-    }
-  }
+async function mayResetSessions() {
+  return !parked.size ||
+    await askConfirm("放弃本次会话的故事排版？", "导入会重新打开资料库。可以取消，回草稿箱继续编辑本次会话中的故事。", "放弃排版并继续");
 }
-
+function resetEditorLibrary() {
+  parked.clear(); draftModes.clear(); openInEditor(null);
+}
+let insertion: { owner: StoryEditor; index: number } | undefined;
+function pickPhotos(index: number) {
+  if (!canChangeEditor()) return;
+  insertion = { owner: editor, index }; photoInput.click();
+}
+async function attachSelectedPhotos() {
+  const target = insertion; insertion = undefined;
+  const files = Array.from(photoInput.files ?? []); photoInput.value = "";
+  if (!target) return;
+  let index = target.index;
+  try {
+    for (const file of files) {
+      if (file.size > 25 * 1024 * 1024) throw new Error("图片超过 25 MB");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (editor !== target.owner || !canChangeEditor()) return;
+      editor.insertPhoto(index++, { fileName: file.name, bytes, caption: "", mediaType: file.type });
+    }
+    if (editor === target.owner && editor.simple) await editor.flush();
+  } catch (error) { showError(error); }
+}
 
 const personal = new PersonalUi(api, memory !== null, flushBeforeLeave, visualPreview?.preferences);
 const museum = new MuseumUi(byId("view-museum"), api, {
@@ -2424,22 +2571,7 @@ let readingEditScroll: ScrollPosition;
 let readingList: Element | null = null;
 let readingGeneration = 0;
 let readingFocus: HTMLElement | null = null;
-async function openReading(id: string, returning = false, originControl?: HTMLElement): Promise<void> {
-  const origin = currentView;
-  if (!(await flushBeforeLeave())) return;
-  const row = await api.getRecord(id); if (!row.formal || row.status !== "active") return;
-  const tags = await api.listTags();
-  if (currentView !== origin || byId("app-shell").inert) return;
-  timelineTags = tags;
-  if (!returning) {
-    readingOrigin = currentView;
-    readingScroll = scrollPosition();
-    readingList = originControl?.closest(".journal, .timeline-list, #on-this-day-list") ?? null;
-    readingGeneration = formalGeneration;
-    readingFocus = originControl ?? document.activeElement as HTMLElement | null;
-  }
-  readingId = id;
-  renderReading(byTestId("reading-content"), row, tagName, (img, photo, holder) => {
+function loadReadingPhoto(img: HTMLImageElement, photo: PhotoUse, holder: HTMLElement) {
     const fallback = (message: string) => {
       img.hidden = true;
       const retry = document.createElement("button"); retry.className = "button";
@@ -2455,7 +2587,23 @@ async function openReading(id: string, returning = false, originControl?: HTMLEl
         img.src = await api.photoDataUrl(photo.assetId);
       } catch { fallback("暂时无法读取图片"); }
     }; void load();
-  });
+}
+async function openReading(id: string, returning = false, originControl?: HTMLElement): Promise<void> {
+  const origin = currentView;
+  if (!(await flushBeforeLeave())) return;
+  const row = await api.getRecord(id); if (!row.formal || row.status !== "active") return;
+  const tags = await api.listTags();
+  if (currentView !== origin || byId("app-shell").inert) return;
+  timelineTags = tags;
+  if (!returning) {
+    readingOrigin = currentView;
+    readingScroll = scrollPosition();
+    readingList = originControl?.closest(".journal, .timeline-list, #on-this-day-list") ?? null;
+    readingGeneration = formalGeneration;
+    readingFocus = originControl ?? document.activeElement as HTMLElement | null;
+  }
+  readingId = id;
+  renderReading(byTestId("reading-content"), row, tagName, loadReadingPhoto);
   setView("reading");
   if (returning) {
     byTestId("reading-edit").focus({ preventScroll: true });
@@ -2506,13 +2654,15 @@ function backLayers(): BackLayer[] {
       if (currentView === "reading" && readingId === id) await openModification(id);
     } });
   }
+  if (currentView === "editor" && !id) stack.push({ close: leaveEditor });
+  if (currentView === "editor" && editor.preview) stack.push({ close: closeDraftPreview, reopen: openDraftPreview });
   if (timelineSheet.open) stack.push({ close: () => timelineSheet.close(), reopen: openTimelineSheet });
-  for (const dialog of [tagDialog, tagPickerDialog, confirmDialog]) {
+  for (const dialog of [tagDialog, tagPickerDialog, chooseDraft, confirmDialog]) {
     if (dialog.open) stack.push({ close: () => dialog.close() });
   }
   return stack;
 }
-for (const dialog of [tagDialog, tagPickerDialog, confirmDialog]) dialog.addEventListener("close", syncBack);
+for (const dialog of [tagDialog, tagPickerDialog, chooseDraft, confirmDialog]) dialog.addEventListener("close", syncBack);
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) button.addEventListener("click", () => {
   const view = button.dataset.go as View;
@@ -2520,8 +2670,9 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-go]")) 
   else if (view === "timeline") void showTimeline(); else if (view === "drafts") void showDrafts(); else if (view === "collect") void showCollect(); else if (view === "trash") void showTrash();
   else void flushBeforeLeave().then(ok => { if (ok) setView(view); });
 });
-byTestId<HTMLInputElement>("editor-location").addEventListener("input", e => session.edit({location: (e.target as HTMLInputElement).value}));
-byTestId<HTMLSelectElement>("editor-mood").addEventListener("change", e => session.edit({mood: ((e.target as HTMLSelectElement).value || null) as Mood | null}));
+const locationField = byTestId<HTMLInputElement>("editor-location");
+bindTyping(locationField, () => { if (canChangeEditor()) editor.editMeta({ location: locationField.value }); });
+byTestId<HTMLSelectElement>("editor-mood").addEventListener("change", e => { if (canChangeEditor()) editor.editMeta({ mood: ((e.target as HTMLSelectElement).value || null) as Mood | null }); });
 
 let unfinishedDraft: RecordRow | null = null;
 
@@ -2544,8 +2695,7 @@ async function resumeUnfinishedDraft(): Promise<void> {
   const row = unfinishedDraft;
   if (row === null) return;
   try {
-    const fresh = await api.getRecord(row.recordId);
-    await openDraft(fresh);
+    await openDraft(row);
   } catch (error) {
     showError(error);
   }
@@ -2556,7 +2706,7 @@ newDraftButton.addEventListener("click", () => { void startNewDraft(); });
 backButton.addEventListener("click", () => { void leaveEditor(); });
 commitButton.addEventListener("click", () => { void commitCurrent(); });
 photoInput.addEventListener("change", () => { void attachSelectedPhotos(); });
-byTestId("add-photos").addEventListener("click", () => photoInput.click());
+byTestId("add-photos").addEventListener("click", () => pickPhotos(editor.story.blocks.length));
 
 openTrashButton.addEventListener("click", () => { void showTrash(); });
 backToSettingsButton.addEventListener("click", () => { void showData(); });
@@ -2669,35 +2819,78 @@ const timelineSentinelObserver = new IntersectionObserver((entries) => {
 }, { rootMargin: "360px" });
 timelineSentinelObserver.observe(timelineSentinel);
 
-editorTitle.addEventListener("input", () => {
-  clearAppNotice();
-  session.edit({ title: editorTitle.value });
-});
-editorBody.addEventListener("input", () => {
-  clearAppNotice();
-  session.edit({ body: editorBody.value });
-});
-editorDate.addEventListener("input", () => {
-  clearAppNotice();
-  session.edit({ eventDate: editorDate.value });
-});
-editorTime.addEventListener("input", () => {
-  clearAppNotice();
-  session.edit({ eventTime: editorTime.value.trim().length > 0 ? editorTime.value : null });
-});
+bindTyping(editorTitle, () => { if (canChangeEditor()) { clearAppNotice(); editor.editMeta({ title: editorTitle.value }); } });
+bindTyping(editorBody, () => { if (canChangeEditor() && editor.mode === "quick") { clearAppNotice(); editor.quickBody(editorBody.value, editorBody.selectionEnd); } });
+editorDate.addEventListener("input", () => { if (canChangeEditor()) editor.editMeta({ eventDate: editorDate.value }); });
+editorTime.addEventListener("input", () => { if (canChangeEditor()) editor.editMeta({ eventTime: editorTime.value || null }); });
 
-window.addEventListener("beforeunload", () => {
-  void session.flush().catch((error: unknown) => { showError(error); });
-});
-// 移动端（Android）切到后台/被系统回收前通常不触发 beforeunload：隐藏时也立即 flush。
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") {
-    void session.flush().catch((error: unknown) => { showError(error); });
+for (const [control, mode] of [["mode-quick", "quick"], ["mode-story", "story"], ["enter-story", "story"]] as const) {
+  byTestId(control).addEventListener("click", () => {
+    if (currentView !== "editor" || byId("app-shell").inert) return;
+    editor.switchMode(mode);
+    if (control === "enter-story") byTestId("mode-story").focus();
+  });
+}
+byTestId("reload-editor").addEventListener("click", () => { void (async () => {
+  const owner = editor, id = editor.recordId;
+  if (!id || !editor.needsReload || !canChangeEditor()) return;
+  if (!await askConfirm("打开最新草稿？", "当前会话中尚未保存的编辑将被放弃。", "打开最新草稿")) return;
+  const row = await api.getRecord(id);
+  if (editor === owner && canChangeEditor() && row.status === "active") {
+    parked.delete(owner); openInEditor(row);
+  }
+})().catch(showError); });
+byTestId("story-undo").addEventListener("click", () => { if (canChangeEditor()) editor.undo(); });
+byTestId("story-redo").addEventListener("click", () => { if (canChangeEditor()) editor.redo(); });
+viewEditor.addEventListener("keydown", event => {
+  if (!canChangeEditor() || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" || key === "y") {
+    event.preventDefault();
+    if (key === "y" || event.shiftKey) editor.redo(); else editor.undo();
   }
 });
-window.addEventListener("pagehide", () => {
-  void session.flush().catch((error: unknown) => { showError(error); });
+
+let previewPlace: { scroll: ScrollPosition; field: HTMLElement; selection: [number, number] | null; top: number } | undefined;
+viewEditor.addEventListener("focusin", event => {
+  const field = event.target as HTMLElement;
+  if (field.closest("#editor-fields")) lastEditorFocus = field;
 });
+function openDraftPreview() {
+  if (!canChangeEditor()) return;
+  const field = lastEditorFocus?.isConnected ? lastEditorFocus : byTestId("draft-preview-open");
+  const text = field as HTMLTextAreaElement;
+  previewPlace = { scroll: scrollPosition(), field, top: field.scrollTop,
+    selection: typeof text.selectionStart === "number" ? [text.selectionStart, text.selectionEnd] : null };
+  const tags = Array.from(byTestId("editor-tag-chips").children, chip => chip.textContent ?? "");
+  renderStoryReading(byTestId("draft-preview-content"), editor.meta, editor.story, tags, (img, photo, holder) => {
+    const url = pendingPhotoUrl(photo);
+    if (url) img.src = url; else loadReadingPhoto(img, photo, holder);
+  });
+  editor.setPreview(true); restoreScroll(); byTestId("draft-preview-back").focus({ preventScroll: true }); syncBack();
+}
+function closeDraftPreview() {
+  if (currentView !== "editor" || !editor.preview) return;
+  editor.setPreview(false); byTestId("draft-preview-content").replaceChildren();
+  const place = previewPlace; previewPlace = undefined;
+  if (place) {
+    const target = place.field.isConnected ? place.field : byTestId("draft-preview-open");
+    target.focus({ preventScroll: true });
+    if (place.selection && target === place.field) (target as HTMLTextAreaElement).setSelectionRange(...place.selection);
+    target.scrollTop = place.top; restoreScroll(place.scroll);
+  }
+  syncBack();
+}
+byTestId("draft-preview-open").addEventListener("click", openDraftPreview);
+byTestId("draft-preview-back").addEventListener("click", closeDraftPreview);
+window.addEventListener("beforeunload", event => {
+  if (!editor.simple || editor.needsReload || parked.size) { event.preventDefault(); event.returnValue = ""; }
+  void editor.settle().catch(showError);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") void editor.settle().catch(showError);
+});
+window.addEventListener("pagehide", () => { void editor.settle().catch(showError); });
 
 async function boot(): Promise<void> {
   if (visualPreview) await visualPreview.prepare();

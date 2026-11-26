@@ -8,6 +8,8 @@ class Node {
   textContent=""; className=""; dataset:Record<string,string>={}; style={}; children:Node[]=[];
   parent: Node | null = null;
   open = false;
+  selectionStart = 0; selectionEnd = 0;
+  setSelectionRange(start: number, end: number) { this.selectionStart = start; this.selectionEnd = end; }
   onFocus?: (node: Node) => void;
   get isConnected(): boolean { return this.tag === "body" || (this.parent?.isConnected ?? false); }
   closest(selector: string): Node | null {
