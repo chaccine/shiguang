@@ -270,6 +270,35 @@ fn run() -> Result<Json, CoreError> {
                 ("durability", Json::str(store.last_durability().as_str())),
             ]))
         }
+        "replace-photo" => {
+            let (id, opts) = first_positional(rest)?;
+            let asset = opts
+                .get("asset")
+                .map(std::path::Path::new)
+                .ok_or_else(|| CoreError::new("USAGE", "需要 --asset FILE"))?;
+            let use_id = opts
+                .get("use")
+                .ok_or_else(|| CoreError::new("USAGE", "需要 --use PHOTO_USE_ID"))?;
+            let bytes = std::fs::read(asset)?;
+            let file_name = asset
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CoreError::new("INVALID_ASSET_NAME", "无效文件名"))?;
+            let source = shiguang_core::store::ReplacementSource::File {
+                file_name,
+                bytes: &bytes,
+                media_type: opts.get("media-type"),
+            };
+            let row = store.replace_draft_photo(&id, use_id, source, None, None, None)?;
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
+        }
+        "reorder-photos" => {
+            let (id, uses) = rest
+                .split_first()
+                .ok_or_else(|| CoreError::new("USAGE", "需要记录 ID 和照片顺序"))?;
+            let row = store.reorder_draft_photos(id, uses)?;
+            Ok(ok_record(&row, Some(store.last_durability().as_str())))
+        }
         "commit" => {
             let (id, opts) = first_positional(rest)?;
             let expected_base_revision = match opts.get("expect-base") {
@@ -594,6 +623,8 @@ fn usage() -> String {
         "  draft-new [--title T] [--body B | --story JSON] [--date YYYY-MM-DD] [--time HH:MM] [--base REC]",
         "  draft-save ID [--title T] [--body B | --story JSON] [--date D] [--time T] [--clear-time]",
         "  attach ID --asset FILE [--caption C] [--media-type M]",
+        "  replace-photo ID --use PHOTO_USE_ID --asset FILE [--media-type M]",
+        "  reorder-photos ID [PHOTO_USE_ID ...]",
         "  commit ID [--expect-base N]             存入时光（默认使用草稿基线版本）",
         "  list                                    正式列表（不含草稿）",
         "  get ID                                  读取记录（含草稿）",

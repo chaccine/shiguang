@@ -243,8 +243,22 @@ fn legacy_story(v: &Json) -> Result<Story, CoreError> {
 }
 
 pub fn migrate_v5_to_v6(mut value: Json) -> Result<Json, CoreError> {
+    // v5 had no replacement operation. Keep its original ownership check at the
+    // legacy boundary now that v6 permits different originals across snapshots.
+    let mut assets = std::collections::BTreeMap::new();
     snapshots(&mut value, |v| {
         let story = legacy_story(v)?;
+        for p in story.photos() {
+            if assets
+                .insert(p.photo_use_id.clone(), p.asset_id.clone())
+                .is_some_and(|id| id != p.asset_id)
+            {
+                return Err(CoreError::new(
+                    "STATE_CORRUPT",
+                    "旧版本照片使用位指向不同原图",
+                ));
+            }
+        }
         remove_fields(v, &["body", "photos", "coverPhotoUseId"])?;
         set(v, "story", story.to_json())
     })?;

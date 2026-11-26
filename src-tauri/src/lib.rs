@@ -120,6 +120,36 @@ pub struct AttachPhotoBytesInput {
     pub expected_story: Option<serde_json::Value>,
 }
 
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum ReplacementSource {
+    File {
+        file_name: String,
+        bytes: Vec<u8>,
+        media_type: Option<String>,
+    },
+    History {
+        asset_id: String,
+        sha256: String,
+        media_type: String,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReplacePhotoInput {
+    record_id: String,
+    photo_use_id: String,
+    source: ReplacementSource,
+    editor_mode: Option<String>,
+    undo_session: Option<String>,
+    expected_story: Option<serde_json::Value>,
+}
+
 #[derive(Serialize)]
 pub struct CommandError {
     code: &'static str,
@@ -509,6 +539,61 @@ fn attach_photo_bytes(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn replace_draft_photo(
+    input: ReplacePhotoInput,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, CommandError> {
+    use shiguang_core::store::ReplacementSource as Source;
+    let mut slot = state.store.wait_lock()?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    let source = match &input.source {
+        ReplacementSource::File {
+            file_name,
+            bytes,
+            media_type,
+        } => Source::File {
+            file_name,
+            bytes,
+            media_type: media_type.as_deref(),
+        },
+        ReplacementSource::History {
+            asset_id,
+            sha256,
+            media_type,
+        } => Source::History {
+            asset_id,
+            sha256,
+            media_type,
+        },
+    };
+    let row = store.replace_draft_photo(
+        &input.record_id,
+        &input.photo_use_id,
+        source,
+        input
+            .editor_mode
+            .as_deref()
+            .map(shiguang_core::model::EditorMode::parse)
+            .transpose()?,
+        input.undo_session.as_deref(),
+        input_story(input.expected_story)?.as_ref(),
+    )?;
+    save_value(Some(&row), store)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn release_photo_history(
+    record_id: String,
+    undo_session: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), CommandError> {
+    let mut slot = state.store.wait_lock()?;
+    let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
+    store.release_photo_history(&record_id, &undo_session);
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn remove_draft_photo(
     record_id: String,
     photo_use_id: String,
@@ -833,6 +918,8 @@ pub fn run() {
             save_draft,
             attach_photo,
             attach_photo_bytes,
+            replace_draft_photo,
+            release_photo_history,
             remove_draft_photo,
             set_draft_photo_caption,
             set_draft_cover,

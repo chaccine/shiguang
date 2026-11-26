@@ -38,11 +38,49 @@ impl StoreConfig {
     }
 }
 
-// In-process inverse for an editor unlink. Never serialized into State or backups.
+pub enum ReplacementSource<'a> {
+    File {
+        file_name: &'a str,
+        bytes: &'a [u8],
+        media_type: Option<&'a str>,
+    },
+    History {
+        asset_id: &'a str,
+        sha256: &'a str,
+        media_type: &'a str,
+    },
+}
+
+// Session receipts are never serialized into State or backups.
 #[derive(Default)]
 struct PhotoUndo {
     session: String,
-    removed: std::collections::BTreeMap<String, (String, u32, u32, PhotoUse)>,
+    created_at: String,
+    revision: u32,
+    base_revision: u32,
+    removed: std::collections::BTreeMap<String, PhotoUse>,
+    versions: Vec<PhotoUse>,
+}
+
+impl PhotoUndo {
+    fn matches(&self, row: &RecordRow, session: &str) -> bool {
+        self.session == session
+            && self.created_at == row.created_at
+            && self.revision == row.content_revision
+            && self.base_revision == row.base_revision
+    }
+    fn for_session(&mut self, row: &RecordRow, session: &str) -> &mut Self {
+        if !self.matches(row, session) {
+            *self = Self {
+                session: session.into(),
+                created_at: row.created_at.clone(),
+                revision: row.content_revision,
+                base_revision: row.base_revision,
+                ..Self::default()
+            };
+        }
+        self
+    }
 }
 
 pub struct Store {
@@ -171,7 +209,7 @@ impl Store {
         if !markers.is_empty() {
             self.apply_candidate(candidate)?;
         }
-        let referenced = self.state.referenced_assets();
+        let referenced = self.referenced_with_history(&self.state);
         let mut quarantined = Vec::new();
         for path in media_files(&self.root)? {
             let asset = path
@@ -219,6 +257,34 @@ impl Store {
                 .into_owned(),
         })
     }
+    fn referenced_with_history(&self, state: &State) -> std::collections::BTreeSet<String> {
+        let mut assets = state.referenced_assets();
+        for (id, history) in &self.photo_undo {
+            if state
+                .row(id)
+                .is_ok_and(|row| history.matches(row, &history.session))
+            {
+                assets.extend(
+                    history
+                        .versions
+                        .iter()
+                        .chain(history.removed.values())
+                        .map(|p| p.asset_id.clone()),
+                );
+            }
+        }
+        assets
+    }
+    pub fn release_photo_history(&mut self, record_id: &str, session: &str) {
+        if self
+            .photo_undo
+            .get(record_id)
+            .is_some_and(|entry| entry.session == session)
+        {
+            self.photo_undo.remove(record_id);
+        }
+    }
+
     pub fn reconcile_media(&mut self) -> Result<MediaReport, CoreError> {
         if self.instance_lock.is_none() {
             return Err(CoreError::new(
@@ -231,7 +297,7 @@ impl Store {
     }
     pub(crate) fn reconcile_media_locked(&mut self) -> Result<MediaReport, CoreError> {
         let state = self.candidate_state()?;
-        let referenced = state.referenced_assets();
+        let referenced = self.referenced_with_history(&state);
         let mut report = MediaReport {
             checked_at: time::now_rfc3339(),
             ..MediaReport::default()
@@ -835,6 +901,49 @@ impl Store {
         media_type: Option<&str>,
         expected_story: Option<&Story>,
     ) -> Result<PhotoUse, CoreError> {
+        let _lock = write_lock(&self.root)?;
+        let mut candidate = self.candidate_state()?;
+        Self::photo_draft(&mut candidate, record_id, expected_story)?;
+        let mut photo = Self::original(file_name, bytes, media_type)?;
+        photo.photo_use_id = candidate.allocate_id("pu");
+        photo.caption = caption.into();
+        let row = candidate.row_mut(record_id)?;
+        row.draft
+            .as_mut()
+            .unwrap()
+            .story
+            .append_photo(photo.clone())?;
+        row.updated_at = time::now_rfc3339();
+        let durability = self.write_photo_candidate(&photo, file_name, bytes, false, candidate)?;
+        if matches!(durability, Durability::Uncertain { .. }) {
+            self.last_durability = durability;
+        }
+        Ok(photo)
+    }
+
+    fn photo_draft<'a>(
+        state: &'a mut State,
+        id: &str,
+        expected: Option<&Story>,
+    ) -> Result<&'a mut RecordRow, CoreError> {
+        let row = state.row_mut(id)?;
+        if row.draft.is_none() {
+            row.draft = Some(
+                row.formal
+                    .clone()
+                    .ok_or_else(|| CoreError::new("NO_DRAFT", "记录没有可编辑内容"))?,
+            );
+            row.base_revision = row.content_revision;
+        }
+        row.draft.as_ref().unwrap().check_expected_story(expected)?;
+        Ok(row)
+    }
+
+    fn original(
+        file_name: &str,
+        bytes: &[u8],
+        media_type: Option<&str>,
+    ) -> Result<PhotoUse, CoreError> {
         if file_name.is_empty()
             || file_name == "."
             || file_name == ".."
@@ -857,59 +966,190 @@ impl Store {
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.to_string())
             .unwrap_or_else(|| sniff_media_type(source, bytes));
-        let ext = extension_for(&media_type, source);
         let asset_id = format!("ast-{}", &sha[..16]);
-        let dest = self.root.join(MEDIA_DIR).join(format!("{asset_id}.{ext}"));
-
-        // 所有领域校验先在候选状态完成，非法请求不产生原图或推进序号。
-        let _write_lock = write_lock(&self.root)?;
-        let mut candidate = self.candidate_state()?;
-        let row = candidate.row_mut(record_id)?;
-        if row.draft.is_none() {
-            row.draft = Some(row.formal.clone().ok_or_else(|| {
-                CoreError::new("NO_DRAFT", format!("记录没有草稿可附加照片：{record_id}"))
-            })?);
-            row.base_revision = row.content_revision;
-        }
-        row.draft
-            .as_ref()
-            .unwrap()
-            .check_expected_story(expected_story)?;
-        let use_ref = PhotoUse {
-            photo_use_id: candidate.allocate_id("pu"),
+        Ok(PhotoUse {
             asset_id,
-            caption: caption.to_string(),
-            sha256: sha.clone(),
+            sha256: sha,
             bytes: bytes.len() as u64,
             media_type,
-        };
-        let row = candidate.row_mut(record_id)?;
-        let draft = row.draft.as_mut().expect("draft just ensured");
-        draft.story.append_photo(use_ref.clone())?;
-        row.updated_at = time::now_rfc3339();
+            ..Default::default()
+        })
+    }
 
-        let asset_durability = if dest.exists() {
-            let existing = fs::read(&dest)?;
-            if sha256::hex_digest(&existing) != sha {
-                return Err(CoreError::new("ASSET_CONFLICT", "assetId 冲突且内容不一致"));
-            }
-            None
-        } else {
-            Some(persist::write_atomic(&dest, bytes)?)
-        };
-        fault::hit(FaultPoint::AfterMediaWrite).map_err(|e| {
-            CoreError::with_stage(
-                "MEDIA_STATE_WRITE_FAILED",
-                "after_media_write",
-                format!("原图已保存，照片引用尚未写入：{e}"),
-            )
-        })?;
-        self.apply_candidate(candidate)?;
-        // 原图写入也需要目录同步；不能用状态文件的确认掩盖原图的不确定性。
-        if let Some(d @ Durability::Uncertain { .. }) = asset_durability {
-            self.last_durability = d;
+    // The caller holds the write lock throughout read-back and the reference switch.
+    fn write_photo_candidate(
+        &mut self,
+        photo: &PhotoUse,
+        file_name: &str,
+        bytes: &[u8],
+        replacing: bool,
+        candidate: State,
+    ) -> Result<Durability, CoreError> {
+        let dir = self.root.join(MEDIA_DIR);
+        if candidate.photo_refs().iter().any(|(_, p)| {
+            p.asset_id == photo.asset_id && (p.sha256 != photo.sha256 || p.bytes != photo.bytes)
+        }) {
+            return Err(CoreError::new("ASSET_CONFLICT", "原图与已有引用不一致"));
         }
-        Ok(use_ref)
+        let verify = |path: &Path| -> Result<(), CoreError> {
+            let (size, hash) = crate::backup::hash_file(path)?;
+            if size != photo.bytes || hash != photo.sha256 {
+                return Err(CoreError::new(
+                    "ASSET_CONFLICT",
+                    "原图长度或 SHA-256 不匹配",
+                ));
+            }
+            Ok(())
+        };
+        // Older attaches could create the same asset under more than one extension.
+        // Every path a reader could resolve must match, including on explicit retry.
+        let mut created = true;
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.file_stem().and_then(|s| s.to_str()) == Some(&photo.asset_id) {
+                if !entry.file_type()?.is_file() {
+                    return Err(CoreError::new("ASSET_CONFLICT", "原图不是普通文件"));
+                }
+                verify(&path)?;
+                created = false;
+            }
+        }
+        let path = dir.join(format!(
+            "{}.{}",
+            photo.asset_id,
+            extension_for(&photo.media_type, Path::new(file_name))
+        ));
+        let durability = if created {
+            persist::write_atomic(&path, bytes)?
+        } else if replacing {
+            persist::parent_sync(&dir)
+        } else {
+            Durability::Durable
+        };
+        let result = (|| {
+            if replacing && matches!(durability, Durability::Uncertain { .. }) {
+                return Err(CoreError::new(
+                    "MEDIA_STATE_WRITE_FAILED",
+                    "无法确认原图写入，请重试或取消替换",
+                ));
+            }
+            if created {
+                verify(&path)?;
+            }
+            fault::hit(FaultPoint::AfterMediaWrite).map_err(|e| {
+                CoreError::with_stage(
+                    "MEDIA_STATE_WRITE_FAILED",
+                    "after_media_write",
+                    format!("照片引用尚未写入：{e}"),
+                )
+            })?;
+            self.apply_candidate(candidate)
+        })();
+        if replacing && created && result.is_err() {
+            fs::remove_file(path)?;
+        }
+        result?;
+        Ok(durability)
+    }
+
+    pub fn replace_draft_photo(
+        &mut self,
+        record_id: &str,
+        use_id: &str,
+        source: ReplacementSource,
+        editor_mode: Option<crate::model::EditorMode>,
+        session: Option<&str>,
+        expected: Option<&Story>,
+    ) -> Result<RecordRow, CoreError> {
+        let _lock = write_lock(&self.root)?;
+        let mut candidate = self.candidate_state()?;
+        let row = Self::photo_draft(&mut candidate, record_id, expected)?;
+        if let Some(mode) = editor_mode {
+            row.draft_mode = Some(mode);
+        }
+        let expired = || CoreError::new("PHOTO_UNDO_EXPIRED", "照片撤销记录已失效");
+        let mut replacement = match source {
+            ReplacementSource::File {
+                file_name,
+                bytes,
+                media_type,
+            } => Self::original(file_name, bytes, media_type)?,
+            ReplacementSource::History {
+                asset_id,
+                sha256,
+                media_type,
+            } => {
+                let history = self
+                    .photo_undo
+                    .get(record_id)
+                    .filter(|h| session.is_some_and(|s| h.matches(row, s)))
+                    .ok_or_else(expired)?;
+                let photo = history
+                    .versions
+                    .iter()
+                    .find(|p| {
+                        p.photo_use_id == use_id
+                            && p.asset_id == asset_id
+                            && p.sha256 == sha256
+                            && p.media_type == media_type
+                    })
+                    .ok_or_else(expired)?;
+                if self.check_photo(photo)? != PhotoStatus::Available {
+                    return Err(CoreError::new(
+                        "ASSET_HASH_MISMATCH",
+                        "撤销所需的原图未通过校验",
+                    ));
+                }
+                photo.clone()
+            }
+        };
+        let draft = row.draft.as_mut().unwrap();
+        let previous = draft
+            .photos
+            .iter()
+            .find(|p| p.photo_use_id == use_id)
+            .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "记录中没有这张照片"))?
+            .clone();
+        replacement.photo_use_id = previous.photo_use_id.clone();
+        replacement.caption = previous.caption.clone();
+        draft.story.edit(|blocks, _| {
+            for block in blocks {
+                if matches!(block, StoryBlock::Photo(p) if p.photo_use_id == use_id) {
+                    *block = StoryBlock::Photo(replacement.clone());
+                    break;
+                }
+            }
+            Ok(())
+        })?;
+        row.updated_at = time::now_rfc3339();
+        let row = row.clone();
+        match source {
+            ReplacementSource::File {
+                file_name, bytes, ..
+            } => {
+                self.write_photo_candidate(&replacement, file_name, bytes, true, candidate)?;
+            }
+            ReplacementSource::History { .. } => {
+                self.apply_candidate(candidate)?;
+            }
+        }
+        if let Some(session) = session {
+            let history = self
+                .photo_undo
+                .entry(record_id.into())
+                .or_default()
+                .for_session(&row, session);
+            if !history.versions.iter().any(|p| {
+                p.photo_use_id == use_id
+                    && p.asset_id == previous.asset_id
+                    && p.sha256 == previous.sha256
+                    && p.media_type == previous.media_type
+            }) {
+                history.versions.push(previous);
+            }
+        }
+        Ok(row)
     }
 
     /// 只移除草稿中的使用关系，原图及正式快照保持不变。
@@ -992,26 +1232,25 @@ impl Store {
         if !undo {
             let (row, photo) = self.unlink_draft_photo(record_id, photo_use_id, expected_story)?;
             let entry = self.photo_undo.entry(record_id.into()).or_default();
-            if entry.session != session {
-                entry.session = session.into();
-                entry.removed.clear();
-            }
-            entry.removed.insert(
-                photo_use_id.into(),
-                (
-                    row.created_at.clone(),
-                    row.content_revision,
-                    row.base_revision,
-                    photo,
-                ),
-            );
+            entry
+                .for_session(&row, session)
+                .removed
+                .insert(photo_use_id.into(), photo);
             return Ok(row);
         }
-        let (created, revision, base, photo) = self
+        let entry = self
             .photo_undo
             .get(record_id)
             .filter(|entry| entry.session == session)
-            .and_then(|entry| entry.removed.get(photo_use_id))
+            .ok_or_else(expired)?;
+        let (created, revision, base) = (
+            entry.created_at.clone(),
+            entry.revision,
+            entry.base_revision,
+        );
+        let photo = entry
+            .removed
+            .get(photo_use_id)
             .cloned()
             .ok_or_else(expired)?;
         let (row, _) = self.transact(|state| {

@@ -194,11 +194,16 @@ pub(crate) fn validate_ids(s: &State) -> Result<(), CoreError> {
         }
         check(&c.conflict_id, format!("conflict:{}", c.conflict_id))?;
     }
+    let mut digests = BTreeMap::new();
     for (r, p) in s.photo_refs() {
-        check(
-            &p.photo_use_id,
-            format!("photo:{r}:{}:{}", p.asset_id, p.sha256),
-        )?;
+        check(&p.photo_use_id, format!("photo:{r}"))?;
+        // A replacement may switch assets across snapshots of this record.
+        if digests
+            .insert((&p.photo_use_id, &p.asset_id), &p.sha256)
+            .is_some_and(|sha| sha != &p.sha256)
+        {
+            return Err(bad("同一照片使用位的原图摘要冲突"));
+        }
     }
     for snap in s
         .records
@@ -278,14 +283,18 @@ fn normalize_photos(
     key: &RecordIdentity,
     target: &str,
     snapshot: &mut Snapshot,
+    use_mapping: &mut BTreeMap<String, String>,
 ) -> Result<(), CoreError> {
-    let mut use_mapping = BTreeMap::new();
     snapshot.story.edit(|blocks, cover| {
         for block in blocks {
             let crate::story::StoryBlock::Photo(p) = block else {
                 continue;
             };
             let old_id = p.photo_use_id.clone();
+            if let Some(id) = use_mapping.get(&old_id) {
+                p.photo_use_id = id.clone();
+                continue;
+            }
             let source = incoming
                 .merge_origins
                 .iter()
@@ -321,10 +330,14 @@ fn normalize_photos(
                 use_mapping.insert(old_id, p.photo_use_id.clone());
                 continue;
             }
-            let collision = s.photo_refs().iter().any(|(r, x)| {
-                x.photo_use_id == p.photo_use_id
-                    && (*r != target || x.asset_id != p.asset_id || x.sha256 != p.sha256)
-            });
+            let refs = s.photo_refs();
+            let mut same_id = refs
+                .iter()
+                .filter(|(_, x)| x.photo_use_id == p.photo_use_id)
+                .peekable();
+            let collision = same_id.peek().is_some()
+                && !same_id
+                    .any(|(r, x)| *r == target && x.asset_id == p.asset_id && x.sha256 == p.sha256);
             if collision {
                 let new = allocate(s, "pu")?;
                 s.merge_origins.push(MergeOrigin {
@@ -424,8 +437,9 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
             (r.record_id.clone(), key.clone()),
         );
         let target = r.record_id.clone();
+        let mut record_uses = BTreeMap::new();
         for snap in snapshots_mut(&mut r) {
-            normalize_photos(&mut s, incoming, &key, &target, snap)?;
+            normalize_photos(&mut s, incoming, &key, &target, snap, &mut record_uses)?;
         }
         let Some(index) = index else {
             s.records.push(r);
@@ -519,7 +533,14 @@ pub fn merge_states(local: &State, incoming: &State) -> Result<(State, MergePlan
             continue;
         };
         let mut snapshot = c.snapshot.clone();
-        normalize_photos(&mut s, incoming, key, id, &mut snapshot)?;
+        normalize_photos(
+            &mut s,
+            incoming,
+            key,
+            id,
+            &mut snapshot,
+            &mut BTreeMap::new(),
+        )?;
         let row = s
             .records
             .iter()
