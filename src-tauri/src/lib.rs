@@ -514,13 +514,19 @@ fn attach_photo_bytes(
 fn remove_draft_photo(
     record_id: String,
     photo_use_id: String,
+    undo_session: Option<String>,
+    undo: Option<bool>,
     state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, CommandError> {
     let mut slot = state.store.wait_lock()?;
     let store = slot.as_mut().map_err(|e| CommandError::from(e.clone()))?;
-    let row = store
-        .remove_draft_photo(&record_id, &photo_use_id)
-        .map_err(CommandError::from)?;
+    let row = match (undo_session, undo.unwrap_or(false)) {
+        (Some(session), restore) if !session.is_empty() => {
+            store.editor_photo_unlink(&record_id, &photo_use_id, &session, restore)
+        }
+        (None, false) => store.remove_draft_photo(&record_id, &photo_use_id),
+        _ => Err(CoreError::new("PHOTO_UNDO_EXPIRED", "照片撤销记录已失效")),
+    }?;
     save_value(Some(&row), store)
 }
 

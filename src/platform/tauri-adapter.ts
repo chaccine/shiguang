@@ -52,7 +52,9 @@ export function createTauriApi(invoke: InvokeFn): TauriApi {
     }),
     attachPhoto: (input) => invoke("attach_photo", { input }),
     attachPhotoBytes: (input) => invoke("attach_photo_bytes", { input: { ...input, bytes: Array.from(input.bytes) } }),
-    removeDraftPhoto: (recordId, photoUseId) => invoke("remove_draft_photo", { recordId, photoUseId }),
+    removeDraftPhoto: (recordId, photoUseId, undoSession, undo) => invoke("remove_draft_photo", {
+      recordId, photoUseId, ...(undoSession !== undefined ? { undoSession, undo: !!undo } : undo ? { undo } : {}),
+    }),
     setDraftPhotoCaption: (recordId, photoUseId, caption) => invoke("set_draft_photo_caption", { recordId, photoUseId, caption }),
     setDraftCover: (recordId, photoUseId) => invoke("set_draft_cover", { recordId, photoUseId }),
     reorderDraftPhotos: (recordId, photoUseIds) => invoke("reorder_draft_photos", { recordId, photoUseIds }),

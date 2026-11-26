@@ -36,6 +36,13 @@ impl StoreConfig {
     }
 }
 
+// In-process inverse for an editor unlink. Never serialized into State or backups.
+#[derive(Default)]
+struct PhotoUndo {
+    session: String,
+    removed: std::collections::BTreeMap<String, (String, u32, u32, PhotoUse)>,
+}
+
 pub struct Store {
     root: PathBuf,
     seed: String,
@@ -43,6 +50,7 @@ pub struct Store {
     last_durability: Durability,
     pub(crate) instance_lock: Option<crate::lock::LockGuard>,
     pending_conflicts: std::collections::BTreeMap<String, (Snapshot, u32)>,
+    photo_undo: std::collections::BTreeMap<String, PhotoUndo>,
 }
 
 #[derive(Clone)]
@@ -524,6 +532,7 @@ impl Store {
             state,
             instance_lock: None,
             pending_conflicts: std::collections::BTreeMap::new(),
+            photo_undo: Default::default(),
             last_durability: Durability::Uncertain {
                 error: "当前实例尚未写入状态".to_string(),
             },
@@ -554,6 +563,7 @@ impl Store {
             .ok_or_else(|| CoreError::io("seed 缺失"))?
             .to_string();
         self.pending_conflicts.clear();
+        self.photo_undo.clear();
         Ok(())
     }
     pub fn root(&self) -> &Path {
@@ -915,6 +925,15 @@ impl Store {
         record_id: &str,
         photo_use_id: &str,
     ) -> Result<RecordRow, CoreError> {
+        self.unlink_draft_photo(record_id, photo_use_id)
+            .map(|(row, _)| row)
+    }
+
+    fn unlink_draft_photo(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+    ) -> Result<(RecordRow, PhotoUse), CoreError> {
         self.transact(|state| {
             let row = state.row_mut(record_id)?;
             let draft = row
@@ -926,14 +945,75 @@ impl Store {
                 .iter()
                 .position(|p| p.photo_use_id == photo_use_id)
                 .ok_or_else(|| CoreError::new("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片"))?;
-            draft.photos.remove(index);
+            let photo = draft.photos.remove(index);
             if draft.cover_photo_use_id.as_deref() == Some(photo_use_id) {
                 draft.cover_photo_use_id = draft.photos.first().map(|p| p.photo_use_id.clone());
             }
             row.updated_at = time::now_rfc3339();
-            Ok(row.clone())
+            Ok((row.clone(), photo))
         })
-        .map(|(row, _)| row)
+        .map(|(result, _)| result)
+    }
+
+    /// Only the unlinking editor can restore this occurrence. The caller cannot supply
+    /// an original, an occurrence identity to mint, a caption, or a replacement asset.
+    pub fn editor_photo_unlink(
+        &mut self,
+        record_id: &str,
+        photo_use_id: &str,
+        session: &str,
+        undo: bool,
+    ) -> Result<RecordRow, CoreError> {
+        let expired = || CoreError::new("PHOTO_UNDO_EXPIRED", "照片撤销记录已失效");
+        if !undo {
+            let (row, photo) = self.unlink_draft_photo(record_id, photo_use_id)?;
+            let entry = self.photo_undo.entry(record_id.into()).or_default();
+            if entry.session != session {
+                entry.session = session.into();
+                entry.removed.clear();
+            }
+            entry.removed.insert(
+                photo_use_id.into(),
+                (
+                    row.created_at.clone(),
+                    row.content_revision,
+                    row.base_revision,
+                    photo,
+                ),
+            );
+            return Ok(row);
+        }
+        let (created, revision, base, photo) = self
+            .photo_undo
+            .get(record_id)
+            .filter(|entry| entry.session == session)
+            .and_then(|entry| entry.removed.get(photo_use_id))
+            .cloned()
+            .ok_or_else(expired)?;
+        let (row, _) = self.transact(|state| {
+            let row = state.row_mut(record_id)?;
+            if row.created_at != created
+                || row.content_revision != revision
+                || row.base_revision != base
+            {
+                return Err(expired());
+            }
+            let draft = row.draft.as_mut().ok_or_else(expired)?;
+            if draft.photos.iter().any(|p| p.photo_use_id == photo_use_id) {
+                return Err(expired());
+            }
+            draft
+                .cover_photo_use_id
+                .get_or_insert(photo.photo_use_id.clone());
+            draft.photos.push(photo);
+            draft.validate_details()?;
+            row.updated_at = time::now_rfc3339();
+            Ok(row.clone())
+        })?;
+        if let Some(entry) = self.photo_undo.get_mut(record_id) {
+            entry.removed.remove(photo_use_id);
+        }
+        Ok(row)
     }
 
     /// Photo changes only mutate the draft slot; publication still uses the same commit CAS.
@@ -1024,7 +1104,7 @@ impl Store {
 
     /// 仅丢弃草稿槽，从未提交的记录整行移除；不清理 media。
     pub fn discard_draft(&mut self, record_id: &str) -> Result<Option<RecordRow>, CoreError> {
-        self.transact(|state| {
+        let (row, _) = self.transact(|state| {
             let row = state.row_mut(record_id)?;
             if row.formal.is_none() {
                 state.records.retain(|r| r.record_id != record_id);
@@ -1035,8 +1115,9 @@ impl Store {
                 row.updated_at = time::now_rfc3339();
                 Ok(Some(row.clone()))
             }
-        })
-        .map(|(row, _)| row)
+        })?;
+        self.photo_undo.remove(record_id);
+        Ok(row)
     }
 
     /// 全部未提交草稿，最近更新优先；同一时刻按 recordId 倒序。
@@ -1161,6 +1242,7 @@ impl Store {
         let committed_at = now;
         let durability = self.apply_candidate(candidate)?;
         self.pending_conflicts.remove(&record_id);
+        self.photo_undo.remove(&record_id);
         Ok(CommitOutcome {
             record_id,
             content_revision,

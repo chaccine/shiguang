@@ -1,3 +1,4 @@
+import type { PhotoUse } from "../domain/types.ts";
 import { searchPage } from "../domain/search.ts";
 import type { SearchFilter, SearchPage, TagAlias, TagDef, TagTombstone, TagInfo, TagImpact, MetaResult, TagMergeResult, TagDeleteResult, TimelineFilter, TimelinePage, MonthCount, CalendarDay, OnThisDayGroup, TimelineItem, SortOrder } from "../domain/types.ts";
 import * as tl from "../domain/timeline.ts";
@@ -510,14 +511,35 @@ export class MemoryAdapter implements ShiguangApi {
     draft.coverPhotoUseId ??= draft.photos[0]!.photoUseId;
     row.updatedAt = this.now(); this.persist(next); return this.result(row);
   }
-  async removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult> {
+  private photoUndo = new Map<string, { session: string; createdAt: string; revision: number; base: number; removed: Map<string, PhotoUse> }>();
+  async removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo = false): Promise<SaveResult> {
     this.checkWrite("removeDraftPhoto");
+    if (undoSession === "") return fail("PHOTO_UNDO_EXPIRED");
     const next = this.reload(), row = this.active(this.row(next, recordId));
-    const index = row.draft?.photos.findIndex((p) => p.photoUseId === photoUseId) ?? -1;
-    if (index < 0) fail("PHOTO_USE_NOT_FOUND");
-    row.draft!.photos.splice(index, 1); row.updatedAt = this.now();
-    if (row.draft!.coverPhotoUseId === photoUseId) row.draft!.coverPhotoUseId = row.draft!.photos[0]?.photoUseId ?? null;
-    this.persist(next); return this.result(row);
+    const draft = row.draft ?? fail("PHOTO_USE_NOT_FOUND");
+    const index = draft.photos.findIndex(p => p.photoUseId === photoUseId);
+    let receipt = this.photoUndo.get(recordId);
+    if (undo) {
+      if (!receipt || receipt.session !== undoSession || row.createdAt !== receipt.createdAt ||
+          row.contentRevision !== receipt.revision || row.baseRevision !== receipt.base || index >= 0) return fail("PHOTO_UNDO_EXPIRED");
+      const photo = receipt.removed.get(photoUseId) ?? fail("PHOTO_UNDO_EXPIRED");
+      draft.photos.push(copy(photo)); draft.coverPhotoUseId ??= photoUseId;
+      row.updatedAt = this.now(); this.persist(next);
+      receipt.removed.delete(photoUseId);
+    } else {
+      if (index < 0) fail("PHOTO_USE_NOT_FOUND");
+      const [photo] = draft.photos.splice(index, 1);
+      if (draft.coverPhotoUseId === photoUseId) draft.coverPhotoUseId = draft.photos[0]?.photoUseId ?? null;
+      row.updatedAt = this.now(); this.persist(next);
+      if (undoSession) {
+        if (receipt?.session !== undoSession || receipt.base !== row.baseRevision || receipt.revision !== row.contentRevision || receipt.createdAt !== row.createdAt) {
+          receipt = { session: undoSession, createdAt: row.createdAt, revision: row.contentRevision, base: row.baseRevision, removed: new Map() };
+          this.photoUndo.set(recordId, receipt);
+        }
+        receipt.removed.set(photoUseId, photo);
+      }
+    }
+    return this.result(row);
   }
   private editDraftPhotos(recordId: string, op: (draft: Snapshot) => void): SaveResult {
     const next = this.reload(), row = this.active(this.row(next, recordId)), draft = this.draft(row);
@@ -550,7 +572,7 @@ export class MemoryAdapter implements ShiguangApi {
     const next = this.reload(), row = this.active(this.row(next, recordId));
     if (!row.formal) next.records = next.records.filter((r) => r.recordId !== recordId);
     else { row.draft = null; row.baseRevision = row.contentRevision; row.updatedAt = this.now(); }
-    this.persist(next); return { row: row.formal ? copy(row) : null, durability: this.durabilityMode };
+    this.persist(next); this.photoUndo.delete(recordId); return { row: row.formal ? copy(row) : null, durability: this.durabilityMode };
   }
   async commitRecord(recordId: string, expectedBaseRevision: number): Promise<CommitResult> {
     this.checkWrite("commitRecord");
@@ -576,7 +598,7 @@ export class MemoryAdapter implements ShiguangApi {
     }
     row.contentRevision++; row.baseRevision = row.contentRevision; row.formal = draft; row.draft = null;
     row.updatedAt = row.committedAt = this.now(); this.persist(next);
-    this.pendingConflicts.delete(recordId);
+    this.pendingConflicts.delete(recordId); this.photoUndo.delete(recordId);
     return { recordId, contentRevision: row.contentRevision, committedAt: row.committedAt, durability: this.durabilityMode };
   }
   private thumbs = new Map<string, Promise<string>>();
@@ -767,7 +789,7 @@ export class MemoryAdapter implements ShiguangApi {
     try { this.storage?.setItem(safetyKey, JSON.stringify(current)); }
     catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
     const next: MemoryState = { ...copy(incoming), settings: { ...incoming.settings, appLock: current.settings.appLock }, quarantine: copy(current.quarantine) };
-    this.persist(next);
+    this.persist(next); this.photoUndo.clear();
     this.picked.delete(token);
     const mediaReport = await this.mediaReport();
     return { restored: this.counts(next), safetyBackup: `backups/pre-restore-${stamp}`, mediaReport, durability: this.durabilityMode };
@@ -783,7 +805,7 @@ export class MemoryAdapter implements ShiguangApi {
     const stamp = this.now().replace(/[-:.]/g, "");
     try { this.storage?.setItem(`${this.key}.pre-merge.${stamp}`, JSON.stringify(current)); }
     catch (error) { fail("RESTORE_SAFETY_BACKUP_FAILED", String(error)); }
-    this.persist(next);
+    this.persist(next); this.photoUndo.clear();
     this.picked.delete(token);
     const mediaReport = await this.mediaReport();
     return { plan, safetyBackup: `backups/pre-merge-${stamp}`, mediaReport, durability: this.durabilityMode };

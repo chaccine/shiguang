@@ -137,3 +137,36 @@ fn references_in_formal_draft_and_trash_are_never_quarantined() {
         assert_eq!(s.photo_status(&id).unwrap(), PhotoStatus::Available);
     }
 }
+
+#[test]
+fn editor_unlink_inverse_retains_exact_use_is_scoped_and_never_publishes() {
+    let t = TempRoot::new("editor-undo");
+    let mut store = Store::open(t.path()).unwrap();
+    let id = draft(&mut store);
+    let photo = store
+        .attach_photo_bytes(&id, "sample.png", &png(), " 文字\r\n", None)
+        .unwrap();
+    store.commit(&id, 0).unwrap();
+    store.create_draft(Some(&id), "", "", "", None).unwrap();
+    let use_id = &photo.photo_use_id;
+    store
+        .editor_photo_unlink(&id, use_id, "one", false)
+        .unwrap();
+    let unlinked = t.bytes();
+    assert!(store
+        .editor_photo_unlink(&id, use_id, "other", true)
+        .is_err());
+    assert_eq!(t.bytes(), unlinked);
+    let restored = store.editor_photo_unlink(&id, use_id, "one", true).unwrap();
+    assert_eq!(restored.formal, restored.draft);
+    assert_eq!(restored.content_revision, 1);
+    assert!(store.editor_photo_unlink(&id, use_id, "one", true).is_err());
+    store
+        .editor_photo_unlink(&id, use_id, "one", false)
+        .unwrap();
+    store.discard_draft(&id).unwrap();
+    store.create_draft(Some(&id), "", "", "", None).unwrap();
+    assert!(store.editor_photo_unlink(&id, use_id, "one", true).is_err());
+    assert_eq!(t.json().get("version").unwrap().as_i64(), Some(1));
+    assert_eq!(t.json().get("schemaVersion").unwrap().as_i64(), Some(5));
+}

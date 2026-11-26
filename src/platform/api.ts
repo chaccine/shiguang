@@ -54,7 +54,7 @@ export interface ShiguangApi {
   createDraft(input: CreateDraftInput): Promise<SaveResult>;
   saveDraft(input: SaveDraftInput): Promise<SaveResult>;
   attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult>;
-  removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult>;
+  removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo?: boolean): Promise<SaveResult>;
   setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult>;
   setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult>;
   reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult>;
