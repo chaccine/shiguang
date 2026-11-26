@@ -1,0 +1,2 @@
+node --check src/platform/memory-adapter.ts | exit=0
+node --check tests/unit011-museum.test.ts | exit=0

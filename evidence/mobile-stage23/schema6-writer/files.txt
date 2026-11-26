@@ -1,0 +1,91 @@
+feat/mobile-stage23 at 77e8af547c87ac782db0bc66425c7c850ae33f60 | PR12 | uncommitted worktree
+57 modified tracked files, 3 new source/test files, 19 evidence files including this inventory.
+
+Native writer and migration (10)
+M core/src/backup.rs
+M core/src/fault.rs
+M core/src/merge.rs
+M core/src/migration.rs
+M core/src/model.rs
+M core/src/persist.rs
+M core/src/schema.rs
+M core/src/search.rs
+M core/src/store.rs
+M core/src/story.rs
+
+CLI and Tauri interfaces (2)
+M cli/src/main.rs
+M src-tauri/src/lib.rs
+
+Editor, adapters and reading (11)
+M src/domain/draft-session.ts
+M src/domain/rules.ts
+M src/domain/search.ts
+M src/domain/story-editor.ts
+M src/domain/story.ts
+M src/domain/types.ts
+M src/platform/api.ts
+M src/platform/memory-adapter.ts
+M src/platform/tauri-adapter.ts
+M src/ui/main.ts
+M src/ui/reading.ts
+
+Native and TypeScript tests and synthetic fixture helpers (37)
+M cli/tests/unit07_cli.rs
+M core/src/migration/tests.rs
+M core/src/migration/tests/faults.rs
+M core/tests/acceptance.rs
+A core/tests/schema6_writer.rs
+M core/tests/story.rs
+M core/tests/unit010_schema.rs
+M core/tests/unit011_faults.rs
+M core/tests/unit011_museum.rs
+M core/tests/unit011_persistence.rs
+M core/tests/unit011_stress.rs
+M core/tests/unit012_search.rs
+M core/tests/unit012_stress.rs
+M core/tests/unit01_safety.rs
+M core/tests/unit02_drafts.rs
+M core/tests/unit04_media.rs
+M core/tests/unit04_schema.rs
+M core/tests/unit04_support/mod.rs
+M core/tests/unit05_backup.rs
+A core/tests/unit05_support/legacy.rs
+M core/tests/unit05_support/mod.rs
+M core/tests/unit06_merge.rs
+M core/tests/unit07_backup.rs
+M core/tests/unit07_query.rs
+M core/tests/unit07_schema.rs
+M core/tests/unit07_support/mod.rs
+M core/tests/unit08_stress.rs
+M core/tests/v5_oracle.rs
+M tests/home-summary-reuse.test.ts
+M tests/story-editor-ui.test.ts
+M tests/story-editor.test.ts
+M tests/story.test.ts
+A tests/support/legacy-story.ts
+M tests/unit010-lock.test.ts
+M tests/unit010-schema.test.ts
+M tests/unit011-museum.test.ts
+M tests/unit07.test.ts
+
+Evidence (19)
+A evidence/mobile-stage23/SCHEMA6_WRITER.md
+A evidence/mobile-stage23/schema6-writer/build.txt
+A evidence/mobile-stage23/schema6-writer/cli-populated-merge.txt
+A evidence/mobile-stage23/schema6-writer/commands.txt
+A evidence/mobile-stage23/schema6-writer/desktop.txt
+A evidence/mobile-stage23/schema6-writer/fault-unreached.log.gz
+A evidence/mobile-stage23/schema6-writer/fault.txt
+A evidence/mobile-stage23/schema6-writer/files.txt
+A evidence/mobile-stage23/schema6-writer/final-rust-check.txt
+A evidence/mobile-stage23/schema6-writer/final-ts-syntax.txt
+A evidence/mobile-stage23/schema6-writer/integrity.txt
+A evidence/mobile-stage23/schema6-writer/migration-default.log.gz
+A evidence/mobile-stage23/schema6-writer/migration-fault.log.gz
+A evidence/mobile-stage23/schema6-writer/npm-test.log.gz
+A evidence/mobile-stage23/schema6-writer/oracle.log.gz
+A evidence/mobile-stage23/schema6-writer/typecheck.log.gz
+A evidence/mobile-stage23/schema6-writer/v3-interruption.log.gz
+A evidence/mobile-stage23/schema6-writer/workspace-unreached.log.gz
+A evidence/mobile-stage23/schema6-writer/workspace.txt
