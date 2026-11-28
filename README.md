@@ -2,7 +2,7 @@
 
 本地离线的个人回忆记录应用（Tauri v2：Android / macOS / Windows）。只用合成数据开发与测试；无云同步、无 AI、无网络权限。
 
-**当前版本：0.1.13**（Android versionCode 1013，由版本推导，真机安装未实测）· 分支开发、PR 合并由 Cine 决定。
+**当前版本：0.1.14**（Android versionCode 1014，由版本推导，真机安装未实测）· 分支开发、PR 合并由 Cine 决定。
 
 ## Unit-0.12 M05 core（0.1.12）
 
