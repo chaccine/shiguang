@@ -1,3 +1,4 @@
+import { legacySnapshots } from "./support/legacy-story.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -98,18 +99,18 @@ test("U010 v4 preview backup roundtrip preserves formal and pending draft detail
   await a.api.setDraftCover(id,photos[2]!.photoUseId); await a.api.reorderDraftPhotos(id,photos.map((p)=>p.photoUseId).reverse());
   await a.api.setDraftPhotoCaption(id,photos[0]!.photoUseId,"合成新说明"); await a.api.saveDraft({ recordId: id, location: "合成地点", mood: "想念" });
   await a.api.commitRecord(id,1); await a.api.saveDraft({ recordId: id, location: "待提交地点", mood: "平静" });
-  const exp=await a.api.exportBackup(); assert.equal(exp.cancelled,false); if(exp.cancelled) return; assert.equal(exp.summary.schemaVersion,5);
+  const exp=await a.api.exportBackup(); assert.equal(exp.cancelled,false); if(exp.cancelled) return; assert.equal(exp.summary.schemaVersion,6);
   await b.api.restoreBackup(await pick(b.api,a.api.lastExportedPackage()!)); assert.deepEqual(await b.api.getRecord(id),await a.api.getRecord(id));
 });
 
 test("U010 v3 preview backup restores and merges into v4 with default content fields", async () => {
   const a=device(), id=await seeded(a.api); await a.api.exportBackup();
-  const body=JSON.parse(a.api.lastExportedPackage()!.body); body.manifest.schemaVersion=3; body.state.schemaVersion=3; delete body.state.settings;
+  const body=JSON.parse(a.api.lastExportedPackage()!.body); legacySnapshots(body.state); body.manifest.schemaVersion=3; body.state.schemaVersion=3; delete body.state.settings;
   for (const row of body.state.records) for(const slot of ["formal","draft"]) if(row[slot]) for(const field of ["location","mood","coverPhotoUseId"]) delete row[slot][field];
   const text=JSON.stringify(body), bytes=new TextEncoder().encode(text), pkg: PreviewBackup={magic:"SGBAK-PREVIEW",body:text,bytes:bytes.length,sha256:sha256(bytes)};
   for(const merge of [false,true]) {
     const b=device(),token=await pick(b.api,pkg); if(merge) await b.api.mergeBackup(token); else await b.api.restoreBackup(token);
-    assert.deepEqual((await b.api.getRecord(id)).formal,(await a.api.getRecord(id)).formal); assert.equal(JSON.parse(b.saved.getItem(key)!).schemaVersion,5);
+    assert.deepEqual((await b.api.getRecord(id)).formal,(await a.api.getRecord(id)).formal); assert.equal(JSON.parse(b.saved.getItem(key)!).schemaVersion,6);
   }
 });
 

@@ -33,14 +33,16 @@ fn optional(value: Option<&str>) -> Json { value.map(Json::str).unwrap_or(Json::
 fn fingerprint(value: Json) -> String { sha256::hex_digest(value.dump().as_bytes()) }
 fn source_row(r: &RecordRow) -> Json {
     let f = r.formal.as_ref().expect("active formal");
-    Json::Arr(vec![
+    let mut source = vec![
         Json::str(&r.record_id), Json::str(&r.created_at), Json::Num(r.content_revision.into()),
         Json::Bool(r.favorite), Json::Num(r.favorite_revision.into()), strings(&r.tag_ids), Json::Num(r.tag_revision.into()),
         Json::Arr(vec![Json::str(&f.title), Json::str(&f.body), Json::str(&f.event_date), optional(f.event_time.as_deref()),
             Json::str(&f.location), f.mood.map(|m| Json::str(m.as_str())).unwrap_or(Json::Null), optional(f.cover_photo_use_id.as_deref()),
             Json::Arr(f.photos.iter().map(|p| Json::Arr(vec![Json::str(&p.photo_use_id), Json::str(&p.asset_id), Json::str(&p.caption),
                 Json::str(&p.sha256), Json::Num(p.bytes as i64), Json::str(&p.media_type)])).collect())]),
-    ])
+    ];
+    if !f.story.is_legacy_shape() { source.push(f.story.to_json()); }
+    Json::Arr(source)
 }
 fn source_generation(s: &State) -> String {
     let mut rows: Vec<_> = s.records.iter().filter(|r| r.status == RecordStatus::Active && r.formal.is_some()).collect();

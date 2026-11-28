@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+mod legacy;
+#[allow(unused_imports)]
+pub use legacy::legacy_snapshots;
 use shiguang_core::{
     json::{self, Json},
     sha256, Store,

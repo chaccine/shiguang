@@ -1,0 +1,2 @@
+# Frozen measurements and plan hashes require the original bytes on every OS.
+* -text

@@ -1,0 +1,98 @@
+{
+  "before": {
+    "at": "2026-11-26T00:42:39.424895+08:00",
+    "branch": "feat/mobile-stage23",
+    "head": "fb8cbcea82fd304e3c69e73c34aeed3abafee7fa",
+    "groups": [
+      {
+        "scope": "migration candidate",
+        "manifest": "/workspace/sg-stage23/home-summary/CANDIDATE_PREIMAGE.json",
+        "manifestSha256": "dc0388e2f9f28d4815f7db0871e97321a4d41d70073193fb06b96ed426ab135e",
+        "entries": 9,
+        "backup": "/workspace/sg-stage23/migration-safety/preserved-candidate",
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "2911064ecb47df75c373097956b8417af43f52cd7c1194b4cd3fa7673cbd4c42"
+      },
+      {
+        "scope": "frozen v3/v5 artifacts",
+        "manifest": "/workspace/shiguang-app/evidence/mobile-stage23/migration-safety/preimage.json",
+        "manifestSha256": "e9b3ba43799c76eb8580e9eff7372bfb94fa9b17d368a751b560c60ad67d64b0",
+        "entries": 15,
+        "backup": null,
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "fe6ea5a83a853cf5f7988d8490b6a15ccd994035dbed78d26b2ce802a4dddeea"
+      },
+      {
+        "scope": "original oracle/provenance",
+        "manifest": "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/ORACLE_PREIMAGE.json",
+        "manifestSha256": "b2cc77569732c2b817de4b6bb7597e823adac5cc80f4b68d58cb8ac9fedc6151",
+        "entries": 10,
+        "backup": "/workspace/sg-stage23/investigation/oracle-preserved",
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "6449f48e46c73bd1b1e1cb02c13d61b45cc31bc9ca0c6f73d049738acf89ed55"
+      }
+    ],
+    "jsSourcesAndTestContract": {
+      "trackedFiles": 74,
+      "vsOriginalBase": "c9eff0546b3167cebc36cb61fb9401b2c6750bb4",
+      "changedRawBlobs": [],
+      "untracked": [],
+      "scopeObjects": {
+        "src": "a01946082ce0bac64b2026219dd3d1731e8bb14d",
+        "tests": "d7763c7dc2b70c1ff91cc7371afae4d42bdf6242",
+        "package.json": "c5d69bddbdd46e7228d9a0868a813f14f290cb42",
+        "package-lock.json": "c0bdb5bfe3ea588bab4a119c752c2a4b3b0db62b"
+      }
+    },
+    "planSha256": "7d7d0da79f736b37d797d562f2f735b31b2176fb4a14e6fb4b6da6ee34d09ca1",
+    "passed": true
+  },
+  "after": {
+    "at": "2026-11-26T00:47:53.194995+08:00",
+    "branch": "feat/mobile-stage23",
+    "head": "fb8cbcea82fd304e3c69e73c34aeed3abafee7fa",
+    "groups": [
+      {
+        "scope": "migration candidate",
+        "manifest": "/workspace/sg-stage23/home-summary/CANDIDATE_PREIMAGE.json",
+        "manifestSha256": "dc0388e2f9f28d4815f7db0871e97321a4d41d70073193fb06b96ed426ab135e",
+        "entries": 9,
+        "backup": "/workspace/sg-stage23/migration-safety/preserved-candidate",
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "2911064ecb47df75c373097956b8417af43f52cd7c1194b4cd3fa7673cbd4c42"
+      },
+      {
+        "scope": "frozen v3/v5 artifacts",
+        "manifest": "/workspace/shiguang-app/evidence/mobile-stage23/migration-safety/preimage.json",
+        "manifestSha256": "e9b3ba43799c76eb8580e9eff7372bfb94fa9b17d368a751b560c60ad67d64b0",
+        "entries": 15,
+        "backup": null,
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "fe6ea5a83a853cf5f7988d8490b6a15ccd994035dbed78d26b2ce802a4dddeea"
+      },
+      {
+        "scope": "original oracle/provenance",
+        "manifest": "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/ORACLE_PREIMAGE.json",
+        "manifestSha256": "b2cc77569732c2b817de4b6bb7597e823adac5cc80f4b68d58cb8ac9fedc6151",
+        "entries": 10,
+        "backup": "/workspace/sg-stage23/investigation/oracle-preserved",
+        "disagreements": [],
+        "measuredPathSizeHashListSha256": "6449f48e46c73bd1b1e1cb02c13d61b45cc31bc9ca0c6f73d049738acf89ed55"
+      }
+    ],
+    "jsSourcesAndTestContract": {
+      "trackedFiles": 74,
+      "vsOriginalBase": "c9eff0546b3167cebc36cb61fb9401b2c6750bb4",
+      "changedRawBlobs": [],
+      "untracked": [],
+      "scopeObjects": {
+        "src": "a01946082ce0bac64b2026219dd3d1731e8bb14d",
+        "tests": "d7763c7dc2b70c1ff91cc7371afae4d42bdf6242",
+        "package.json": "c5d69bddbdd46e7228d9a0868a813f14f290cb42",
+        "package-lock.json": "c0bdb5bfe3ea588bab4a119c752c2a4b3b0db62b"
+      }
+    },
+    "planSha256": "7d7d0da79f736b37d797d562f2f735b31b2176fb4a14e6fb4b6da6ee34d09ca1",
+    "passed": true
+  }
+}

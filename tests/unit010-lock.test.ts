@@ -1,3 +1,4 @@
+import { legacySnapshots } from "./support/legacy-story.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { pbkdf2Sync } from "node:crypto";
@@ -106,7 +107,7 @@ test("U010 portable backup omits credential; crafted incoming lock never overrid
 });
 
 test("U010 v3 restore cannot disable existing device lock or reset its waiting counter",async()=>{
-  const src=device();await src.api.exportBackup();const body=JSON.parse(src.api.lastExportedPackage()!.body);body.manifest.schemaVersion=3;body.state.schemaVersion=3;delete body.state.settings;
+  const src=device();await src.api.exportBackup();const body=JSON.parse(src.api.lastExportedPackage()!.body);legacySnapshots(body.state);body.manifest.schemaVersion=3;body.state.schemaVersion=3;delete body.state.settings;
   const d=device();await d.api.setAppLock("482615");for(let i=0;i<3;i++)await assert.rejects(d.api.verifyAppLock("invalid"),code("APP_LOCK_WRONG"));
   const before=credential(d.saved);await d.api.restoreBackup(await pick(d.api,repack(body)));assert.deepEqual(credential(d.saved),before);await assert.rejects(d.api.verifyAppLock("482615"),code("APP_LOCK_THROTTLED"));
 });

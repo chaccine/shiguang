@@ -33,7 +33,7 @@ fn preference_no_ops_skip_writes() {
 fn v4_migration_failure_keeps_exact_v4_bytes_and_is_retryable() {
     for (point,visit) in [(FaultPoint::MigrationBackup,1),(FaultPoint::MigrationWrite,1),(FaultPoint::TempCreate,2),
         (FaultPoint::TempWrite,2),(FaultPoint::TempSync,2),(FaultPoint::Replace,2)] {
-        let t=Temp::new("u011-migration-fault");let mut s=Store::open(&t.0).unwrap();formal(&mut s);let mut v=s.state_json();drop(s);
+        let t=Temp::new("u011-migration-fault");let mut s=Store::open(&t.0).unwrap();formal(&mut s);let mut v=s.state_json();legacy_snapshots(&mut v);drop(s);
         let mut records=rows(&v).to_vec();for row in &mut records{let Json::Obj(fields)=row else{panic!()};fields.retain(|(k,_)|k!="museumHidden");}
         set(&mut v,"records",Json::Arr(records));set(&mut v,"schemaVersion",Json::Num(4));let bytes=v.pretty().into_bytes();fs::write(t.0.join("state.json"),&bytes).unwrap();
         fault::set_after(point,visit);assert!(Store::open(&t.0).is_err(),"{point:?}");fault::clear();

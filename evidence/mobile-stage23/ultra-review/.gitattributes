@@ -1,0 +1,2 @@
+# Keep review and probe bytes unchanged across checkouts.
+* -text

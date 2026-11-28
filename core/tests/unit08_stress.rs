@@ -31,8 +31,7 @@ fn synthetic_stress_open_query_export_restore() {
     for (index, row) in rows.iter_mut().enumerate() {
         let mut p = photos[index % photos.len()].clone();
         p.photo_use_id = format!("pu-{:06}", index + 10000);
-        row.formal.as_mut().unwrap().cover_photo_use_id = Some(p.photo_use_id.clone());
-        row.formal.as_mut().unwrap().photos.push(p);
+        edit_simple(row.formal.as_mut().unwrap(), |f| { f.cover_photo_use_id = Some(p.photo_use_id.clone()); f.photos.push(p); });
     }
     let state = with_rows(&seed, &rows);
     let snapshot = state.to_json(seed.seed()).dump();

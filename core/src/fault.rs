@@ -20,6 +20,13 @@ pub enum FaultPoint {
     CrashAfterMediaSwap,
     MigrationBackup,
     MigrationWrite,
+    MigrationBackupVerify,
+    MigrationAfterInstall,
+    MigrationWitnessWrite,
+    MigrationWitnessSync,
+    MigrationAfterCommit,
+    #[cfg(all(test, feature = "fault-injection"))]
+    PartialTempWrite,
     AfterMediaWrite,
     TempCreate,
     TempWrite,

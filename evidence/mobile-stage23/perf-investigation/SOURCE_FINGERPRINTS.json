@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-25T23:05:57.638779+08:00",
+  "baseline": "8f86b47479e89241efeb4a5b9a27e80cba626759",
+  "current": "21691eaf8505ea542cdcf099113c6ff5b1bac376",
+  "fingerprints": {
+    "src": {
+      "baseline": "a01946082ce0bac64b2026219dd3d1731e8bb14d",
+      "current": "a01946082ce0bac64b2026219dd3d1731e8bb14d"
+    },
+    "tests": {
+      "baseline": "58868d895e6d6c90cb1cbda7cd400425db260a12",
+      "current": "58868d895e6d6c90cb1cbda7cd400425db260a12"
+    },
+    "package.json": {
+      "baseline": "c5d69bddbdd46e7228d9a0868a813f14f290cb42",
+      "current": "c5d69bddbdd46e7228d9a0868a813f14f290cb42"
+    },
+    "package-lock.json": {
+      "baseline": "c0bdb5bfe3ea588bab4a119c752c2a4b3b0db62b",
+      "current": "c0bdb5bfe3ea588bab4a119c752c2a4b3b0db62b"
+    }
+  },
+  "preregisteredPlanSha256": "6b52017cd47b63512a19ed9fd92940a791c4959006d07e41f541b2f9291aaeb8"
+}

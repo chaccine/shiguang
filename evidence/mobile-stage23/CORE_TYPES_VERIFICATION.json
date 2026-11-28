@@ -1,0 +1,72 @@
+{
+  "time": "2026-11-25T21:50:05.089841+08:00",
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0
+    }
+  ],
+  "counts": {
+    "cargo": 250,
+    "fault": 300,
+    "npm": 285
+  },
+  "scope": "pure domain and legacy in-memory mapping; existing production v5 writer unchanged",
+  "base": "0dca11d76f6e95380b7c5e17642b2998cbf00330"
+}

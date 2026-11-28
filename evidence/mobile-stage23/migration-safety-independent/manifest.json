@@ -1,0 +1,124 @@
+{
+  "at": "2026-11-26T00:36:56.756635+08:00",
+  "base": "c9eff0546b3167cebc36cb61fb9401b2c6750bb4",
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "started": "2026-11-26T00:34:29.509302+08:00",
+      "elapsedSeconds": 40.121,
+      "exit": 0
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "started": "2026-11-26T00:35:09.630628+08:00",
+      "elapsedSeconds": 45.449,
+      "exit": 0
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "started": "2026-11-26T00:35:55.080346+08:00",
+      "elapsedSeconds": 3.237,
+      "exit": 1
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "started": "2026-11-26T00:36:51.955440+08:00",
+      "elapsedSeconds": 2.247,
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "started": "2026-11-26T00:36:54.202811+08:00",
+      "elapsedSeconds": 1.608,
+      "exit": 0
+    }
+  ],
+  "rustCounts": {
+    "cargo": {
+      "passed": 260,
+      "failed": 0,
+      "ignored": 1
+    },
+    "fault": {
+      "passed": 318,
+      "failed": 0,
+      "ignored": 1
+    }
+  },
+  "npm": {
+    "passed": 284,
+    "failed": 1,
+    "failure": "homeSummary adapter 313.050ms > unchanged150ms"
+  },
+  "defaultNpmLaunchesThisBlock": 1,
+  "unexpectedValidationFailuresThisBlock": 1,
+  "logs": [
+    {
+      "source": "build.log",
+      "archive": "build.log.gz",
+      "bytes": 179,
+      "sha256": "b661158e90d0d81a8aeb7d7b13f6f51f66f48ce8a7a6ba6ad3d3c25c617acf0c"
+    },
+    {
+      "source": "cargo.log",
+      "archive": "cargo.log.gz",
+      "bytes": 26689,
+      "sha256": "3792b328fab90bea589b583df5c94f6f691ae7c52ef36da1afdca472b4e419ae"
+    },
+    {
+      "source": "fault.log",
+      "archive": "fault.log.gz",
+      "bytes": 29509,
+      "sha256": "97b56172d964a854e45e19e97e0a76389692b65b5159afc03541d9a3c73e8600"
+    },
+    {
+      "source": "npm.log",
+      "archive": "npm.log.gz",
+      "bytes": 28991,
+      "sha256": "5672954294795466d69d0b3e9aa81f2411b8348170aa94d614914d57610724a5"
+    },
+    {
+      "source": "results.json",
+      "archive": "results.json.gz",
+      "bytes": 1089,
+      "sha256": "e7e48190f4515ca03e6afaab5b9d711efa36b76fa9bee82b6820b1c5cba5c217"
+    },
+    {
+      "source": "typecheck.log",
+      "archive": "typecheck.log.gz",
+      "bytes": 57,
+      "sha256": "6796dcec13529efbd4cf20466baf395cbb9bea0ba34b2d509da16409f49dc4b4"
+    }
+  ]
+}

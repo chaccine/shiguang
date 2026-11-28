@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-25T23:23:29.993629+08:00",
+  "verdict": "INCONCLUSIVE",
+  "checkedHead": "21691eaf8505ea542cdcf099113c6ff5b1bac376",
+  "diagnosticLaunches": 10,
+  "reachedMeasurements": 180,
+  "diagnosticNonzeroExits": 0,
+  "diagnosticBreaches": 0,
+  "helperCheckIssues": 2,
+  "newAcceptanceLaunches": 0,
+  "profileLaunches": 0,
+  "oracleFilesIntact": 10,
+  "frozenV3FilesIntact": 11,
+  "sourceAndDefaultCommandChanged": false,
+  "lastPlainGate": {
+    "pass": 284,
+    "fail": 1,
+    "targetMs": 172.558,
+    "strictBudgetMs": 150
+  },
+  "action": "report-only archive; no fix or feature progression",
+  "deepEqualityChecksConfirmed": 80,
+  "photoContinuationChecksConfirmed": 20,
+  "eligibleResultItemsPerRun": 48
+}

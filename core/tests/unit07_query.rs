@@ -151,13 +151,15 @@ fn filters_formal_projection_calendar_and_date_move() {
     r[3].trashed_at = Some("synthetic".into());
     r[4].formal = None;
     r[5].formal.as_mut().unwrap().event_date = "9999-12-31".into();
-    r[0].formal.as_mut().unwrap().photos = vec![PhotoUse {
+    edit_simple(r[0].formal.as_mut().unwrap(), |f| {
+    f.photos = vec![PhotoUse {
         photo_use_id: "pu-009999".into(),
         asset_id: "ast-synthetic".into(),
         sha256: "0".repeat(64),
         ..Default::default()
     }];
-    r[0].formal.as_mut().unwrap().cover_photo_use_id = Some("pu-009999".into());
+    f.cover_photo_use_id = Some("pu-009999".into());
+    });
     r[0].draft = Some(shiguang_core::Snapshot {
         title: "草稿不可见".into(),
         ..Default::default()

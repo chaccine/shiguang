@@ -1,0 +1,68 @@
+{
+  "repo": "/workspace/shiguang-app",
+  "head": "a87573d04763f97f575a4fbd060df00696ad351e",
+  "review_mode": "static source and archived evidence",
+  "production_writer": {"outer": 1, "schema": 5},
+  "gate": {
+    "case": "U011 5000-record domain and MemoryAdapter first-page budgets",
+    "assertion": "homeSummary adapter",
+    "status": "BLOCKED",
+    "historical_cause": "INCONCLUSIVE",
+    "original": {"adapter_wall_ms": 313.050, "limit_exclusive_ms": 150, "whole_case_ms": 786.313605, "passed": 284, "failed": 1, "instrumented": false},
+    "sole_200ms_exception": "reunionPage adapter",
+    "later_observation": {"adapter_wall_ms": 132.048, "main_cpu_ms": 123.539, "runnable_wait_ms": 4.390, "parse_wall_ms": 112.267, "parse_system_cpu_ms": 90.454, "reproduced_breach": false},
+    "new_test_or_profile_launches": 0,
+    "same_path_failed_test_launches_including_original": 1,
+    "same_path_stop_at": 3,
+    "inside_adapter_clock": ["default or injected today", "failure check", "authoritative getItem", "parse and full reload validation", "domain date check and counts", "await resumption"],
+    "outside_adapter_clock": ["fixture construction and stringify", "initial Map write and eager validated open", "independent pure-domain clock", "equality and thresholds", "later queries and continuation clocks", "final read-only assertions", "UI rendering"],
+    "evidence": ["tests/unit011-museum.test.ts:422", "tests/unit011-museum.test.ts:447", "evidence/mobile-stage23/migration-safety-independent/npm.log.gz", "evidence/mobile-stage23/home-summary-investigation/measurements.json", "evidence/mobile-stage23/home-summary-investigation/ledger.json"]
+  },
+  "findings": [
+    {
+      "id": "M1",
+      "classification": "CONFIRMED defect",
+      "scope": "test-only candidate migration, G03 recovery",
+      "title": "An unconfirmed install and a confirmed commit can leave an indistinguishable synced receipt",
+      "locations": ["core/src/migration.rs:157", "core/src/migration.rs:161", "core/src/migration.rs:205", "core/src/migration/tests/faults.rs:58", "core/src/migration/tests/faults.rs:275", "evidence/mobile-stage23/PLAN.md:26"],
+      "expected": "Recover the exact old bytes after failed final confirmation; keep an ambiguous outcome fenced. Retain the candidate after a confirmed commit.",
+      "actual": "If final parent sync fails and the process stops before compensating rename, or that rename fails leaving SYNCED visible, recovery verifies both hashes, freshly syncs, unlinks the receipt and leaves the candidate active.",
+      "basis": "Static control flow. Existing tests cover successful compensation and a crash after confirmed commit separately.",
+      "how_to_test": "On disposable v3 and v5 copies, interrupt after failed parent-sync visit 6 before compensation, and separately fail the compensating rename. Compare with interruption after successful visit 6. Reopen under fresh ownership and check fencing, active state bytes/hash, retained backup and all named originals.",
+      "verification_this_review": "NOT_RUN"
+    },
+    {
+      "id": "M2",
+      "classification": "POSSIBLE hotspot or residual risk",
+      "title": "Interrupted first preimage copy can prevent unattended retry",
+      "locations": ["core/src/backup.rs:1009", "core/src/migration.rs:188", "core/src/migration.rs:247", "core/src/migration/tests.rs:391"],
+      "evidence": "create_new writes directly to the final digest-named path. A previously present partial copy is preserved and rejected. With no intent, recovery returns immediately.",
+      "confirm_or_falsify": "Interrupt the first copy after a partial write on a disposable fixture; inspect the final name, reopen and retry twice. Determine whether a partial file persists and blocks retry while the original state and media remain intact.",
+      "verification_this_review": "NOT_RUN"
+    },
+    {
+      "id": "H1",
+      "classification": "POSSIBLE hotspot or residual risk",
+      "title": "A second parse of identical authoritative text dominated the later measurement",
+      "locations": ["tests/support/museum.ts:35", "src/platform/memory-adapter.ts:114", "src/platform/memory-adapter.ts:129", "src/platform/memory-adapter.ts:882", "src/domain/museum.ts:97", "src/ui/main.ts:185", "src/ui/museum.ts:178"],
+      "evidence": "One eager parse outside the clock, then another inside for the same 6847994 UTF-8 bytes. Timed parse 112.267 ms of 132.048 ms; date check and row count loop 1.153 ms.",
+      "proposed_for_cine_confirmation": "One-shot reuse of an exclusively read-only, fully validated snapshot on the first summary after successful open. Always getItem in the original clock, compare full non-null strings, and validate the freshly read value on a miss. Compute counts for the current date.",
+      "confirm_or_falsify": "Check eager and deferred preview opens, cross-handle edits, invalid and missing data, writes including failed writes, date and error precedence, and no media access or storage writes. Retain default scheduling and assertions; check heap cost, equality cost and real hit rate.",
+      "verification_this_review": "NOT_RUN"
+    },
+    {
+      "id": "A1",
+      "classification": "REJECTED or out-of-scope suggestion that would weaken default acceptance",
+      "title": "Changes that weaken or substitute for the recorded gate",
+      "locations": ["tests/unit011-museum.test.ts:447", "tests/unit011-museum.test.ts:452"],
+      "rejected": ["extend the 200 ms exception", "exclude read/parse/validation from the clock", "substitute domain or whole-case timing", "serialize or isolate the default suite", "pin CPU", "select a passing retry", "serve unchecked cached counts"]
+    }
+  ],
+  "next": {"first": "Distinguish and test M1's two recovery histories before candidate promotion.", "performance": "H1 requires Cine confirmation and behavioral and performance verification."},
+  "not_run_this_review": ["npm or cargo regression", "targeted tests", "profile or observational launch", "M1 and M2 fault cases", "H1 implementation and validation", "candidate v6 backup read/verify/overwrite/merge twice/re-export", "occurrence identity collisions", "schema 6 activation", "editor UI or T5", "browser/native/device or physical power loss"],
+  "integrity": {
+    "method": "Read each manifest entry from the repo and compare byte length and SHA-256 at start and end.",
+    "candidate": {"manifest": "/workspace/sg-stage23/home-summary/CANDIDATE_PREIMAGE.json", "manifest_sha256": "dc0388e2f9f28d4815f7db0871e97321a4d41d70073193fb06b96ed426ab135e", "entries": 9, "start_matched": 9, "end_matched": 9, "end_mismatches": []},
+    "oracle": {"manifest": "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/ORACLE_PREIMAGE.json", "manifest_sha256": "b2cc77569732c2b817de4b6bb7597e823adac5cc80f4b68d58cb8ac9fedc6151", "entries": 10, "start_matched": 10, "end_matched": 10, "end_mismatches": []}
+  }
+}

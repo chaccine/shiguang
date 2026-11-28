@@ -1,0 +1,19 @@
+Reading additional input from stdin...
+OpenAI Codex v0.172.0
+--------
+workdir: /tmp
+model: gpt-6.2-astra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: ultra
+reasoning summaries: detailed
+session id: 01a215f2-6e9c-7eb0-baea-52c98da868c8
+--------
+user
+Reply with one short sentence that this probe was received, then stop. Do not inspect files, do not run tools, and do not write code.
+codex
+Your probe was received.
+tokens used
+4,952
+Your probe was received.

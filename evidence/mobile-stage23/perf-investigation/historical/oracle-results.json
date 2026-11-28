@@ -1,0 +1,65 @@
+{
+  "time": "2026-11-25T22:07:03.617342+08:00",
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit": 1
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "suite": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0
+    }
+  ]
+}

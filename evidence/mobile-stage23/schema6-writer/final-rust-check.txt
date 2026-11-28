@@ -1,0 +1,6 @@
+    Checking shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.12 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.72s
+    Checking shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Checking shiguang v0.1.12 (/workspace/shiguang-app/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.77s

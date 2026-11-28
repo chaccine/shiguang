@@ -1,0 +1,74 @@
+end feat/mobile-stage23 85d13a549a9886b6551ccb19589f41df0094cd8b
+rustc 1.90.0 (1159e78c4 2025-09-14)
+cargo 1.90.0 (840b83a10 2025-07-30)
+oracle manifest evidence/mobile-stage23/perf-investigation/ORACLE_PREIMAGE.json b2cc77569732c2b817de4b6bb7597e823adac5cc80f4b68d58cb8ac9fedc6151
+MATCH 108 c206c27a363365f007a48590efc205248df5dd7070b57a016e8f742a9117ee15 core/tests/fixtures/.gitattributes
+MATCH 7263 ee63e120c01ab959e8990d7f2cd11aab2e5f27bc191f20c39a95f04063e4976f core/tests/fixtures/v5/encrypted.sgbak
+MATCH 295 336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8 core/tests/fixtures/v5/media/ast-336cf1dd4efe5ef1.png
+MATCH 297 5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076 core/tests/fixtures/v5/media/ast-5be0e93dd09a92cb.png
+MATCH 6961 1e6219684710aa3ed5676fb4950713def97f106e9dee161f2ae677a905a2384b core/tests/fixtures/v5/plain.sgbak
+MATCH 5596 b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb core/tests/fixtures/v5/state.json
+MATCH 13354 d9afc1623c3dcadb1d29b9fdb92c28d5735b544cfaf656527671f66dcf1c1ab5 core/tests/v5_oracle.rs
+MATCH 1984 9934212da4f9555cdd57a63190bc013a2b6cb38dbb5aaa96d900b76bd9f31533 evidence/mobile-stage23/BLOCKED_TEST_GATE.md
+MATCH 9053 8a6d66fc25ade64f5f685abe45ce855b3fe41ef797fe585f70d8e9a461aaacd2 evidence/mobile-stage23/V5_ORACLE.md
+MATCH 4108 07b277b2ce8b7dd51e05b61e480dc98b61b62fbdc04e2d3c72505844e77b37b1 evidence/mobile-stage23/freeze_v5.rs
+oracle 10/10 matched
+preserved manifest /workspace/sg-stage23/home-summary/CANDIDATE_PREIMAGE.json dc0388e2f9f28d4815f7db0871e97321a4d41d70073193fb06b96ed426ab135e
+MATCH 53199 07850a665005b5a25bbb6499a55e22d8f7187a17d6b9c7978065ec43ad475fff core/src/backup.rs
+MATCH 1998 c156eaba92a591942dc71680f5e00423d7b7e13235535d5740f5185319e4e934 core/src/fault.rs
+MATCH 1845 ee987e88c8a5108957e3c1bff5a2b9a67f1c01584fff1c95f2038a3b406df447 core/src/lib.rs
+MATCH 10487 a6051c0c73bf7c084e1e05d6466a75fc844ba1624e981857163687f08c2b8a46 core/src/migration.rs
+MATCH 16628 5939dcfdb6e607088644f5e4cbfc21c1ae48a196966171fbf61b272d7d4e7ebf core/src/migration/tests.rs
+MATCH 13812 dc5043d18c392ad145eaec6e30efc7b593e458a705cae6a61bb26bbd4b692957 core/src/migration/tests/faults.rs
+MATCH 5582 34f4fe4465df64e227f96b238629f1456e9acf0f1d6fdb40e9b0c5877dcc0b2f core/src/persist.rs
+MATCH 74440 52a96cd80723bfeda6ac25043590ee7e7a08855c73b6f7946782394d3bc9eb28 core/src/store.rs
+MATCH 10004 967c2f082f9ef4a74e9a0b28c892d1ac840c90d89325dbfaa639535fd2981e40 evidence/mobile-stage23/MIGRATION_SAFETY.md
+preserved 9/9 matched
+working-candidate manifest /workspace/sg-stage23/home-summary/CANDIDATE_PREIMAGE.json dc0388e2f9f28d4815f7db0871e97321a4d41d70073193fb06b96ed426ab135e
+MATCH 53199 07850a665005b5a25bbb6499a55e22d8f7187a17d6b9c7978065ec43ad475fff core/src/backup.rs
+CHANGED 2085 6e3634a70c3add1d4abb483a1db17c370f84af9cb603cc90159c80ae9c824a9f core/src/fault.rs
+MATCH 1845 ee987e88c8a5108957e3c1bff5a2b9a67f1c01584fff1c95f2038a3b406df447 core/src/lib.rs
+CHANGED 12002 8952ae9a4fc0ab2018386f9e4607011957b1fce5ee203db21f0a036ee1006153 core/src/migration.rs
+MATCH 16628 5939dcfdb6e607088644f5e4cbfc21c1ae48a196966171fbf61b272d7d4e7ebf core/src/migration/tests.rs
+CHANGED 19566 3445b0a1d37a126bc893fde1163f7cafe7ad60750cad0666b6a473368c67ae96 core/src/migration/tests/faults.rs
+MATCH 5582 34f4fe4465df64e227f96b238629f1456e9acf0f1d6fdb40e9b0c5877dcc0b2f core/src/persist.rs
+MATCH 74440 52a96cd80723bfeda6ac25043590ee7e7a08855c73b6f7946782394d3bc9eb28 core/src/store.rs
+CHANGED 10203 3cd3371f4673df5b9f21ed64eec54bd057b44f0e286d6cea628223de70b2c801 evidence/mobile-stage23/MIGRATION_SAFETY.md
+working-candidate 5/9 matched
+src-tauri/gen tracked files: 0
+ARCHIVE 202912 3a9faaaaae7508c93ce919c3e563276b5b1b5d455e4299237b68e41be80d40d4 core/tests/fixtures/v3/encrypted.sgbak
+ARCHIVE 27812 00c2072079ed2cd020b5fe3eb687feb0c556c8aee947e8a3d2836971e30be115 core/tests/fixtures/v3/media/ast-00c2072079ed2cd0.png
+ARCHIVE 27812 22bc14a2983efb7a47d62f8c5d61675fe3faf6412ec566a15d9a9da08cf981bc core/tests/fixtures/v3/media/ast-22bc14a2983efb7a.png
+ARCHIVE 27812 712228abd53de6ebd84c5dd22779591f0cc0e04646c48e9c0b9678254ed1f238 core/tests/fixtures/v3/media/ast-712228abd53de6eb.png
+ARCHIVE 27812 7855dea458cee20f92c4fc65fde447bab8688497f29e7741e7abda188c6b08a1 core/tests/fixtures/v3/media/ast-7855dea458cee20f.png
+ARCHIVE 27812 800b8c3f88a08913eaf158c0ffb52a2058be6c27276e3b5741a4568dd01c7b2a core/tests/fixtures/v3/media/ast-800b8c3f88a08913.png
+ARCHIVE 27812 86ca1edaf7944720c73edb33b0f1d3320324c55afdda49cce1e2308123b1eb2a core/tests/fixtures/v3/media/ast-86ca1edaf7944720.png
+ARCHIVE 27812 bae4c974bce18ec7fa4dd98989cba28c8f0acfa61d8e60f21a6d15923adb222b core/tests/fixtures/v3/media/ast-bae4c974bce18ec7.png
+ARCHIVE 202608 a36c6395d12f14029bc445dd25572327c5a99f4311a77d5c01710e8cb32b89b9 core/tests/fixtures/v3/plain.sgbak
+ARCHIVE 6493 2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 core/tests/fixtures/v3/state.json
+ARCHIVE 7263 ee63e120c01ab959e8990d7f2cd11aab2e5f27bc191f20c39a95f04063e4976f core/tests/fixtures/v5/encrypted.sgbak
+ARCHIVE 295 336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8 core/tests/fixtures/v5/media/ast-336cf1dd4efe5ef1.png
+ARCHIVE 297 5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076 core/tests/fixtures/v5/media/ast-5be0e93dd09a92cb.png
+ARCHIVE 6961 1e6219684710aa3ed5676fb4950713def97f106e9dee161f2ae677a905a2384b core/tests/fixtures/v5/plain.sgbak
+ARCHIVE 5596 b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb core/tests/fixtures/v5/state.json
+15/15 archived v3/v5 fixture files match their prior manifest
+All pre-M1 fault tests byte-identical after excluding the two added source blocks
+Prior migration safety report byte-identical after excluding the M1 pointer
+Changed Rust source passes rustfmt; git diff --check passes; index has no staged files
+All prior ledger log hashes, exits and test counts verified
+Report links resolve
+M1 FILE core/src/fault.rs
+M1 FILE core/src/migration.rs
+M1 FILE core/src/migration/tests/faults.rs
+M1 FILE evidence/mobile-stage23/M1_COMMIT_WINDOW.md
+M1 FILE evidence/mobile-stage23/MIGRATION_SAFETY.md
+M1 FILE evidence/mobile-stage23/m1-commit-window/00-preimage.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/00b-red-source.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/01-red.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/02-green.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/03-candidate-default.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/04-candidate-fault.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/05-native-oracle.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/06-legacy-migration.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/07-postimage.txt
+M1 FILE evidence/mobile-stage23/m1-commit-window/commands.jsonl

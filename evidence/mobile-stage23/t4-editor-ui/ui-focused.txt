@@ -1,0 +1,12 @@
+✔ new record and calendar default open read-only; empty preview and opening the tag dialog create no draft (125.102448ms)
+✔ real controls group Chinese composition into one undo, survive autosave, and restore selection and scroll after preview (93.011937ms)
+✔ complex formal edit protects tags, fields, photo actions and publish in quick; preview, parking and simplification preserve the separate saved draft (290.745315ms)
+✔ formal Edit offers continue, restart with confirmation, or cancel; untouched restart creates no draft (119.181475ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 900.737223

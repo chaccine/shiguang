@@ -1,0 +1,15 @@
+✔ labelled movement and touch hold/drop share a persisted move; early lift and pointer cancellation preserve order and scroll (842.383638ms)
+✔ quick replacement picker cancel, retry, caption review, new thumbnail, undo and cover fallback (164.163231ms)
+✔ story replacement picker cancel, retry, caption review, new thumbnail, undo and cover fallback (138.26245ms)
+✔ T-5 opt-in fixtures are RAM-only and the shared fault is consumed exactly once (14.33763ms)
+✔ same-use replacement, move and history preserve typed order, independent captions and exact backup contents (23.873073ms)
+✔ bad input, uncertain original, failed state save, corrupt reused bytes and stale comparison keep working history and saved bytes (4.692606ms)
+✔ Tauri carries replacement bytes, expected layout and session-scoped history (0.597843ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1303.353227

@@ -1,0 +1,117 @@
+{
+  "legacy": {
+    "title": "旧记录",
+    "eventDate": "2026-11-09",
+    "eventTime": "08:15",
+    "location": "合成地点",
+    "mood": "平静",
+    "body": " \t\r\n**字** <b>字</b> é\n\n末尾 \n",
+    "photos": [
+      {
+        "photoUseId": "pu-000009",
+        "assetId": "ast-1f9012d2a9d6c94b",
+        "caption": " 春\n秋 ",
+        "sha256": "1f9012d2a9d6c94bffc6cb65ebe3a182a18144a24ad6f4eb6e34a296b3babbf5",
+        "bytes": 15,
+        "mediaType": "image/png"
+      },
+      {
+        "photoUseId": "pu-000002",
+        "assetId": "ast-1f9012d2a9d6c94b",
+        "caption": "<script>合成</script>\r\n🌱",
+        "sha256": "1f9012d2a9d6c94bffc6cb65ebe3a182a18144a24ad6f4eb6e34a296b3babbf5",
+        "bytes": 15,
+        "mediaType": "image/png"
+      }
+    ],
+    "coverPhotoUseId": "pu-000002"
+  },
+  "legacyBodies": [
+    "",
+    " ",
+    "\t　\r\n",
+    "\n",
+    "\n\n",
+    "\rfirst\r\n\n末\n"
+  ],
+  "mixed": {
+    "blocks": [
+      {
+        "kind": "smallHeading",
+        "runs": [
+          {
+            "text": "序",
+            "bold": false,
+            "italic": false
+          }
+        ]
+      },
+      {
+        "kind": "photo",
+        "photoUse": {
+          "photoUseId": "pu-000004",
+          "assetId": "ast-f82e1054fc0b89cc",
+          "caption": "封面以外\n的说明",
+          "sha256": "f82e1054fc0b89cc0c7f8f19df01b0098dc7b70225f3181e111237bf1ecb7c23",
+          "bytes": 12,
+          "mediaType": "image/png"
+        }
+      },
+      {
+        "kind": "paragraph",
+        "runs": [
+          {
+            "text": "<script>",
+            "bold": true,
+            "italic": false
+          },
+          {
+            "text": "🌱&",
+            "bold": false,
+            "italic": true
+          },
+          {
+            "text": "é",
+            "bold": true,
+            "italic": true
+          },
+          {
+            "text": "</script> **字**",
+            "bold": false,
+            "italic": false
+          }
+        ]
+      },
+      {
+        "kind": "divider"
+      },
+      {
+        "kind": "photo",
+        "photoUse": {
+          "photoUseId": "pu-000001",
+          "assetId": "ast-f82e1054fc0b89cc",
+          "caption": "**独立说明**",
+          "sha256": "f82e1054fc0b89cc0c7f8f19df01b0098dc7b70225f3181e111237bf1ecb7c23",
+          "bytes": 12,
+          "mediaType": "image/png"
+        }
+      },
+      {
+        "kind": "quote",
+        "runs": [
+          {
+            "text": " 引\n用 ",
+            "bold": false,
+            "italic": false
+          }
+        ]
+      }
+    ],
+    "coverPhotoUseId": "pu-000001"
+  },
+  "mixedText": "序\n<script>🌱&é</script> **字**\n 引\n用 ",
+  "mixedCaptions": [
+    "封面以外\n的说明",
+    "**独立说明**"
+  ]
+}

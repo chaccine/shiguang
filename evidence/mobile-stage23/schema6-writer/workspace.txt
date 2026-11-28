@@ -1,0 +1,132 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+   Compiling shiguang v0.1.12 (/workspace/shiguang-app/cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.90s
+     Running unittests src/main.rs (target/debug/deps/shiguang-34a13a194163b230)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_multiprocess.rs (target/debug/deps/unit04_multiprocess-00f07b4759bcacf8)
+
+running 5 tests
+test child_instance_lock_causes_store_locked_and_preserves_all_files ... ok
+test four_processes_create_twenty_drafts_each_without_lost_updates ... ok
+test child_write_lock_blocks_entire_commit_without_changes ... ok
+test child_write_lock_blocks_open_cleanup_and_preserves_state_bytes ... ok
+test child_write_lock_blocks_save_transaction_without_changes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.03s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-e39f544c138dddd6)
+
+running 1 test
+test cli_backup_roundtrip_requires_yes_and_verify_is_store_free ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/unit06_backup.rs (target/debug/deps/unit06_backup-c90f1624bf7573db)
+
+running 2 tests
+test password_argv_is_rejected_without_echo_or_data_creation ... ok
+test encrypted_export_verify_plan_merge_restore_env_and_stdin ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/unit07_cli.rs (target/debug/deps/unit07_cli-d760ee95b7cde06b)
+
+running 3 tests
+test cli_platform_local_date_is_passed_into_pure_query ... ok
+test typed_draft_survives_separate_cli_processes ... ok
+test all_unit07_commands_end_to_end_and_confirmation_guards ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-e76b184c8295cfa6)
+
+running 36 tests
+test base64::tests::rfc4648_vectors_and_binary ... ok
+test json::tests::rejects_duplicate_keys ... ok
+test json::tests::round_trip ... ok
+test json::tests::rejects_floats_and_trailing_garbage ... ok
+test backup::tests::existing_safety_directory_is_never_removed_on_create_failure ... ok
+test lock::tests::own_pid_leftover_is_stale_and_fresh_garbage_is_not ... ok
+test lock::tests::live_other_process_owner_blocks_and_pid_reuse_is_detected ... ok
+test json::tests::pretty_is_valid ... ok
+test lock::tests::real_proc_starttime_parses_for_self ... ok
+test lock::tests::without_proc_an_unknown_owner_is_never_stolen ... ok
+test lock::tests::stale_owner_from_dead_process_is_taken_over ... ok
+test lock::tests::unsupported_falls_back_and_rejects_second_holder_in_process ... ok
+test migration::tests::existing_store_import_recovery_runs_before_taking_the_preimage ... ok
+test migration::tests::an_existing_wrong_backup_is_never_replaced ... ok
+test migration::tests::builder_and_validator_run_with_both_store_locks_and_a_verified_preimage ... ok
+test preview::tests::crc_known_value ... ok
+test migration::tests::production_open_rejects_unknown_pairs_before_receipts_cleanup_or_writes ... ok
+test preview::tests::produces_stable_png ... ok
+test session::tests::failure_is_kept_and_actionable ... ok
+test migration::tests::frozen_stories_install_and_remain_committed_after_reopen ... ok
+test session::tests::timeout_reports_starting_not_panic ... ok
+test store::tests::draft_round_trip_and_atomic_state ... ok
+test store::tests::normal_writes_report_durable_on_linux ... ok
+test store::tests::open_cleans_only_root_temp_files ... ok
+test migration::tests::malformed_or_lossy_round_trip_cannot_install ... ok
+test store::tests::serialization_mismatch_keeps_memory_and_disk ... ok
+test store::unit08_sniff_tests::heic_ftyp_brands_and_extension ... ok
+test time::tests::epoch_and_known_dates ... ok
+test time::tests::time_validation ... ok
+test time::tests::date_validation ... ok
+test session::tests::begin_only_once_and_waiters_see_result ... ok
+test migration::tests::ownership_and_source_version_refusal_precede_candidate_writes ... ok
+test sha256::tests::known_vectors ... ok
+test json::unit08_regression::large_multilingual_document_roundtrips_strictly ... ok
+test app_lock::tests::exponential_backoff_is_persisted_and_correct_code_waits_then_resets ... ok
+test app_lock::tests::diagnostics_redact_codes_salts_hashes_and_success_payloads ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running tests/acceptance.rs (target/debug/deps/acceptance-bf39b475d700f156)
+
+running 13 tests
+test ac_u0_02_title_only_draft_cannot_be_committed ... ok
+test ac_u0_03_draft_survives_reopen_with_identical_hash ... ok
+test ac_u0_04_commit_creates_formal_record_and_increments_revision ... ok
+test ac_u0_02b_missing_or_invalid_date_is_rejected ... ok
+test ac_u0_07b_missing_original_blocks_commit ... ok
+test ac_u0_05_formal_list_excludes_drafts ... ok
+test ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view ... ok
+test ac_u0_09_edit_commit_updates_single_entry_with_stable_id ... ok
+test ac_u0_10_future_date_without_time_keeps_null_time ... ok
+test ac_u0_11_manifest_lists_formal_records_and_media_sha ... ok
+test ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically ... ok
+test s0_guard_formal_state_never_references_missing_asset ... ok
+test ac_u0_06_two_photos_independent_captions_and_sha_verifiable ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/hotfix07_reopen.rs (target/debug/deps/hotfix07_reopen-9d64d8c8ad32d21f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/schema6_writer.rs (target/debug/deps/schema6_writer-116654287929e7db)
+
+running 2 tests
+test equal_plain_text_with_different_structure_creates_one_durable_conflict ... FAILED
+test ordered_draft_publishes_reopens_restores_merges_twice_and_reexports ... ok
+
+failures:
+
+---- equal_plain_text_with_different_structure_creates_one_durable_conflict stdout ----
+
+thread 'equal_plain_text_with_different_structure_creates_one_durable_conflict' panicked at core/tests/schema6_writer.rs:176:44:
+called `Result::unwrap()` on an `Err` value: CoreError { tag_id: None, code: "STORE_NOT_EXCLUSIVE", stage: None, message: "覆盖恢复需要独占打开数据目录" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    equal_plain_text_with_different_structure_creates_one_durable_conflict
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+error: test failed, to rerun pass `-p shiguang_core --test schema6_writer`

@@ -1,0 +1,25 @@
+✔ new opens quick; mode, preview and accepting the prefilled date create no record (6.611329ms)
+✔ autosave retains undo/redo and exact v5 bytes after typed, formatted and ordered edits (5.006926ms)
+✔ complex quick protects the whole document and publish, including after navigation or preview (2.305772ms)
+✔ complex changes, including metadata and a contextual new photo, stay in RAM until simplified (2.369099ms)
+✔ undo/redo persisted insertion and deletion restore the same occurrence, caption, order and cover (2.473172ms)
+✔ complex transition during an in-flight simple save cannot send a scalar projection or lose newer input (1.586015ms)
+✔ failed durable photo operation retains the working story and a retry is idempotent (2.216035ms)
+✔ late formal publication still uses the revision observed when Edit opened (1.017018ms)
+✔ native undo sends only an editor token and the occurrence ID over the existing unlink command (0.478644ms)
+✔ shared Rust v5 fixture preserves exact bytes, occurrence order, captions, integrity and non-first cover (1.829975ms)
+✔ shared Rust empty/whitespace/CRLF and photo-only boundaries (0.410171ms)
+✔ shared Rust interleaved marked story projects literal text and independent captions in occurrence order (0.524377ms)
+✔ R02 depends on current order and both marks even when text projections match (0.351219ms)
+✔ empty textual blocks still separate lines and dividers alone do not meet the content minimum (0.186385ms)
+✔ Rust malformed block, run, occurrence, cover and metadata cases are rejected (0.638065ms)
+✔ separate stories can describe independent snapshots of the same occurrence (0.182258ms)
+✔ textarea and UTF-16 selection edits keep untouched CRLF, combining text and independent emphasis (0.655053ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 154.085155

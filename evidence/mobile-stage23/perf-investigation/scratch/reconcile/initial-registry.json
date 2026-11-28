@@ -1,0 +1,145 @@
+{
+  "order": [
+    "P",
+    "I",
+    "I",
+    "P",
+    "P",
+    "I",
+    "I",
+    "P",
+    "P",
+    "I"
+  ],
+  "limitSeconds": 2700,
+  "timeoutSeconds": 90,
+  "failedAttemptCap": 3,
+  "failedAttempts": 0,
+  "diagnosticBreaches": 0,
+  "failedPlainValidations": 0,
+  "launches": [
+    {
+      "run": "run-01-P",
+      "kind": "P",
+      "pair": 1,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15503891274706,
+        "load": [
+          "0.41",
+          "0.63",
+          "0.77"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:13:18.291+08:00",
+      "status": "exited",
+      "pid": 29,
+      "startNs": 15503891562309,
+      "after": {
+        "atNs": 15505976413269,
+        "load": [
+          "0.41",
+          "0.63",
+          "0.77"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15505976169587,
+      "end": "2026-11-25T23:13:20.376+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 2.084607278,
+      "monitorPolls": 268,
+      "monitorCpuMs": 67.112077,
+      "samplesSha256": "95c57104cc9a3b680562175ada535b7dcbe55002ddcd78911b150c85118786ba",
+      "consoleSha256": "3cfcecd8deddecbbcfec689d57b00c6c206aa641c0e102ac06469f803e2c83d8",
+      "assessment": "run-01-P/assessment.json",
+      "breaches": {},
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [
+        "Original case census differs or unavailable",
+        "Original case counts incomplete",
+        "Missing worker registry"
+      ]
+    }
+  ],
+  "harnessSha256": {
+    "HYPOTHESIS_MILESTONE.md": "dbe8b28e79f3aaabc67fe1b5795e92315ea292b285efdfd37bc1b5ab008394a3",
+    "scratch/fixture.mjs": "8cd771e5825c174b3097deea796752670d5bd6fccee726c3dace96c7700e6718",
+    "scratch/hooks.mjs": "39033dbd5c6837b16e55a3e282843684b4486ea0d6f8627e39407b34df0e3e2f",
+    "scratch/input.json": "bfab0f0daacb503c37f0bccc3319b3627e90f4c4725fdf849530902a3d62d032",
+    "scratch/inspect_run.py": "283eee18e92a516150867a1947c3db0ba436ff7e93b03f4226898dca4f301316",
+    "scratch/integrity.py": "fe08cf4334b7eb7c5d4b60c014a31f3a13b39aaa92cd6d2b5bb7774ca0a2617b",
+    "scratch/launch.py": "c2d318a579db8aca861b7ebcb9113943f86587cfca47a9c3907d316d30979061",
+    "scratch/lifecycle.mjs": "5aa50a86185a35ccd4eab6112b76a7f7da4c10c2ec5bbc94107deaf1f3f7b59e",
+    "scratch/observe.mjs": "ef9d768f5cf37230e67c07a8399acea3ea06dba6f80f676f1707a6fb11197ed3",
+    "scratch/preflight.json": "e943bb01c649ba837e6fa6868e08a604f3a61fa2088eafc6b24945eb5cf859c9",
+    "scratch/preflight.mjs": "94c2ee6c861366cad397163b2572029cf4113779aba02fb2e359d0c575af049a",
+    "scratch/probes.mjs": "512c74fd41bc10c2772cb1818eb82313651888116d68df11fa65b01add861fa2",
+    "scratch/profile.mjs": "9cab6ba82d7da3f43f30b4ae89977c3bd3f07dcfdd1a859f019b77af9aec4e87",
+    "scratch/target.mjs": "452ed4ecf5ee21619c5654f5059dcffdf6fae47be757d6d0743aaa0084211223",
+    "scratch/work.mjs": "f2a37fe7184dafcff59c91884b307b689ceaa0cae1d95136ff036f3dc183c3a3"
+  },
+  "stop": "Fidelity/correctness stop: Original case census differs or unavailable; Original case counts incomplete; Missing worker registry",
+  "firstLaunchNs": 15503891562309,
+  "finished": "2026-11-25T23:13:20.410+08:00",
+  "elapsedSecondsFromFirstLaunch": 2.118621497
+}

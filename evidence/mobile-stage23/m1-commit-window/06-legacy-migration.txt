@@ -1,0 +1,9 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+     Running tests/unit010_faults.rs (target/debug/deps/unit010_faults-19da6dcbdee453a2)
+
+running 1 test
+test v3_migration_interrupted_at_each_safe_write_stage_leaves_original_reopenable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.03s
+

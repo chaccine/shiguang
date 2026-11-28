@@ -4,6 +4,9 @@ import type { Mood, AppSettings, SettingsResult, ThemePreference } from "../doma
 import type { MuseumReunionPage, MuseumPhotoPage, MuseumYear, MuseumYearRoom, MuseumShuffle, MuseumSummary, MuseumHiddenResult, MuseumResetResult } from "../domain/types.ts";
 
 export interface DraftFields {
+  story?: import("../domain/story.ts").Story;
+  expectedStory?: import("../domain/story.ts").Story;
+  editorMode?: "quick" | "story";
   title?: string;
   body?: string;
   eventDate?: string;
@@ -14,11 +17,21 @@ export interface DraftFields {
 export interface CreateDraftInput extends DraftFields { baseRecordId?: string | null }
 export interface SaveDraftInput extends DraftFields { recordId: string; clearEventTime?: boolean; clearMood?: boolean }
 export interface AttachPhotoBytesInput {
+  expectedStory?: import("../domain/story.ts").Story;
   recordId: string;
   fileName: string;
   bytes: readonly number[] | Uint8Array;
   caption: string;
   mediaType?: string | null;
+}
+export type PhotoFile = Pick<AttachPhotoBytesInput, "fileName" | "bytes" | "mediaType">;
+export interface ReplacePhotoInput {
+  editorMode?: "quick" | "story";
+  recordId: string;
+  photoUseId: string;
+  undoSession?: string;
+  expectedStory?: import("../domain/story.ts").Story;
+  source: ({ kind: "file" } & PhotoFile) | { kind: "history"; assetId: string; sha256: string; mediaType: string };
 }
 export interface SaveResult { row: RecordRow; durability: Durability }
 export interface DiscardResult { row: RecordRow | null; durability: Durability }
@@ -54,7 +67,9 @@ export interface ShiguangApi {
   createDraft(input: CreateDraftInput): Promise<SaveResult>;
   saveDraft(input: SaveDraftInput): Promise<SaveResult>;
   attachPhotoBytes(input: AttachPhotoBytesInput): Promise<SaveResult>;
-  removeDraftPhoto(recordId: string, photoUseId: string): Promise<SaveResult>;
+  replaceDraftPhoto(input: ReplacePhotoInput): Promise<SaveResult>;
+  releasePhotoHistory(recordId: string, undoSession: string): Promise<void>;
+  removeDraftPhoto(recordId: string, photoUseId: string, undoSession?: string, undo?: boolean, expectedStory?: import("../domain/story.ts").Story): Promise<SaveResult>;
   setDraftPhotoCaption(recordId: string, photoUseId: string, caption: string): Promise<SaveResult>;
   setDraftCover(recordId: string, photoUseId: string): Promise<SaveResult>;
   reorderDraftPhotos(recordId: string, photoUseIds: string[]): Promise<SaveResult>;

@@ -1,0 +1,23 @@
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.13s
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-51d23a2cebecabbe)
+
+running 5 tests
+v5 parent sync visit 6 failed; compensating rename returned [IO_ERROR] Is a directory (os error 21)
+v5 parent sync visit 6 failed; installing process exited before compensation
+v5 fresh recovery: synced=false idle=true state=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb old=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb candidate=3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 originals=2
+v5 fresh recovery: synced=false idle=true state=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb old=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb candidate=3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 originals=2
+test migration::tests::faults::unconfirmed_sync_crash_v5 ... ok
+test migration::tests::faults::unconfirmed_sync_compensation_error_v5 ... ok
+v3 parent sync visit 6 failed; compensating rename returned [IO_ERROR] Is a directory (os error 21)
+v3 parent sync visit 6 failed; installing process exited before compensation
+v3 fresh recovery: synced=false idle=true state=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 old=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 candidate=202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c originals=7
+v3 fresh recovery: synced=false idle=true state=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 old=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 candidate=202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c originals=7
+v3 interruption after durable commit; receipt sync failure fenced; confirmed reopen=candidate originals=7
+test migration::tests::faults::unconfirmed_sync_compensation_error_v3 ... ok
+test migration::tests::faults::unconfirmed_sync_crash_v3 ... ok
+v5 interruption after durable commit; receipt sync failure fenced; confirmed reopen=candidate originals=2
+test migration::tests::faults::verified_commit_receipt_needs_confirmed_sync_before_releasing_the_writer ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.07s
+

@@ -1,0 +1,143 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-51d23a2cebecabbe)
+
+running 20 tests
+test migration::tests::faults::already_open_v5_writer_cannot_save_through_pending_even_when_old_bytes_are_visible ... ok
+v3 MigrationBackupVerify visit=1 error=IO_ERROR before_reopen=Old reopened=exact_old originals=7
+test migration::tests::existing_store_import_recovery_runs_before_taking_the_preimage ... ok
+test migration::tests::an_existing_wrong_backup_is_never_replaced ... ok
+v3 corrupt-backup installed=false rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 two-phase-names rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 pending=empty rejected_without_mutation repaired_reopen=exact_old originals=7
+test migration::tests::builder_and_validator_run_with_both_store_locks_and_a_verified_preimage ... ok
+v3 ParentSync visit=1 error=MIGRATION_FAILED before_reopen=Old reopened=exact_old originals=7
+v3 parent sync visit 6 failed; compensating rename returned [IO_ERROR] Is a directory (os error 21)
+v3 missing-backup installed=false rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 pending=truncated rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 rollback RestoreSwitchState visit=1 old_visible=false fenced reopened=exact_old originals=7
+v3 overlapping-import rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 symlink=state rejected_without_mutation reopened=exact_old originals=7
+v3 fresh recovery: synced=false idle=true state=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 old=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 candidate=202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c originals=7
+v3 ParentSync visit=2 error=MIGRATION_FAILED before_reopen=Old reopened=exact_old originals=7
+test migration::tests::faults::unconfirmed_sync_compensation_error_v3 ... ok
+v5 parent sync visit 6 failed; compensating rename returned [IO_ERROR] Is a directory (os error 21)
+v3 third-state installed=false rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 fresh recovery: synced=false idle=true state=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb old=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb candidate=3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 originals=2
+test migration::tests::faults::unconfirmed_sync_compensation_error_v5 ... ok
+v3 pending=oversized rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 backup-schema rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 TempWrite visit=1 error=PERSIST_TEMP_WRITE_FAILED before_reopen=Old reopened=exact_old originals=7
+v3 rollback TempWrite visit=1 old_visible=false fenced reopened=exact_old originals=7
+v3 symlink=backup rejected_without_mutation reopened=exact_old originals=7
+v3 parent sync visit 6 failed; installing process exited before compensation
+v3 missing-state installed=false rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 pending=duplicate-key rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 fresh recovery: synced=false idle=true state=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 old=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 candidate=202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c originals=7
+v3 Replace visit=1 error=PERSIST_REPLACE_FAILED before_reopen=Old reopened=exact_old originals=7
+v3 foreign-state rejected_without_mutation repaired_reopen=exact_old originals=7
+test migration::tests::faults::unconfirmed_sync_crash_v3 ... ok
+v5 parent sync visit 6 failed; installing process exited before compensation
+v3 pending=parent rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 two-phase-names rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 fresh recovery: synced=false idle=true state=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb old=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb candidate=3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 originals=2
+test migration::tests::faults::unconfirmed_sync_crash_v5 ... ok
+v3 symlink=backups rejected_without_mutation reopened=exact_old originals=7
+v3 rollback ParentSync visit=1 old_visible=true fenced reopened=exact_old originals=7
+v3 corrupt-backup installed=true rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 ParentSync visit=3 error=MIGRATION_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v5 overlapping-import rejected_without_mutation repaired_reopen=exact_old originals=2
+v3 pending=absolute rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 backup-schema rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 foreign-state rejected_without_mutation repaired_reopen=exact_old originals=2
+test migration::tests::faults::conflicting_intents_and_wrong_version_pairs_stay_fenced ... ok
+v3 symlink=pending rejected_without_mutation reopened=exact_old originals=7
+v3 interruption after durable commit; receipt sync failure fenced; confirmed reopen=candidate originals=7
+v3 rollback ParentSync visit=2 old_visible=true fenced reopened=exact_old originals=7
+v3 missing-backup installed=true rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 MigrationWrite visit=1 error=IO_ERROR before_reopen=OldPending reopened=exact_old originals=7
+v3 pending=backslash rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 interruption after durable commit; receipt sync failure fenced; confirmed reopen=candidate originals=2
+test migration::tests::faults::verified_commit_receipt_needs_confirmed_sync_before_releasing_the_writer ... ok
+v5 rollback RestoreSwitchState visit=1 old_visible=false fenced reopened=exact_old originals=2
+v3 MigrationWitnessWrite confirmed=0 recovered state=2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936
+v5 rollback TempWrite visit=1 old_visible=false fenced reopened=exact_old originals=2
+v3 pending=other-backup rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 symlink=clearing rejected_without_mutation reopened=exact_old originals=7
+test migration::tests::faults::legacy_receipts_and_malformed_witnesses_preserve_the_fence_or_exact_old_state ... ok
+v3 TempCreate visit=2 error=PERSIST_TEMP_CREATE_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v3 third-state installed=true rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 rollback ParentSync visit=1 old_visible=true fenced reopened=exact_old originals=2
+v5 symlink=state rejected_without_mutation reopened=exact_old originals=2
+v5 rollback ParentSync visit=2 old_visible=true fenced reopened=exact_old originals=2
+test migration::tests::faults::rollback_failure_and_uncertain_restoration_keep_writers_fenced ... ok
+v3 durable candidate 202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c preimage 2c0677c397b5d135262ae5194f4854a94b78d03979189e91bbca7c0d0afd5936 originals 7
+v3 pending=name-digest rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 symlink=backup rejected_without_mutation reopened=exact_old originals=2
+v3 MigrationWitnessSync confirmed=1 recovered state=202c26ed2e7aae64777f688ef7877304d972da8f52ac50f5b788293543d8d20c
+v5 durable candidate 3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7 preimage b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb originals 2
+test migration::tests::frozen_stories_install_and_remain_committed_after_reopen ... ok
+v5 symlink=backups rejected_without_mutation reopened=exact_old originals=2
+v5 MigrationWitnessWrite confirmed=0 recovered state=b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb
+v3 TempWrite visit=2 error=PERSIST_TEMP_WRITE_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v5 symlink=pending rejected_without_mutation reopened=exact_old originals=2
+v3 missing-state installed=true rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 MigrationWitnessSync confirmed=1 recovered state=3a15407ccd457d825303f02f33d183d81c62df3b1480e54f34eee38e25e33ba7
+test migration::tests::faults::witness_io_faults_leave_a_fenced_receipt_for_the_next_owner ... ok
+test migration::tests::ownership_and_source_version_refusal_precede_candidate_writes ... ok
+v3 pending=bad-old rejected_without_mutation repaired_reopen=exact_old originals=7
+v5 corrupt-backup installed=false rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 symlink=clearing rejected_without_mutation reopened=exact_old originals=2
+test migration::tests::faults::symlinked_state_backup_pending_or_directory_never_reaches_its_target ... ok
+v5 missing-backup installed=false rejected_without_mutation repaired_reopen=exact_old originals=2
+test migration::tests::malformed_or_lossy_round_trip_cannot_install ... ok
+v5 third-state installed=false rejected_without_mutation repaired_reopen=exact_old originals=2
+v3 pending=bad-new rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 PartialTempWrite visit=2 error=PERSIST_TEMP_WRITE_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v5 missing-state installed=false rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 corrupt-backup installed=true rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 missing-backup installed=true rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 third-state installed=true rejected_without_mutation repaired_reopen=exact_old originals=2
+v3 pending=identical rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 TempSync visit=2 error=PERSIST_TEMP_SYNC_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v5 missing-state installed=true rejected_without_mutation repaired_reopen=exact_old originals=2
+test migration::tests::faults::corrupt_missing_backup_or_third_state_blocks_all_destructive_recovery ... ok
+v3 pending=extra rejected_without_mutation repaired_reopen=exact_old originals=7
+v3 Replace visit=2 error=PERSIST_REPLACE_FAILED before_reopen=OldPending reopened=exact_old originals=7
+v5 pending=empty rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=truncated rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=oversized rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=duplicate-key rejected_without_mutation repaired_reopen=exact_old originals=2
+v3 ParentSync visit=4 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=7
+v5 pending=parent rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=absolute rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=backslash rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=other-backup rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=name-digest rejected_without_mutation repaired_reopen=exact_old originals=2
+v3 MigrationAfterInstall visit=1 error=IO_ERROR before_reopen=CandidatePending reopened=exact_old originals=7
+v5 pending=bad-old rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=bad-new rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=identical rejected_without_mutation repaired_reopen=exact_old originals=2
+v5 pending=extra rejected_without_mutation repaired_reopen=exact_old originals=2
+test migration::tests::faults::invalid_pending_hashes_names_and_documents_cannot_write_through_the_record ... ok
+v3 ParentSync visit=5 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=7
+v3 ParentSync visit=6 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=7
+v5 MigrationBackupVerify visit=1 error=IO_ERROR before_reopen=Old reopened=exact_old originals=2
+v5 ParentSync visit=1 error=MIGRATION_FAILED before_reopen=Old reopened=exact_old originals=2
+v5 ParentSync visit=2 error=MIGRATION_FAILED before_reopen=Old reopened=exact_old originals=2
+v5 TempWrite visit=1 error=PERSIST_TEMP_WRITE_FAILED before_reopen=Old reopened=exact_old originals=2
+v5 Replace visit=1 error=PERSIST_REPLACE_FAILED before_reopen=Old reopened=exact_old originals=2
+v5 ParentSync visit=3 error=MIGRATION_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 MigrationWrite visit=1 error=IO_ERROR before_reopen=OldPending reopened=exact_old originals=2
+v5 TempCreate visit=2 error=PERSIST_TEMP_CREATE_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 TempWrite visit=2 error=PERSIST_TEMP_WRITE_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 PartialTempWrite visit=2 error=PERSIST_TEMP_WRITE_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 TempSync visit=2 error=PERSIST_TEMP_SYNC_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 Replace visit=2 error=PERSIST_REPLACE_FAILED before_reopen=OldPending reopened=exact_old originals=2
+v5 ParentSync visit=4 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=2
+v5 MigrationAfterInstall visit=1 error=IO_ERROR before_reopen=CandidatePending reopened=exact_old originals=2
+v5 ParentSync visit=5 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=2
+v5 ParentSync visit=6 error=MIGRATION_FAILED before_reopen=CandidatePending reopened=exact_old originals=2
+test migration::tests::faults::backup_install_and_clear_faults_preserve_the_frozen_preimage_on_reopen ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.89s
+

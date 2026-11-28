@@ -1,0 +1,37 @@
+{
+  "total": 285,
+  "fileOnly": [
+    "tests/unit08.test.ts"
+  ],
+  "fileCounts": {
+    "tests/conflict.test.ts": 2,
+    "tests/draft-session.test.ts": 23,
+    "tests/durability.test.ts": 2,
+    "tests/errors.test.ts": 6,
+    "tests/memory-adapter.test.ts": 14,
+    "tests/mobile-startup.test.ts": 14,
+    "tests/mobile-visual.test.ts": 15,
+    "tests/navigation.test.ts": 6,
+    "tests/rules.test.ts": 7,
+    "tests/startup.test.ts": 3,
+    "tests/unit010-accessibility.test.ts": 8,
+    "tests/unit010-appearance.test.ts": 5,
+    "tests/unit010-boot.test.ts": 1,
+    "tests/unit010-lock-ui.test.ts": 2,
+    "tests/unit010-lock.test.ts": 11,
+    "tests/unit010-schema.test.ts": 15,
+    "tests/unit010-ui.test.ts": 5,
+    "tests/unit011-museum-ui.test.ts": 13,
+    "tests/unit011-museum.test.ts": 19,
+    "tests/unit012-search-demo.test.ts": 7,
+    "tests/unit012-search-ui.test.ts": 28,
+    "tests/unit012-search.test.ts": 15,
+    "tests/unit04.test.ts": 20,
+    "tests/unit05.test.ts": 11,
+    "tests/unit06.test.ts": 9,
+    "tests/unit07.test.ts": 18,
+    "tests/unit08.test.ts": 1,
+    "tests/view.test.ts": 5
+  },
+  "registeredMuseumCases": 19
+}

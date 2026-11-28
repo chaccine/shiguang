@@ -27,7 +27,18 @@ impl Durability {
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Durability, CoreError> {
-    write_atomic_inner(path, |file| file.write_all(bytes), None)
+    write_atomic_inner(
+        path,
+        |file| {
+            #[cfg(all(test, feature = "fault-injection"))]
+            if let Err(error) = fault::hit(FaultPoint::PartialTempWrite) {
+                file.write_all(&bytes[..bytes.len() / 2])?;
+                return Err(error);
+            }
+            file.write_all(bytes)
+        },
+        None,
+    )
 }
 
 pub(crate) fn write_atomic_restore(path: &Path, source: &Path) -> Result<Durability, CoreError> {
@@ -155,7 +166,23 @@ pub(crate) fn parent_sync(dir: &Path) -> Durability {
             },
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x02000000;
+        match OpenOptions::new()
+            .write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(dir)
+            .and_then(|handle| handle.sync_all())
+        {
+            Ok(()) => Durability::Durable,
+            Err(error) => Durability::Uncertain {
+                error: error.to_string(),
+            },
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = dir;
         Durability::ParentSyncUnsupported

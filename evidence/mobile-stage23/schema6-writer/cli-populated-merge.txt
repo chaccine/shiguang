@@ -1,0 +1,6 @@
+Synthetic populated merge through separate CLI processes, with unrelated records sharing both occurrence IDs.
+Incoming record and 2 uses remapped. Source IDs ['pu-000002', 'pu-000003'] installed IDs ['pu-000005', 'pu-000006'] non-first cover pu-000006
+All 7 ordered blocks, literal text, combined marks, captions, metadata and prior local formal matched.
+Second merge identical state SHA-256 9e6c7ebeb8e1012413ea14498d6be9b7ef76a7cc3390d54787ecfd33c9ddabd4
+Re-export formatVersion=1 schemaVersion=6. Fresh overwrite and reopen retained both stories.
+One shared original SHA-256 336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8

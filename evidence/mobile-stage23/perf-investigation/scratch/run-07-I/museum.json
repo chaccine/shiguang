@@ -1,0 +1,156 @@
+{
+  "pid": 627,
+  "parent": 621,
+  "times": {
+    "domain.homeSummary": 2.6037039999999934,
+    "adapter.homeSummary": 32.71273699999995,
+    "domain.reunionPreview": 4.191280000000006,
+    "adapter.reunionPreview": 25.344058000000018,
+    "domain.reunionPage": 1.7492619999999874,
+    "adapter.reunionPage": 32.75874700000003,
+    "domain.favoritesFirst": 1.8758860000000368,
+    "adapter.favoritesFirst": 19.029105999999956,
+    "domain.photosFirst": 4.066011000000003,
+    "adapter.photosFirst": 21.544956999999954,
+    "domain.years": 1.265186999999969,
+    "adapter.years": 17.285022000000026,
+    "domain.yearRoomFirst": 1.2111099999999624,
+    "adapter.yearRoomFirst": 18.634051999999997,
+    "domain.reshuffle": 1.9595310000000836,
+    "adapter.reshuffle": 17.72042799999997,
+    "adapter.photosNext.asc": 19.496713,
+    "adapter.photosNext.desc": 19.627877000000012
+  },
+  "equal": {
+    "homeSummary": true,
+    "reunionPreview": true,
+    "reunionPage": true,
+    "favoritesFirst": true,
+    "photosFirst": true,
+    "years": true,
+    "yearRoomFirst": true,
+    "reshuffle": true
+  },
+  "continued": {
+    "asc": true,
+    "desc": true
+  },
+  "fullAssertions": true,
+  "input": {
+    "utf8Bytes": 6847994,
+    "sha256": "4414a194cd52718f3412ebfbffe97bcec5ae29ea905a8a8b66ed9148e37494e9",
+    "version": 1,
+    "schema": 5,
+    "rows": 5000,
+    "active": 5000,
+    "formal": 5000,
+    "drafts": 0,
+    "photoUses": 5000,
+    "referencedAssetIds": 1,
+    "assetEntries": 0,
+    "favorites": 1000,
+    "hidden": 136,
+    "anniversary2024": 50,
+    "hiddenAnniversary": 2,
+    "eligibleIdSetSha256": "fdedab4a93ad2a0cd984d736adf751eb34c84d5f8bf85747f7112bfdf9d097a8"
+  },
+  "stored": {
+    "beforeWrites": 1,
+    "afterWrites": 1,
+    "identical": true,
+    "afterBytes": 6847994,
+    "afterSha256": "4414a194cd52718f3412ebfbffe97bcec5ae29ea905a8a8b66ed9148e37494e9"
+  },
+  "home": {
+    "recordCount": 5000,
+    "reunionCount": 48,
+    "favoriteCount": 1000,
+    "photoCount": 5000,
+    "yearCount": 30,
+    "eligibleCount": 4380,
+    "hiddenCount": 136
+  },
+  "output": {
+    "total": 48,
+    "items": 48,
+    "years": [
+      2024
+    ],
+    "nextCursor": null,
+    "eligibleIdSetSha256": "fdedab4a93ad2a0cd984d736adf751eb34c84d5f8bf85747f7112bfdf9d097a8",
+    "pageSha256": "58d72befe592209c4ff5bae3a4e1c1753c24281f73391a1ef01487216845f335"
+  },
+  "startPerfMs": 489.552398,
+  "elapsedPerfMs": 32.75874700000003,
+  "target": {
+    "beforeWorkNs": 15778129701807,
+    "contextBefore": {
+      "atNs": 15778130170458,
+      "availableParallelism": 8,
+      "affinity": "0-7",
+      "cgroup": "/sys/fs/cgroup/agent",
+      "quotaAndPeriod": "max 100000",
+      "effectiveCpuset": "0-7",
+      "periods": 0,
+      "throttled": 0,
+      "throttledUsec": 0,
+      "load": [
+        2.06,
+        0.85,
+        0.78
+      ],
+      "runnableAndTotal": "2/1610"
+    },
+    "before": {
+      "lo": 15778130465626,
+      "hi": 15778130584775,
+      "cpu": {
+        "user": 684772,
+        "system": 108118
+      },
+      "thread": {
+        "user": 410276,
+        "system": 72397
+      },
+      "runtimeNs": 482673525,
+      "waitNs": 340765,
+      "slices": 94
+    },
+    "beforeClockNs": 15778130590737,
+    "afterClockNs": 15778163479471,
+    "after": {
+      "lo": 15778163496195,
+      "hi": 15778163600655,
+      "cpu": {
+        "user": 734488,
+        "system": 108958
+      },
+      "thread": {
+        "user": 442920,
+        "system": 72472
+      },
+      "runtimeNs": 515393188,
+      "waitNs": 340765,
+      "slices": 98
+    },
+    "contextAfter": {
+      "atNs": 15778163731903,
+      "availableParallelism": 8,
+      "affinity": "0-7",
+      "cgroup": "/sys/fs/cgroup/agent",
+      "quotaAndPeriod": "max 100000",
+      "effectiveCpuset": "0-7",
+      "periods": 0,
+      "throttled": 0,
+      "throttledUsec": 0,
+      "load": [
+        2.06,
+        0.85,
+        0.78
+      ],
+      "runnableAndTotal": "1/1610"
+    },
+    "afterWorkNs": 15778163829881
+  },
+  "failures": []
+}

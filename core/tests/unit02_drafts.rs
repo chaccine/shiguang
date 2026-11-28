@@ -53,15 +53,9 @@ fn list_drafts_orders_updates_and_ties_and_includes_formal_edits() {
     rows[0].updated_at = "2099-01-01T00:00:00Z".into();
     rows[1].updated_at = "2000-01-01T00:00:00Z".into();
     rows[2].updated_at = "2000-01-01T00:00:00Z".into();
-    let state = Json::obj(vec![
-        ("version", Json::Num(1)),
-        ("seq", Json::Num(4)),
-        ("seed", Json::str("20261109")),
-        (
-            "records",
-            Json::Arr(rows.iter().map(|r| r.to_json()).collect()),
-        ),
-    ]);
+    let mut state = s.state_json();
+    let Json::Obj(fields) = &mut state else { unreachable!() };
+    fields.iter_mut().find(|(k, _)| k == "records").unwrap().1 = Json::Arr(rows.iter().map(|r| r.to_json()).collect());
     fs::write(tmp.path().join("state.json"), state.pretty()).unwrap();
     let s = Store::open(tmp.path()).unwrap();
     assert_eq!(

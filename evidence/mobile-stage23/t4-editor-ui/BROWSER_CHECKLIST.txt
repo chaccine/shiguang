@@ -1,0 +1,63 @@
+T-4 editor parent computerUse checklist
+Status at handoff — NOT_RUN
+
+Start in /workspace/shiguang-app with npm run preview.
+Use http://127.0.0.1:1420/?stage01=empty&theme=light or
+http://127.0.0.1:1420/?stage01=timeline&theme=dark. These existing
+opt-in synthetic libraries, including navigation preferences, are held in RAM.
+Use in-app navigation when checking the current session. Refresh starts a new fixture.
+Run each flow at 360×800 and 390×844, in light paper and lamplit dark.
+Record viewport, theme, actions and observed results for each pass.
+
+[ ] Start with the empty fixture. Open ＋记录. Check the prefilled date.
+    Accept it, visit both modes, open and cancel the tag picker, and preview.
+    Return to the draft box. It should still be empty. Repeat from the calendar.
+
+[ ] In quick mode enter a short literal body with line breaks and markup-like text.
+    Pick only the two checked-in synthetic PNGs under core/tests/fixtures/v5/media/.
+    Give the occurrences different multiline captions. Set the second as cover.
+    Move a photo up and down with its existing buttons, then publish. Open formal
+    reading. Check the separate cover header and the two positions and captions
+    in body order. Repeat the publication minimum with a photo-only entry.
+
+[ ] Edit that formal. Return immediately, then check the draft box. Opening Edit
+    alone should have created no draft. Edit once more, change a simple field and
+    wait for 已自动保存. Remember that baseline. Enter 故事编辑. Insert a small
+    heading, quote and divider between blocks. Select overlapping text ranges
+    for 加粗 and 斜体. Move blocks, including a photo across text. Confirm one
+    removal, undo it, and cancel a second removal. Verify order, caption and cover.
+
+[ ] Check the session-only explanation. Switch to 速记. Try title, date, time,
+    location, mood, tags, captions, cover, reorder, remove, file selection, undo
+    and publish. Editing is protected. Use 进入故事编辑 and confirm the complete
+    working document is present.
+
+[ ] Place a selection in a block and scroll both the editor and the textarea where
+    possible. Open 预览草稿. Check the order of headings, paragraphs, nested emphasis,
+    quotes, dividers and captions, plus the cover outside the sequence. Confirm
+    preview offers a return control and no publish action. Return via the button
+    and via Back. Check the same control, selection and scroll.
+
+[ ] Leave an unsaved complex edit. The formal reader should still show the original
+    publication. Find the working story in 我的 → 草稿箱 with 仅本次会话. Reopen it
+    in story mode. From formal Edit, try cancel, continue, then 从正式版重编 followed
+    by cancel at the second confirmation. Both saved and working content should
+    survive cancellation. Exercise confirmed restart on a disposable fixture entry.
+
+[ ] Simplify explicitly to one leading unmarked paragraph and trailing photos,
+    or to photos only. Verify autosave returns and quick mode becomes editable.
+    Wait for autosave, undo and redo a body edit and a photo unlink. Check that
+    the same occurrence, caption, order and cover return. Reopen the simple draft
+    within this app instance and check its last mode. Publish and verify the reader.
+
+[ ] Start a new complex story without a durable row. Insert a synthetic photo at
+    a chosen gap, change its caption and preview it. Leave and reopen via the
+    session draft box. Simplify, then publish. Verify a single new formal entry.
+
+[ ] At both widths check page overflow, wraps, visible focus, control labels,
+    selection toolbar and field sizing. Tab through the UI and navigate using
+    the touch-sized controls. Note any clipping when an input has focus.
+
+Android-native, real IME composition and keyboard occlusion, TalkBack, the native
+picker and Back, and real-device process restart/upgrade retention — NOT_RUN.
+T-5 has not started.

@@ -1,0 +1,304 @@
+{
+  "zone": "Asia/Shanghai",
+  "head": "fb8cbcea82fd304e3c69e73c34aeed3abafee7fa",
+  "limitNewLaunches": 2,
+  "cumulativeStop": 3,
+  "original": {
+    "suite": "npm",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "started": "2026-11-26T00:35:55.080346+08:00",
+    "elapsedSeconds": 3.237,
+    "exit": 1,
+    "derivedEnd": "2026-11-26T00:35:58.317346+08:00",
+    "failureNumber": 1
+  },
+  "newLaunches": 1,
+  "cumulativeFailures": 2,
+  "helperIssues": [
+    {
+      "phase": "offline reduction of saved samples",
+      "problem": "Python reserved keyword in reporter-count dictionary",
+      "occurrences": 1,
+      "exit": 1,
+      "rawStderr": "offline-helper.stderr.gz",
+      "stderrSha256": "2d7799cae1d08d26f29c1479c478b24308fedc346eaa7ba301bd2823239556c4",
+      "failedHelperSha256": "f3460e742faa21a8fec47c60d0c7696963fad34c41fa1f15f4e2be0f235c8741",
+      "afterLocal": "2026-11-26T00:46:18.812845+08:00",
+      "noticedByLocal": "2026-11-26T00:46:49.019071+08:00",
+      "timePrecision": "bounded by script write and capture of returned stderr; no separate runtime timestamps",
+      "invokedNodeOrNpm": false,
+      "newSample": false,
+      "changedProductOrProbe": false,
+      "resolution": "Corrected the dictionary literal in the offline reader. Reconciled the same archived bytes, exit 0.",
+      "correctedHelper": "offline-reduce.py.gz",
+      "correctedHelperSha256": "761d592162210dc69db54b738d50a02b0da1b778a2526ce960b64257f16c9f82",
+      "correctedOfflineExit": 0,
+      "derivedArtifact": "measurements.json"
+    }
+  ],
+  "launches": [
+    {
+      "slot": 1,
+      "kind": "observation",
+      "command": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/home-summary-investigation/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "cwd": "/workspace/shiguang-app",
+      "started": "2026-11-26T00:44:09.024216+08:00",
+      "status": "exited",
+      "coordinatorTimeoutSeconds": 90,
+      "sampleSleepMs": 7,
+      "before": {
+        "atNs": 20954626561614,
+        "load": [
+          "0.28",
+          "0.41",
+          "0.50"
+        ],
+        "runnableAndTotal": "1/1044",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        },
+        "at": "2026-11-26T00:44:09.027578+08:00",
+        "kernel": "6.12.113+",
+        "machine": "x86_64",
+        "logicalCpus": 8,
+        "affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "cpuModel": "Intel(R) Xeon(R) Processor",
+        "memory": [
+          "MemTotal:       16386416 kB",
+          "MemAvailable:   12364856 kB"
+        ],
+        "counters": {
+          "/sys/fs/cgroup/cpu.max": null,
+          "/sys/fs/cgroup/cpu.stat": "usage_usec 17088897194\nuser_usec 11785174717\nsystem_usec 5303722476\nnice_usec 995150707\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+          "/sys/fs/cgroup/cpu.pressure": "some avg10=0.00 avg60=0.00 avg300=0.17 total=141764574\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+          "/sys/fs/cgroup/cpuset.cpus.effective": "0-7",
+          "/sys/fs/cgroup/memory.current": null,
+          "/sys/fs/cgroup/memory.max": null,
+          "/sys/fs/cgroup/memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=12238622\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=11520446",
+          "/sys/fs/cgroup/memory.events": null,
+          "/sys/fs/cgroup/agent/cpu.max": "max 100000",
+          "/sys/fs/cgroup/agent/cpu.stat": "usage_usec 15481662092\nuser_usec 11845208073\nsystem_usec 3636454018\nnice_usec 995150707\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+          "/sys/fs/cgroup/agent/cpu.pressure": "some avg10=0.00 avg60=0.00 avg300=0.16 total=130006886\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=26508353",
+          "/sys/fs/cgroup/agent/cpuset.cpus.effective": "0-7",
+          "/sys/fs/cgroup/agent/memory.current": "14967013376",
+          "/sys/fs/cgroup/agent/memory.max": "max",
+          "/sys/fs/cgroup/agent/memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=3196809\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=2609501",
+          "/sys/fs/cgroup/agent/memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "/proc/pressure/cpu": "some avg10=0.00 avg60=0.00 avg300=0.17 total=141764574\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+          "/proc/pressure/memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=12238622\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=11520446",
+          "/proc/pressure/io": "some avg10=0.00 avg60=0.00 avg300=0.03 total=405914200\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=391191047"
+        }
+      },
+      "sourceSha256": {
+        "evidence/mobile-stage23/home-summary-investigation/PLAN.md": "7d7d0da79f736b37d797d562f2f735b31b2176fb4a14e6fb4b6da6ee34d09ca1",
+        "evidence/mobile-stage23/home-summary-investigation/observe.mjs": "ff5fdf7e50d90b2e0a5ba55d654c2f14ecac4a43733bb499275294b2338df1e8",
+        "evidence/mobile-stage23/home-summary-investigation/capture.py": "4ad9f2e18e373810cbe0523b520041b74ec79d3e80e36c510e6670a8b52704ce",
+        "evidence/mobile-stage23/perf-investigation/scratch/lifecycle.mjs": "5aa50a86185a35ccd4eab6112b76a7f7da4c10c2ec5bbc94107deaf1f3f7b59e",
+        "evidence/mobile-stage23/perf-investigation/scratch/probes.mjs": "512c74fd41bc10c2772cb1818eb82313651888116d68df11fa65b01add861fa2",
+        "evidence/mobile-stage23/perf-investigation/scratch/work.mjs": "f2a37fe7184dafcff59c91884b307b689ceaa0cae1d95136ff036f3dc183c3a3",
+        "evidence/mobile-stage23/perf-investigation/scratch/input.json": "bfab0f0daacb503c37f0bccc3319b3627e90f4c4725fdf849530902a3d62d032",
+        "evidence/mobile-stage23/perf-investigation/scratch/run-01-P/museum.json": "d74c29932a48af546b7621eeb6819db59a001ced40160498dcf7b1a974170483",
+        "evidence/mobile-stage23/perf-investigation/scratch/launch.py": "c2d318a579db8aca861b7ebcb9113943f86587cfca47a9c3907d316d30979061"
+      },
+      "nodeOptionsNonempty": false,
+      "parentHadNodeTestContext": false,
+      "timedOut": false,
+      "spawnAt": "2026-11-26T00:44:09.028799+08:00",
+      "startNs": 20954628490140,
+      "pid": 3,
+      "exit": 0,
+      "endNs": 20956984110066,
+      "ended": "2026-11-26T00:44:11.384426+08:00",
+      "after": {
+        "atNs": 20956984610945,
+        "load": [
+          "0.82",
+          "0.52",
+          "0.53"
+        ],
+        "runnableAndTotal": "2/1044",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        },
+        "at": "2026-11-26T00:44:11.385404+08:00",
+        "kernel": "6.12.113+",
+        "machine": "x86_64",
+        "logicalCpus": 8,
+        "affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "cpuModel": "Intel(R) Xeon(R) Processor",
+        "memory": [
+          "MemTotal:       16386416 kB",
+          "MemAvailable:   12170496 kB"
+        ],
+        "counters": {
+          "/sys/fs/cgroup/cpu.max": null,
+          "/sys/fs/cgroup/cpu.stat": "usage_usec 17104817473\nuser_usec 11794286353\nsystem_usec 5310531119\nnice_usec 995218551\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+          "/sys/fs/cgroup/cpu.pressure": "some avg10=2.53 avg60=0.45 avg300=0.26 total=142359465\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+          "/sys/fs/cgroup/cpuset.cpus.effective": "0-7",
+          "/sys/fs/cgroup/memory.current": null,
+          "/sys/fs/cgroup/memory.max": null,
+          "/sys/fs/cgroup/memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=12246112\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=11527023",
+          "/sys/fs/cgroup/memory.events": null,
+          "/sys/fs/cgroup/agent/cpu.max": "max 100000",
+          "/sys/fs/cgroup/agent/cpu.stat": "usage_usec 15497429624\nuser_usec 11854147518\nsystem_usec 3643282106\nnice_usec 995218551\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+          "/sys/fs/cgroup/agent/cpu.pressure": "some avg10=2.35 avg60=0.42 avg300=0.25 total=130585226\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=26519413",
+          "/sys/fs/cgroup/agent/cpuset.cpus.effective": "0-7",
+          "/sys/fs/cgroup/agent/memory.current": "14638981120",
+          "/sys/fs/cgroup/agent/memory.max": "max",
+          "/sys/fs/cgroup/agent/memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=3196809\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=2609501",
+          "/sys/fs/cgroup/agent/memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "/proc/pressure/cpu": "some avg10=2.53 avg60=0.45 avg300=0.26 total=142359465\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+          "/proc/pressure/memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=12246112\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=11527023",
+          "/proc/pressure/io": "some avg10=0.00 avg60=0.00 avg300=0.03 total=405914325\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=391191095"
+        }
+      },
+      "polls": 305,
+      "samplerThreadCpuMs": 75.111919,
+      "raw": {
+        "console.log.gz": {
+          "bytes": 1388,
+          "sha256": "878f5b9cc23d34a31c227769aa53698cf994a06ec0c814033786b4386f013183",
+          "gzipSha256": "d44c1abaab201ccb194386e600b1fb7026d27f79251171cb2ad021764ecd4cc7"
+        },
+        "samples.json.gz": {
+          "bytes": 79309,
+          "sha256": "432e49fabf89eec795ab45bcc6a8005613ac2b5efadfec667e5b168a09910966",
+          "gzipSha256": "c2544963d41e84b1f27f88a895ea781c64fc80a49101853202b70422e96fa0c1"
+        },
+        "trace.json.gz": {
+          "bytes": 22361,
+          "sha256": "1a6a5c1cac347e9cbce0bd94d4fc4f7c5b1940b56116391665040141ce0e2f5e",
+          "gzipSha256": "d73392ace8c4b381d6587b646911fc545547109fcddf8cf8ffd9c7f1afcdbe13"
+        },
+        "workers.jsonl.gz": {
+          "bytes": 3215,
+          "sha256": "634b271ec4483670b054f4860610bb1d04827e09c21dc5fb361583c9e51a5aa3",
+          "gzipSha256": "175767d22effb1f0106541033fac11d8e4ae0b13a2d0675050060a97557e3aac"
+        }
+      },
+      "reconciliation": {
+        "fileTotals": {
+          "tests": 28,
+          "pass": 28,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "originalTimingsRecorded": 18,
+        "target": {
+          "wallMs": 132.048104,
+          "threadUserMs": 22.344,
+          "threadSystemMs": 101.195,
+          "mainMs": 123.539,
+          "processUserMs": 26.573,
+          "processSystemMs": 101.848,
+          "processMs": 128.421,
+          "schedExecMs": 123.539039,
+          "schedWaitMs": 4.38993,
+          "schedSlices": 36,
+          "wallLessSchedExecAndWaitMs": 4.119135,
+          "gcEntries": [],
+          "gcUnionMs": 0,
+          "clock": "original performance.now",
+          "startLocal": "2026-11-26T00:44:10.815629+08:00",
+          "endLocal": "2026-11-26T00:44:10.947677+08:00",
+          "counterEnvelopeMinusWallMs": 0.034711,
+          "measuredProbeUnionInWindowMs": 0.324444,
+          "observerGcCallbackOverlapMs": 0
+        },
+        "observerOrFidelityProblems": [],
+        "source": "measurements.json"
+      }
+    }
+  ],
+  "slot2": {
+    "kind": "plain npm test after a justified fix",
+    "status": "NOT_RUN",
+    "reason": "The original home adapter breach did not recur. The measured parse did required work. No localized removable cause or qualifying implementation change."
+  },
+  "failedGateOrObservationLaunches": 1,
+  "nonzeroNewTestOrObservationLaunches": 0,
+  "counterRule": "Conservative stop counter includes original default exit 1 and the offline reporting helper exit 1, also tracked independently. Only the original is a failed test launch.",
+  "decision": {
+    "at": "2026-11-26T00:47:53.149916+08:00",
+    "verdict": "INCONCLUSIVE",
+    "originalPlainGate": "BLOCKED",
+    "candidateFix": "NONE",
+    "actualNewPlainDefaultAcceptance": "NOT_RUN",
+    "newObservationLaunches": 1,
+    "newPlainAcceptanceLaunches": 0,
+    "separateProfilerLaunches": 0,
+    "stopThreshold": 3,
+    "conservativeStopCount": 2,
+    "helperIssueCounts": {
+      "offline reporter dictionary syntax": 1
+    },
+    "samePathFailedTestLaunchesIncludingOriginal": 1,
+    "newNonzeroMeasuredLaunches": 0
+  }
+}

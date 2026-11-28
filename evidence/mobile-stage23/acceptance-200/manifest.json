@@ -1,0 +1,162 @@
+{
+  "results": [
+    {
+      "suite": "cargo",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "started": "2026-11-25T23:54:01.495159+08:00",
+      "elapsedSeconds": 0.128,
+      "exit": 101
+    },
+    {
+      "suite": "fault",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "started": "2026-11-25T23:54:01.623763+08:00",
+      "elapsedSeconds": 0.016,
+      "exit": 101
+    },
+    {
+      "suite": "npm",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "started": "2026-11-25T23:54:01.639936+08:00",
+      "elapsedSeconds": 2.447,
+      "exit": 0
+    },
+    {
+      "suite": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "started": "2026-11-25T23:54:04.087319+08:00",
+      "elapsedSeconds": 2.457,
+      "exit": 0
+    },
+    {
+      "suite": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "started": "2026-11-25T23:54:06.544908+08:00",
+      "elapsedSeconds": 1.942,
+      "exit": 0
+    },
+    {
+      "suite": "cargo-rustup",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "started": "2026-11-25T23:54:24.112227+08:00",
+      "elapsedSeconds": 37.04,
+      "exit": 0,
+      "note": "Earlier /usr/bin/cargo did not execute tests; current invocation uses existing /home/box/.cargo/bin rustup proxy."
+    },
+    {
+      "suite": "fault-rustup",
+      "command": [
+        "cargo",
+        "+1.90.0",
+        "test",
+        "--locked",
+        "-p",
+        "shiguang_core",
+        "--features",
+        "fault-injection"
+      ],
+      "started": "2026-11-25T23:55:01.153335+08:00",
+      "elapsedSeconds": 41.434,
+      "exit": 0,
+      "note": "Earlier /usr/bin/cargo did not execute tests; current invocation uses existing /home/box/.cargo/bin rustup proxy."
+    }
+  ],
+  "rustCounts": {
+    "cargo": {
+      "passed": 254,
+      "failed": 0,
+      "ignored": 1
+    },
+    "fault": {
+      "passed": 304,
+      "failed": 0,
+      "ignored": 1
+    }
+  },
+  "npm": {
+    "passed": 285,
+    "failed": 0
+  },
+  "logs": [
+    {
+      "source": "build.log",
+      "bytes": 179,
+      "sha256": "b661158e90d0d81a8aeb7d7b13f6f51f66f48ce8a7a6ba6ad3d3c25c617acf0c",
+      "archive": "build.log.gz"
+    },
+    {
+      "source": "cargo-rustup.log",
+      "bytes": 26041,
+      "sha256": "7268cb928b7ab9918357a23b16eb49efb64f834bd1c17aaa3cc9a8e62be42e36",
+      "archive": "cargo-rustup.log.gz"
+    },
+    {
+      "source": "cargo.log",
+      "bytes": 141,
+      "sha256": "4d925c51380e8e72b6bce81579d31bffd0274af82c30034708c65c990ae68370",
+      "archive": "cargo.log.gz"
+    },
+    {
+      "source": "fault-rustup.log",
+      "bytes": 28057,
+      "sha256": "bb60e984236276553065cf55181e1fdfe77f91919b86dc5c6ae13cf63decbd5f",
+      "archive": "fault-rustup.log.gz"
+    },
+    {
+      "source": "fault.log",
+      "bytes": 141,
+      "sha256": "4d925c51380e8e72b6bce81579d31bffd0274af82c30034708c65c990ae68370",
+      "archive": "fault.log.gz"
+    },
+    {
+      "source": "npm.log",
+      "bytes": 28889,
+      "sha256": "9f79c2c3609f0c4108188a7e000f0fe2048a7922d9ae332da197072b5be462c7",
+      "archive": "npm.log.gz"
+    },
+    {
+      "source": "results.json",
+      "bytes": 1889,
+      "sha256": "fc33d6012733c5c44132a7a79933e33edac0f85a6aaab293630859c743e9db3b",
+      "archive": "results.json.gz"
+    },
+    {
+      "source": "typecheck.log",
+      "bytes": 57,
+      "sha256": "6796dcec13529efbd4cf20466baf395cbb9bea0ba34b2d509da16409f49dc4b4",
+      "archive": "typecheck.log.gz"
+    }
+  ]
+}

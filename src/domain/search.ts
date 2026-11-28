@@ -1,6 +1,7 @@
 /** M05 disposable projection. Cursor fingerprints are derived from authoritative
  * formal content, never draft snapshots, indexes, clocks or revision counters alone. */
 import type { RecordRow, SearchFilter, SearchPage, TagDef } from "./types.ts";
+import { isSimple } from "./story.ts";
 import { isValidDate } from "./rules.ts";
 import { decodeCursor, isFormalActive, pageRows, sortedFormal } from "./timeline.ts";
 import { sha256 } from "../platform/bytes.ts";
@@ -27,9 +28,12 @@ export function normalizeSearchFilter(filter: SearchFilter): Required<SearchFilt
 function sourceGeneration(rows: readonly RecordRow[], tags: readonly TagDef[]): string {
   const chunks = rows.filter(isFormalActive).sort((a,b) => cmp(a.recordId,b.recordId)).map(r => {
     const f = r.formal;
-    return JSON.stringify([r.recordId,r.createdAt,r.contentRevision,r.favorite,r.favoriteRevision,r.tagIds,r.tagRevision,
+    const source: unknown[] = [r.recordId,r.createdAt,r.contentRevision,r.favorite,r.favoriteRevision,r.tagIds,r.tagRevision,
       [f.title,f.body,f.eventDate,f.eventTime,f.location,f.mood,f.coverPhotoUseId,
-        f.photos.map(p => [p.photoUseId,p.assetId,p.caption,p.sha256,p.bytes,p.mediaType])]]) + "\n";
+        f.photos.map(p => [p.photoUseId,p.assetId,p.caption,p.sha256,p.bytes,p.mediaType])]];
+    if (f.story && (!isSimple(f.story) || f.story.blocks.some(b =>
+      b.kind === "paragraph" && (b.runs.length !== 1 || !b.runs[0].text)))) source.push(f.story);
+    return JSON.stringify(source) + "\n";
   });
   chunks.push(JSON.stringify([...tags].sort((a,b) => cmp(a.tagId,b.tagId)).map(t => [t.tagId,t.name])));
   return hash(chunks.join(""));

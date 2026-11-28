@@ -32,6 +32,7 @@ fn remove(v: &mut Json, keys: &[&str]) {
     f.retain(|(k, _)| !keys.contains(&k.as_str()));
 }
 fn strip_v4(mut v: Json) -> Json {
+    legacy_snapshots(&mut v);
     remove(&mut v, &["settings"]);
     let Json::Obj(top) = &mut v else { panic!() };
     for (k, value) in top.iter_mut() {
@@ -75,7 +76,7 @@ fn canonical(v: Json) -> Json {
     }
 }
 fn defaults(s: &Store) {
-    assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(5)));
+    assert_eq!(s.state_json().get("schemaVersion"), Some(&Json::Num(6)));
     assert_eq!(
         s.state_json().get("settings").unwrap().get("theme"),
         Some(&Json::str("system"))
@@ -100,7 +101,7 @@ fn lossless(s: &Store) {
 }
 #[test]
 fn frozen_v3_state_migrates_losslessly_once_and_keeps_exact_original() {
-    assert_eq!(CURRENT_SCHEMA_VERSION, 5);
+    assert_eq!(CURRENT_SCHEMA_VERSION, 6);
     let t = Temp::new("u010-migrate");
     copy_v3(&t.0);
     let original = fs::read(t.0.join("state.json")).unwrap();
@@ -372,7 +373,7 @@ fn v4_plain_and_encrypted_roundtrip_all_new_fields_and_both_snapshot_slots() {
         } else {
             s.export_backup(&file, "0.1.10").unwrap()
         };
-        assert_eq!(report.manifest.schema_version, 5);
+        assert_eq!(report.manifest.schema_version, 6);
         let mut d = Store::open_exclusive(a.0.join(if enc { "enc" } else { "plain" })).unwrap();
         if enc {
             d.restore_backup_overwrite_with_password(&file, "synthetic-v4-pass")
@@ -447,7 +448,7 @@ fn merge_compares_every_new_content_field_keeps_both_versions_and_reimports_idem
     }
 }
 #[test]
-fn future_v6_and_malformed_v4_fields_are_refused_without_modifying_file() {
+fn future_schema_and_malformed_v4_fields_are_refused_without_modifying_file() {
     let t = Temp::new("u010-invalid");
     let mut s = Store::open(&t.0).unwrap();
     let id = draft(&mut s, "合成");
@@ -456,12 +457,16 @@ fn future_v6_and_malformed_v4_fields_are_refused_without_modifying_file() {
     for key in ["schemaVersion", "coverPhotoUseId", "location", "mood"] {
         let mut value = base.clone();
         if key == "schemaVersion" {
-            set(&mut value, key, Json::Num(6));
+            set(&mut value, key, Json::Num(7));
         } else {
             let mut rows = value.get("records").unwrap().as_arr().unwrap().to_vec();
             let mut snap = rows[0].get("draft").unwrap().clone();
+            let target = if key == "coverPhotoUseId" {
+                let Json::Obj(fields) = &mut snap else { unreachable!() };
+                &mut fields.iter_mut().find(|(k, _)| k == "story").unwrap().1
+            } else { &mut snap };
             set(
-                &mut snap,
+                target,
                 key,
                 Json::str(if key == "location" {
                     "x".repeat(201)

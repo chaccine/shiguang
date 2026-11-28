@@ -1,7 +1,8 @@
-import type { AttachPhotoBytesInput, DraftFields, ShiguangApi, SaveResult } from "../platform/api.ts";
+import type { AttachPhotoBytesInput, ReplacePhotoInput, DraftFields, ShiguangApi, SaveResult } from "../platform/api.ts";
 import type { CommitResult, Durability, RecordRow, Snapshot } from "./types.ts";
 import { describeError } from "./errors.ts";
 import type { ErrorDescription } from "./errors.ts";
+import { isSimple, type Story } from "./story.ts";
 import { validateForCommit } from "./rules.ts";
 
 export type DraftStatus = "idle" | "dirty" | "saving" | "saved" | "savedUncertain" | "error" | "conflict";
@@ -34,6 +35,7 @@ export class DraftSession<Handle = unknown> {
   private listeners = new Set<(state: DraftSessionSnapshot) => void>();
   private data: DraftSessionSnapshot = { status: "idle", recordId: null, snapshot: blank() };
   private baseRevision = 0;
+  private materialized = false;
   private version = 0;
   private savedVersion = 0;
   private failure: unknown;
@@ -81,6 +83,7 @@ export class DraftSession<Handle = unknown> {
     this.stopTimer(); this.emit();
   }
   private saved(durability: Durability, updatedAt: string): void {
+    this.materialized = true;
     this.clearError(); this.data.lastSavedAt = updatedAt;
     this.data.status = durability === "uncertain" ? "savedUncertain" : "saved";
     if (durability === "uncertain") this.data.lastError = describeError(durability);
@@ -106,12 +109,15 @@ export class DraftSession<Handle = unknown> {
       throw problem("SESSION_BUSY", "请先保存当前编辑；发生冲突时请保留本地副本并新建会话核对版本。");
     }
     this.stopTimer(); this.clearError(); this.version = this.savedVersion = 0;
-    this.baseRevision = row?.baseRevision ?? 0;
-    this.data = { status: row ? "saved" : "idle", recordId: row?.recordId ?? null,
+    this.materialized = !!row?.draft;
+    this.baseRevision = row?.draft ? row.baseRevision : row?.contentRevision ?? 0;
+    this.data = { status: this.materialized ? "saved" : "idle", recordId: row?.recordId ?? null,
       snapshot: copy(row?.draft ?? row?.formal ?? blank()), ...(row ? { lastSavedAt: row.updatedAt } : {}) };
     this.emit();
   }
-  edit(patch: DraftFields): void {
+  edit(patch: Omit<DraftFields, "story" | "expectedStory" | "editorMode">): void {
+    if (patch.body !== undefined && this.data.snapshot.story && !isSimple(this.data.snapshot.story))
+      throw problem("STORY_COMPLEX", "请在故事编辑中修改正文");
     for (const field of ["title", "body", "eventDate", "location"] as const) {
       const value = patch[field];
       if (value !== undefined) {
@@ -140,15 +146,17 @@ export class DraftSession<Handle = unknown> {
       this.data.status = "saving"; this.clearError(); this.emit();
       let result: SaveResult;
       if (this.data.recordId === null) {
-        result = await this.api.createDraft(snapshot);
+        const { story: _story, ...fields } = snapshot;
+        result = await this.api.createDraft(fields);
         this.data.recordId = result.row.recordId;
         this.baseRevision = result.row.baseRevision;
       } else {
         result = await this.api.saveDraft({ recordId: this.data.recordId, title: snapshot.title,
-          body: snapshot.body, eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
+          ...(snapshot.story && !isSimple(snapshot.story) ? {} : { body: snapshot.body }), eventDate: snapshot.eventDate, eventTime: snapshot.eventTime, location: snapshot.location, mood: snapshot.mood });
       }
       this.savedVersion = sentVersion;
       // 不能把响应中的旧字段写回本地：在途期间的输入仍是权威的本地内容。
+      this.data.snapshot.story = copy(result.row.draft?.story);
       this.data.snapshot.photos = copy(result.row.draft?.photos ?? snapshot.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft?.coverPhotoUseId ?? null;
       this.applyPendingPhotos();
@@ -168,6 +176,7 @@ export class DraftSession<Handle = unknown> {
         : op.action === "cover" ? await this.api.setDraftCover(id, op.id)
         : await this.api.reorderDraftPhotos(id, op.value as string[]);
       this.photoWrites.shift();
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.applyPendingPhotos();
@@ -201,6 +210,7 @@ export class DraftSession<Handle = unknown> {
         this.saved(created.durability, created.row.updatedAt);
       }
       const result = await this.api.attachPhotoBytes({ ...input, recordId: this.data.recordId });
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
@@ -210,12 +220,59 @@ export class DraftSession<Handle = unknown> {
       return result;
     });
   }
-  removePhoto(photoUseId: string): Promise<SaveResult> {
+  replacePhoto(input: Omit<ReplacePhotoInput, "recordId">): Promise<SaveResult> {
+    return this.exclusive(async () => {
+      await this.drain();
+      if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
+      const result = await this.api.replaceDraftPhoto({ ...input, recordId: this.data.recordId });
+      this.data.snapshot = copy(result.row.draft!);
+      this.saved(result.durability, result.row.updatedAt);
+      this.emit();
+      return result;
+    });
+  }
+  dismissPhotoError() {
+    if (this.data.status === "error" && this.version === this.savedVersion && !this.photoWrites.length) {
+      this.clearError();
+      this.data.status = this.materialized ? "saved" : "idle";
+      this.emit();
+    }
+  }
+  /** StoryEditor owns the working document while this queue owns durable acknowledgements. */
+  saveDocument(fields: DraftFields & { story: Story }, expectedStory: Story): Promise<SaveResult> {
+    return this.exclusive(async () => {
+      await this.drain();
+      const id = this.data.recordId;
+      this.data.status = "saving"; this.emit();
+      const result = id ? await this.api.saveDraft({ ...fields, expectedStory, recordId: id })
+        : await this.api.createDraft(fields);
+      if (!id) this.baseRevision = result.row.baseRevision;
+      this.data.recordId = result.row.recordId;
+      this.data.snapshot = copy(result.row.draft!);
+      this.saved(result.durability, result.row.updatedAt);
+      this.emit();
+      return result;
+    });
+  }
+  private async materialize(): Promise<void> {
+    if (this.materialized) return;
+    const result = await this.api.createDraft(this.data.recordId ? { baseRecordId: this.data.recordId } : this.data.snapshot);
+    if (!this.data.recordId) this.baseRevision = result.row.baseRevision;
+    this.data.recordId = result.row.recordId;
+    this.saved(result.durability, result.row.updatedAt);
+    this.emit();
+  }
+  ensureDraft(): Promise<void> {
+    return this.exclusive(async () => { await this.drain(); await this.materialize(); });
+  }
+  removePhoto(photoUseId: string, undoSession?: string, undo = false, expectedStory?: Story): Promise<SaveResult> {
     this.stopTimer();
     return this.exclusive(async () => {
       await this.drain();
       if (!this.data.recordId) throw problem("PHOTO_USE_NOT_FOUND", "草稿中没有这张照片");
-      const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId);
+      await this.materialize();
+      const result = await this.api.removeDraftPhoto(this.data.recordId, photoUseId, undoSession, undo, expectedStory);
+      this.data.snapshot.story = copy(result.row.draft!.story);
       this.data.snapshot.photos = copy(result.row.draft!.photos);
       this.data.snapshot.coverPhotoUseId = result.row.draft!.coverPhotoUseId;
       this.saved(result.durability, result.row.updatedAt);
@@ -242,6 +299,7 @@ export class DraftSession<Handle = unknown> {
       const result = await this.api.commitRecord(this.data.recordId, this.baseRevision);
       this.baseRevision = result.contentRevision;
       this.saved(result.durability, result.committedAt);
+      this.materialized = false;
       // 提交等待期间的新输入保留为下一份草稿，不并入已提交版本。
       if (this.version !== sentVersion) { this.data.status = "dirty"; this.arm(); }
       this.emit(); return result;

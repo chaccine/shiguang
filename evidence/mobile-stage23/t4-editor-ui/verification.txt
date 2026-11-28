@@ -1,0 +1,14 @@
+feat/mobile-stage23 @ c19e55590312fbaa98358b2b82607cb96d756faa
+Rust 1.90.0; CARGO_NET_OFFLINE=true; PATH prefix /home/box/.cargo/bin
+cargo-workspace (passed, failed, ignored) (262, 0, 1)
+cargo-fault (passed, failed, ignored) (326, 0, 1)
+npm test: 321 passed, 0 failed, one default-scheduled launch
+Node worker-output preload only: see worker-output.txt
+adapter.homeSummary 2.130 ms
+adapter.reunionPage 28.676 ms
+U011 test blob at HEAD and in worktree: 73613a10bb81a43caa7760a622cf8fbe682e51df
+typecheck exit 0; build exit 0
+independent Tauri shell check exit 101, offline dependency resolution
+git diff --check: clean; new source/document whitespace: clean
+report file references verified; index empty; pre-existing untracked paths preserved
+independent orchestrator 2026-11-27T00:31+08:00 cargo 262/0/1 fault 326/0/1 npm 321 typecheck/build 0 adapter.homeSummary 3.287 ms adapter.reunionPage 23.411 ms

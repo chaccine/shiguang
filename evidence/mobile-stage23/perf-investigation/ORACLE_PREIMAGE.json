@@ -1,0 +1,56 @@
+{
+  "at": "2026-11-25T22:55:45.791821+08:00",
+  "head": "21691eaf8505ea542cdcf099113c6ff5b1bac376",
+  "files": [
+    {
+      "file": "core/tests/fixtures/.gitattributes",
+      "bytes": 108,
+      "sha256": "c206c27a363365f007a48590efc205248df5dd7070b57a016e8f742a9117ee15"
+    },
+    {
+      "file": "core/tests/fixtures/v5/encrypted.sgbak",
+      "bytes": 7263,
+      "sha256": "ee63e120c01ab959e8990d7f2cd11aab2e5f27bc191f20c39a95f04063e4976f"
+    },
+    {
+      "file": "core/tests/fixtures/v5/media/ast-336cf1dd4efe5ef1.png",
+      "bytes": 295,
+      "sha256": "336cf1dd4efe5ef1d304b86c058f3e1bea3148cba705f45a4d2e698996b5b2e8"
+    },
+    {
+      "file": "core/tests/fixtures/v5/media/ast-5be0e93dd09a92cb.png",
+      "bytes": 297,
+      "sha256": "5be0e93dd09a92cbff3c68ff6003585022b464bcc475bf2c780f29d0a8f15076"
+    },
+    {
+      "file": "core/tests/fixtures/v5/plain.sgbak",
+      "bytes": 6961,
+      "sha256": "1e6219684710aa3ed5676fb4950713def97f106e9dee161f2ae677a905a2384b"
+    },
+    {
+      "file": "core/tests/fixtures/v5/state.json",
+      "bytes": 5596,
+      "sha256": "b41b45bc93fc65ed0915f8cf7197b0cf496c01b2e14b22271408f5f37bc86ccb"
+    },
+    {
+      "file": "core/tests/v5_oracle.rs",
+      "bytes": 13354,
+      "sha256": "d9afc1623c3dcadb1d29b9fdb92c28d5735b544cfaf656527671f66dcf1c1ab5"
+    },
+    {
+      "file": "evidence/mobile-stage23/BLOCKED_TEST_GATE.md",
+      "bytes": 1984,
+      "sha256": "9934212da4f9555cdd57a63190bc013a2b6cb38dbb5aaa96d900b76bd9f31533"
+    },
+    {
+      "file": "evidence/mobile-stage23/V5_ORACLE.md",
+      "bytes": 9053,
+      "sha256": "8a6d66fc25ade64f5f685abe45ce855b3fe41ef797fe585f70d8e9a461aaacd2"
+    },
+    {
+      "file": "evidence/mobile-stage23/freeze_v5.rs",
+      "bytes": 4108,
+      "sha256": "07b277b2ce8b7dd51e05b61e480dc98b61b62fbdc04e2d3c72505844e77b37b1"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+start_utc | end_utc | exit | command | log
+2026-11-26T15:49:09Z | 2026-11-26T15:49:10Z | 0 | node --test tests/home-summary-reuse.test.ts | focused.txt
+2026-11-26T15:50:16Z | 2026-11-26T15:50:18Z | 0 | npm run typecheck | typecheck.txt
+2026-11-26T15:51:08Z | 2026-11-26T15:51:08Z | 0 | env NODE_OPTIONS=--require=/tmp/h1-worker-output.2akvfr/output.cjs node --test /tmp/h1-node-report.prwYuK/probe.mjs | output-probe.txt
+2026-11-26T15:51:26Z | 2026-11-26T15:51:28Z | 0 | npm run build | build.txt
+2026-11-26T15:51:53Z | 2026-11-26T15:51:55Z | 0 | env NODE_OPTIONS=--require=/tmp/h1-worker-output.2akvfr/output.cjs npm test | npm-test.txt

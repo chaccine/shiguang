@@ -1,4 +1,5 @@
 import type { FieldIssue, Snapshot } from "./types.ts";
+import { hasContent } from "./story.ts";
 import { MOODS } from "./types.ts";
 
 export function validateSnapshotDetails(snapshot: Snapshot): FieldIssue | null {
@@ -38,7 +39,7 @@ export function validateForCommit(snapshot: Snapshot): FieldIssue | null {
       message: `事件时刻无效：${snapshot.eventTime}（需为 HH:MM，可留空）`,
     };
   }
-  if (snapshot.body.trim().length === 0 && snapshot.photos.length === 0) {
+  if (snapshot.story ? !hasContent(snapshot.story) : snapshot.body.trim().length === 0 && snapshot.photos.length === 0) {
     return {
       code: "EMPTY_CONTENT",
       message: "缺少正文或照片，无法存入时光（仅标题不能提交）",

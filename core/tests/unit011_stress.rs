@@ -19,7 +19,7 @@ fn five_thousand_records_each_first_page_is_bounded_without_persisted_views() {
     let mut rows=synthetic_rows(5000);
     for (i,r) in rows.iter_mut().enumerate(){
         let mut p=originals[i%32].clone();p.photo_use_id=format!("pu-{:06}",10000+i);
-        let f=r.formal.as_mut().unwrap();f.cover_photo_use_id=Some(p.photo_use_id.clone());f.photos.push(p);
+        let f=r.formal.as_mut().unwrap();edit_simple(f, |f| {f.cover_photo_use_id=Some(p.photo_use_id.clone());f.photos.push(p);});
         if i%100==0{f.event_date="2024-11-12".into();}
         r.favorite=i%5==0;r.museum_hidden=i%37==0;
     }

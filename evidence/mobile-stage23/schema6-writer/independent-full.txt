@@ -1,0 +1,1469 @@
+=== cargo workspace 2026-11-27T05:13:17+08:00 ===
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+   Compiling shiguang v0.1.12 (/workspace/shiguang-app/cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.27s
+     Running unittests src/main.rs (target/debug/deps/shiguang-34a13a194163b230)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_multiprocess.rs (target/debug/deps/unit04_multiprocess-00f07b4759bcacf8)
+
+running 5 tests
+test child_instance_lock_causes_store_locked_and_preserves_all_files ... ok
+test four_processes_create_twenty_drafts_each_without_lost_updates ... ok
+test child_write_lock_blocks_open_cleanup_and_preserves_state_bytes ... ok
+test child_write_lock_blocks_entire_commit_without_changes ... ok
+test child_write_lock_blocks_save_transaction_without_changes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.04s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-e39f544c138dddd6)
+
+running 1 test
+test cli_backup_roundtrip_requires_yes_and_verify_is_store_free ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/unit06_backup.rs (target/debug/deps/unit06_backup-c90f1624bf7573db)
+
+running 2 tests
+test password_argv_is_rejected_without_echo_or_data_creation ... ok
+test encrypted_export_verify_plan_merge_restore_env_and_stdin ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/unit07_cli.rs (target/debug/deps/unit07_cli-d760ee95b7cde06b)
+
+running 3 tests
+test cli_platform_local_date_is_passed_into_pure_query ... ok
+test typed_draft_survives_separate_cli_processes ... ok
+test all_unit07_commands_end_to_end_and_confirmation_guards ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-e76b184c8295cfa6)
+
+running 36 tests
+test json::tests::rejects_floats_and_trailing_garbage ... ok
+test json::tests::round_trip ... ok
+test json::tests::rejects_duplicate_keys ... ok
+test base64::tests::rfc4648_vectors_and_binary ... ok
+test json::tests::pretty_is_valid ... ok
+test backup::tests::existing_safety_directory_is_never_removed_on_create_failure ... ok
+test lock::tests::own_pid_leftover_is_stale_and_fresh_garbage_is_not ... ok
+test lock::tests::unsupported_falls_back_and_rejects_second_holder_in_process ... ok
+test lock::tests::real_proc_starttime_parses_for_self ... ok
+test lock::tests::without_proc_an_unknown_owner_is_never_stolen ... ok
+test lock::tests::stale_owner_from_dead_process_is_taken_over ... ok
+test lock::tests::live_other_process_owner_blocks_and_pid_reuse_is_detected ... ok
+test migration::tests::existing_store_import_recovery_runs_before_taking_the_preimage ... ok
+test migration::tests::an_existing_wrong_backup_is_never_replaced ... ok
+test migration::tests::builder_and_validator_run_with_both_store_locks_and_a_verified_preimage ... ok
+test migration::tests::production_open_rejects_unknown_pairs_before_receipts_cleanup_or_writes ... ok
+test preview::tests::crc_known_value ... ok
+test migration::tests::frozen_stories_install_and_remain_committed_after_reopen ... ok
+test preview::tests::produces_stable_png ... ok
+test session::tests::failure_is_kept_and_actionable ... ok
+test session::tests::timeout_reports_starting_not_panic ... ok
+test store::tests::draft_round_trip_and_atomic_state ... ok
+test migration::tests::ownership_and_source_version_refusal_precede_candidate_writes ... ok
+test session::tests::begin_only_once_and_waiters_see_result ... ok
+test store::tests::open_cleans_only_root_temp_files ... ok
+test migration::tests::malformed_or_lossy_round_trip_cannot_install ... ok
+test time::tests::date_validation ... ok
+test time::tests::epoch_and_known_dates ... ok
+test time::tests::time_validation ... ok
+test store::unit08_sniff_tests::heic_ftyp_brands_and_extension ... ok
+test store::tests::serialization_mismatch_keeps_memory_and_disk ... ok
+test store::tests::normal_writes_report_durable_on_linux ... ok
+test json::unit08_regression::large_multilingual_document_roundtrips_strictly ... ok
+test sha256::tests::known_vectors ... ok
+test app_lock::tests::diagnostics_redact_codes_salts_hashes_and_success_payloads ... ok
+test app_lock::tests::exponential_backoff_is_persisted_and_correct_code_waits_then_resets ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/acceptance.rs (target/debug/deps/acceptance-bf39b475d700f156)
+
+running 13 tests
+test ac_u0_02_title_only_draft_cannot_be_committed ... ok
+test ac_u0_03_draft_survives_reopen_with_identical_hash ... ok
+test ac_u0_02b_missing_or_invalid_date_is_rejected ... ok
+test ac_u0_05_formal_list_excludes_drafts ... ok
+test ac_u0_04_commit_creates_formal_record_and_increments_revision ... ok
+test ac_u0_07b_missing_original_blocks_commit ... ok
+test ac_u0_10_future_date_without_time_keeps_null_time ... ok
+test ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view ... ok
+test ac_u0_09_edit_commit_updates_single_entry_with_stable_id ... ok
+test ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically ... ok
+test ac_u0_11_manifest_lists_formal_records_and_media_sha ... ok
+test s0_guard_formal_state_never_references_missing_asset ... ok
+test ac_u0_06_two_photos_independent_captions_and_sha_verifiable ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/hotfix07_reopen.rs (target/debug/deps/hotfix07_reopen-9d64d8c8ad32d21f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/schema6_writer.rs (target/debug/deps/schema6_writer-116654287929e7db)
+
+running 2 tests
+test equal_plain_text_with_different_structure_creates_one_durable_conflict ... ok
+test ordered_draft_publishes_reopens_restores_merges_twice_and_reexports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests/story.rs (target/debug/deps/story-c33f28ca1366e183)
+
+running 10 tests
+test decoded_interleaved_story_preserves_all_marks_and_projects_literal_text_and_photos ... ok
+test formal_and_draft_can_describe_the_same_occurrence_with_different_originals ... ok
+test bad_photo_identities_and_cover_references_fail_at_each_entry_point ... ok
+test decoder_rejects_unknown_kinds_marks_and_malformed_payloads ... ok
+test formal_content_requires_text_or_a_photo_and_empty_text_blocks_still_project_newlines ... ok
+test legacy_empty_whitespace_and_line_endings_preserve_literal_paragraph_boundaries ... ok
+test malformed_photo_metadata_cannot_be_silently_dropped ... ok
+test r02_uses_current_blocks_and_marks_even_when_plain_text_is_identical ... ok
+test shared_editor_fixture_round_trips_v5_and_projects_ordered_runs_and_captions ... ok
+test legacy_content_matches_the_v5_writer_including_repeated_uses_and_non_first_cover ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit010_faults.rs (target/debug/deps/unit010_faults-c4f0afe690f4bffd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit010_lock.rs (target/debug/deps/unit010_lock-ccdda1ebee0fa4f5)
+
+running 9 tests
+test malformed_lock_parameters_fail_closed_without_leaking_hash_or_rewriting_state ... ok
+test real_command_backoff_survives_restart_and_cannot_be_reset_by_set_change_disable ... ok
+test theme_persists_without_touching_content_and_stale_store_preserves_lock ... ok
+test argon2id_random_salts_stored_parameters_and_no_plaintext_or_ipc_verifier ... ok
+test v3_restore_retains_existing_lock_and_counter_and_merge_never_imports_settings ... ok
+test crafted_backup_lock_never_overrides_target_lock_in_overwrite_or_merge ... ok
+test default_settings_and_passcode_format_validation_never_echo_inputs ... ok
+test portable_plain_encrypted_backups_omit_lock_and_overwrite_preserves_target_lock ... ok
+test set_verify_change_disable_require_current_and_remain_persisted_after_reopen ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
+
+     Running tests/unit010_schema.rs (target/debug/deps/unit010_schema-1c3af5032672609c)
+
+running 15 tests
+test location_counts_unicode_scalars_without_stripping_and_mood_rejects_unknown_values ... ok
+test frozen_v3_state_migrates_losslessly_once_and_keeps_exact_original ... ok
+test future_schema_and_malformed_v4_fields_are_refused_without_modifying_file ... ok
+test cover_reorder_and_removal_fallback_keep_originals_and_formal_untouched ... ok
+test photo_id_collision_remaps_manual_cover_in_both_slots_and_conflict_snapshot ... ok
+test g01_all_new_fields_isolate_publish_atomically_and_discard_preserves_formal ... ok
+test v3_conflict_snapshot_migrates_without_losing_caption_order_or_ownership ... ok
+test reorder_of_repeated_identical_photo_uses_is_differing_content ... ok
+test frozen_v3_wrong_passphrase_is_rejected_without_any_live_changes ... ok
+test equal_revision_differing_new_fields_keep_local_and_exact_incoming_conflict ... ok
+test v4_plain_and_encrypted_roundtrip_all_new_fields_and_both_snapshot_slots ... ok
+test v3_merge_into_v4_preserves_drafts_trash_tags_favorites_and_is_idempotent ... ok
+test frozen_v3_plain_and_production_encrypted_backups_restore_without_loss ... ok
+test v3_import_into_nonempty_v4_store_keeps_local_new_fields_and_pending_draft ... ok
+test merge_compares_every_new_content_field_keeps_both_versions_and_reimports_idempotently ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+     Running tests/unit010_storage.rs (target/debug/deps/unit010_storage-bc9f3981ce5ba330)
+
+running 2 tests
+test storage_counts_nested_categories_without_changing_data ... ok
+test storage_skips_external_internal_and_looping_symlinks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit011_faults.rs (target/debug/deps/unit011_faults-e5bd8214dd95f9eb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit011_museum.rs (target/debug/deps/unit011_museum-65f272f91303af40)
+
+running 9 tests
+test reunion_leap_day_century_and_year_boundaries_do_not_shift_or_use_a_window ... ok
+test reunion_exact_event_date_prior_years_only_and_m03_shares_eligibility ... ok
+test years_are_real_month_counts_and_featured_rules_are_deterministic ... ok
+test invalid_inputs_reject_without_panics_and_empty_pools_remain_empty ... ok
+test photo_wall_counts_uses_not_assets_and_keeps_formal_position_context_caption ... ok
+test seeded_shuffle_matches_cross_language_vectors_and_avoids_minimum_repeats ... ok
+test summaries_empty_single_and_read_only_queries_never_touch_originals_or_drafts ... ok
+test bounded_preview_and_all_reunion_pages_cover_every_year_and_tie ... ok
+test favorites_use_b02_both_directions_and_survive_boundary_deletion ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/unit011_persistence.rs (target/debug/deps/unit011_persistence-b2bcab3c96465a87)
+
+running 8 tests
+test v5_flag_is_strictly_boolean_and_future_schema_does_not_write ... ok
+test merge_hidden_union_is_identity_aware_idempotent_and_never_resurrects ... ok
+test hidden_is_independent_g01_metadata_retains_access_and_commits_current_formal_only ... ok
+test store_merge_persists_preference_union_and_second_import_is_no_op ... ok
+test reset_clears_only_preferences_including_trash_and_never_restores_deleted_content ... ok
+test v4_to_current_is_lossless_once_with_exact_backup_and_v3_chain_defaults ... ok
+test actual_v4_backup_verifies_restores_and_merges_with_false_preference ... ok
+test plain_and_encrypted_current_backups_restore_hidden_flags_and_independent_drafts_losslessly ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/unit011_stress.rs (target/debug/deps/unit011_stress-e1b99c1e661ef31d)
+
+running 1 test
+test five_thousand_records_each_first_page_is_bounded_without_persisted_views ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+
+     Running tests/unit012_search.rs (target/debug/deps/unit012_search-98ab66d121bf1541)
+
+running 9 tests
+test inclusive_leap_ranges_validation_and_limits ... ok
+test each_field_literal_unicode_and_unique_record_matching ... ok
+test rust_ts_normalized_query_and_formal_source_fingerprint_golden_contract ... ok
+test source_generation_covers_equal_revision_changes_but_ignores_drafts_and_hidden ... ok
+test formal_only_and_metadata_transactions_commit_trash_restore_reopen ... ok
+test shared_asset_caption_changes_publish_only_on_commit_and_preserve_favorite ... ok
+test backup_overwrite_merge_reimport_and_deletion_use_current_authority ... ok
+test all_192_filter_combinations_and_reset ... ok
+test same_day_full_m02_ties_both_directions_and_cursor_mismatch ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/unit012_stress.rs (target/debug/deps/unit012_stress-dcec84421e9f456c)
+
+running 1 test
+test five_thousand_representative_records_cold_warm_first_and_subsequent_pages ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.97s
+
+     Running tests/unit01_faults.rs (target/debug/deps/unit01_faults-8ae041b241f5eb56)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit01_safety.rs (target/debug/deps/unit01_safety-c36dcc2d86ca16a0)
+
+running 14 tests
+test t_c3_out_of_range_or_duplicate_rejected ... ok
+test t_c2_missing_fields_no_silent_default ... ok
+test t_a1_invalid_date_does_not_mutate_title_body ... ok
+test t_c4_future_version_refused ... ok
+test t_a3_attach_missing_record_does_not_bump_seq ... ok
+test t_e3_expected_base_mismatch_rejected ... ok
+test t_a2_failed_edit_draft_does_not_materialize_draft ... ok
+test conflict_with_occupied_draft_keeps_disk_and_local_memory ... ok
+test t_d1_tampered_asset_blocks_commit ... ok
+test t_d2_truncated_asset_blocks_commit ... ok
+test t_e1_stale_base_revision_conflict ... ok
+test t_e2_clock_does_not_pick_winner ... ok
+test transactions_reload_disk_and_reject_corruption_without_changes ... ok
+test t_c1_truncated_state_rejected_and_file_untouched ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/unit02_drafts.rs (target/debug/deps/unit02_drafts-c256d0dcfc86278c)
+
+running 10 tests
+test corrupt_state_blocks_all_new_mutations ... ok
+test invalid_byte_requests_leave_memory_state_and_media_unchanged ... ok
+test conflicting_existing_asset_never_changes_state_or_original_bytes ... ok
+test bytes_and_path_share_assets_but_not_photo_uses ... ok
+test attach_to_formal_materializes_draft_without_changing_formal_or_base ... ok
+test missing_use_and_no_draft_leave_state_unchanged ... ok
+test discard_pure_draft_removes_row_and_formal_draft_keeps_formal ... ok
+test list_drafts_orders_updates_and_ties_and_includes_formal_edits ... ok
+test remove_only_draft_use_preserves_formal_shared_and_orphan_assets ... ok
+test exactly_25_mib_is_accepted_and_explicit_type_is_kept ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+     Running tests/unit04_conflict.rs (target/debug/deps/unit04_conflict-fc141e9d74ecbff5)
+
+running 5 tests
+test restoring_copy_to_occupied_slot_rejects_without_any_change ... ok
+test keep_formal_saves_recoverable_copy_and_restore_uses_current_revision ... ok
+test keep_mine_rebases_without_auto_commit_then_user_can_commit ... ok
+test occupied_disk_draft_preserves_local_copy_durably_without_overwriting_slot ... ok
+test conflict_copy_only_photo_reference_survives_purge_and_reconcile ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/unit04_faults.rs (target/debug/deps/unit04_faults-35f394a7329fff75)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_lock.rs (target/debug/deps/unit04_lock-5da651e318d4409b)
+
+running 2 tests
+test exclusive_instances_exclude_each_other_and_drop_releases_lock ... ok
+test rejected_exclusive_open_never_cleans_or_changes_any_file ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_lock_unsupported.rs (target/debug/deps/unit04_lock_unsupported-8a11a7c3930ec66b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit04_media.rs (target/debug/deps/unit04_media-989d8d2bf26f9121)
+
+running 7 tests
+test reconciliation_requires_exclusive_instance_and_does_not_touch_files ... ok
+test referenced_wrong_size_is_reported_as_corrupt ... ok
+test orphan_and_partial_originals_move_to_quarantine_with_identical_sha ... ok
+test referenced_same_size_wrong_sha_is_reported_as_corrupt ... ok
+test referenced_missing_original_is_reported_without_record_mutation ... ok
+test editor_unlink_inverse_retains_exact_use_is_scoped_and_never_publishes ... ok
+test references_in_formal_draft_and_trash_are_never_quarantined ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/unit04_schema.rs (target/debug/deps/unit04_schema-0bfb4ebc8e657fa1)
+
+running 5 tests
+test migration_function_and_table_expose_v1_to_v2 ... ok
+test too_new_schema_rejects_without_touching_state_temps_or_directories ... ok
+test transaction_reloading_legacy_schema_refuses_to_overwrite ... ok
+test explicit_v1_uses_same_migration_chain ... ok
+test missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-c10217f2ba213de4)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test trashed_attach_is_write_protected ... ok
+test trashed_commit_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trashed_discard_is_write_protected ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test trashed_create_edit_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-093093fd2d1624c9)
+
+running 35 tests
+test empty_unpersisted_library_roundtrips ... ok
+test absent_reference ... ok
+test double_dot ... ok
+test duplicate ... ok
+test dot ... ok
+test backslash ... ok
+test absolute ... ok
+test counts ... ok
+test encrypted ... ok
+test export_reloads_disk_snapshot_and_reports_corrupt_media ... ok
+test export_is_read_only_including_mtimes_and_refuses_existing_dest ... ok
+test format ... ok
+test entry_sha ... ok
+test invalid_state ... ok
+test long_name ... ok
+test legacy_v1_container_restores_and_migrates_to_v2 ... ok
+test open_removes_only_abandoned_staging_without_journal ... ok
+test malformed_json_and_excessive_nesting_fail_before_any_restore_write ... ok
+test restore_requires_exclusive_and_verify_does_not_create_store ... ok
+test media_inner ... ok
+test media_outer ... ok
+test missing_field ... ok
+test missing_state ... ok
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test size ... ok
+test traversal_media ... ok
+test schema ... ok
+test traversal_state ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.58s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-587e7cbcbe0dd8a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_crypto.rs (target/debug/deps/unit06_crypto-61519414d0f87564)
+
+running 6 tests
+test empty_password_and_invalid_kdf_rejected_without_artifacts ... ok
+test untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext ... ok
+test wrong_password_wrappers_preserve_entire_existing_root ... ok
+test wrong_password_never_leaks_in_message_debug_or_changes_destination ... ok
+test encrypted_roundtrip_password_wrappers_and_required_error ... ok
+test multichunk_tamper_truncation_header_aad_and_reorder_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.33s
+
+     Running tests/unit06_faults.rs (target/debug/deps/unit06_faults-f688bd0db8cfbead)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit06_merge.rs (target/debug/deps/unit06_merge-274e203d6e6decb3)
+
+running 15 tests
+test merge_requires_exclusive_and_invalid_package_writes_nothing ... ok
+test drafts_preserve_local_import_current_and_conflict_stale ... ok
+test incoming_markers_never_delete_local_and_union_is_idempotent ... ok
+test new_records_preserve_draft_and_trash_and_markers_preserve_local_trash ... ok
+test merge_symlinks_and_malicious_journal_cannot_escape_root ... ok
+test pure_table_revision_status_and_equal_content ... ok
+test collisions_remap_records_photos_conflicts_and_remain_idempotent ... ok
+test strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses ... ok
+test strict_validation_covers_conflict_ids_and_logical_photo_ownership ... ok
+test reexported_collision_merges_back_without_duplicate_photos_or_conflicts ... ok
+test missing_media_and_hash_collision_preserve_local_original ... ok
+test dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts ... ok
+test plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes ... ok
+test purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative ... ok
+test synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/unit07_backup.rs (target/debug/deps/unit07_backup-f47075e2427236f9)
+
+running 9 tests
+test independent_revision_winners_equal_local_wins_and_marker_union ... ok
+test dictionary_cross_device_collisions_and_reimport_idempotence ... ok
+test remapped_identity_survives_merge_delete_and_history_reexport ... ok
+test incoming_alias_to_locally_deleted_terminal_becomes_tombstone ... ok
+test local_deletion_merge_alias_and_deleted_record_never_resurrect ... ok
+test actual_v2_package_without_new_fields_verifies_restores_and_merges ... ok
+test store_merge_metadata_roundtrip_is_byte_identical_on_second_import ... ok
+test v3_roundtrip_tags_favorites_aliases_tombs_and_counts ... ok
+test cross_device_history_collisions_are_valid_and_idempotent ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/unit07_faults.rs (target/debug/deps/unit07_faults-f9015b8b8a5b1d0d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unit07_meta.rs (target/debug/deps/unit07_meta-d5917ebe41e5b36f)
+
+running 4 tests
+test stale_store_cas_and_content_commit_keep_latest_independent_metadata ... ok
+test formal_only_trash_restore_purge_and_missing ... ok
+test metadata_cas_does_not_publish_or_overwrite_drafts ... ok
+test draft_tag_creation_detach_cas_commit_and_discard ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit07_query.rs (target/debug/deps/unit07_query-cbc01167a4a54985)
+
+running 5 tests
+test on_this_day_past_only_and_leap_day_exact ... ok
+test b02_all_ties_time_groups_and_directions ... ok
+test filters_formal_projection_calendar_and_date_move ... ok
+test entire_day_is_unbounded_queries_are_read_only_and_false_photo_filter ... ok
+test paging_3000_is_complete_fast_and_insertions_do_not_repeat ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+
+     Running tests/unit07_schema.rs (target/debug/deps/unit07_schema-3b6153b08f997944)
+
+running 2 tests
+test future_schema_and_invalid_metadata_reject_without_writes ... ok
+test migration_chain_defaults_and_exact_backup ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit07_tags.rs (target/debug/deps/unit07_tags-7b083817c7dfb66e)
+
+running 3 tests
+test trimming_precedes_display_name_validation ... ok
+test names_rename_conflicts_and_normalization ... ok
+test merge_delete_atomic_links_alias_chain_and_content_survives ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/unit08_stress.rs (target/debug/deps/unit08_stress-864e017706a06cbc)
+
+running 1 test
+test synthetic_stress_open_query_export_restore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/v3_golden_generator.rs (target/debug/deps/v3_golden_generator-807e18d8071d0cd0)
+
+running 2 tests
+test generate_v3_golden_fixtures ... ignored, writes historical fixtures; run explicitly with the unmodified v3 core
+test frozen_v3_fixtures_have_original_schema_and_complete_media ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/v5_oracle.rs (target/debug/deps/v5_oracle-8ad6ae9f6317c26f)
+
+running 4 tests
+test v5_wrong_password_and_changed_bytes_preserve_the_destination ... ok
+test archived_envelopes_decrypt_to_the_exact_plain_package_and_source_files ... ok
+test v5_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+test archived_v3_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.68s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+cargo_workspace_exit:0
+=== cargo fault 2026-11-27T05:14:06+08:00 ===
+   Compiling shiguang_core v0.1.12 (/workspace/shiguang-app/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.13s
+     Running unittests src/lib.rs (target/debug/deps/shiguang_core-51d23a2cebecabbe)
+
+running 51 tests
+test json::tests::rejects_duplicate_keys ... ok
+test json::tests::pretty_is_valid ... ok
+test base64::tests::rfc4648_vectors_and_binary ... ok
+test lock::tests::own_pid_leftover_is_stale_and_fresh_garbage_is_not ... ok
+test json::tests::rejects_floats_and_trailing_garbage ... ok
+test lock::tests::live_other_process_owner_blocks_and_pid_reuse_is_detected ... ok
+test backup::tests::existing_safety_directory_is_never_removed_on_create_failure ... ok
+test json::tests::round_trip ... ok
+test lock::tests::real_proc_starttime_parses_for_self ... ok
+test lock::tests::without_proc_an_unknown_owner_is_never_stolen ... ok
+test lock::tests::stale_owner_from_dead_process_is_taken_over ... ok
+test lock::tests::unsupported_falls_back_and_rejects_second_holder_in_process ... ok
+test migration::tests::faults::already_open_writer_cannot_save_through_pending_even_when_old_bytes_are_visible ... ok
+test migration::tests::an_existing_wrong_backup_is_never_replaced ... ok
+test migration::tests::existing_store_import_recovery_runs_before_taking_the_preimage ... ok
+test json::unit08_regression::large_multilingual_document_roundtrips_strictly ... ok
+test migration::tests::builder_and_validator_run_with_both_store_locks_and_a_verified_preimage ... ok
+test migration::tests::faults::ordinary_open_recovers_before_a_fresh_upgrade_can_begin ... ok
+test app_lock::tests::diagnostics_redact_codes_salts_hashes_and_success_payloads ... ok
+test app_lock::tests::exponential_backoff_is_persisted_and_correct_code_waits_then_resets ... ok
+test migration::tests::faults::conflicting_intents_and_wrong_version_pairs_stay_fenced ... ok
+test migration::tests::faults::unconfirmed_sync_compensation_error_v5 ... ok
+test migration::tests::faults::unconfirmed_sync_compensation_error_v3 ... ok
+test migration::tests::faults::unconfirmed_sync_crash_v5 ... ok
+test migration::tests::faults::unconfirmed_sync_crash_v3 ... ok
+test migration::tests::faults::verified_commit_receipt_needs_confirmed_sync_before_releasing_the_writer ... ok
+test migration::tests::faults::legacy_receipts_and_malformed_witnesses_preserve_the_fence_or_exact_old_state ... ok
+test migration::tests::faults::rollback_failure_and_uncertain_restoration_keep_writers_fenced ... ok
+test migration::tests::ownership_and_source_version_refusal_precede_candidate_writes ... ok
+test migration::tests::production_open_rejects_unknown_pairs_before_receipts_cleanup_or_writes ... ok
+test preview::tests::crc_known_value ... ok
+test migration::tests::frozen_stories_install_and_remain_committed_after_reopen ... ok
+test preview::tests::produces_stable_png ... ok
+test session::tests::failure_is_kept_and_actionable ... ok
+test migration::tests::malformed_or_lossy_round_trip_cannot_install ... ok
+test session::tests::timeout_reports_starting_not_panic ... ok
+test store::tests::draft_round_trip_and_atomic_state ... ok
+test migration::tests::faults::witness_io_faults_leave_a_fenced_receipt_for_the_next_owner ... ok
+test store::tests::open_cleans_only_root_temp_files ... ok
+test store::tests::normal_writes_report_durable_on_linux ... ok
+test store::unit08_sniff_tests::heic_ftyp_brands_and_extension ... ok
+test time::tests::date_validation ... ok
+test store::tests::serialization_mismatch_keeps_memory_and_disk ... ok
+test time::tests::epoch_and_known_dates ... ok
+test session::tests::begin_only_once_and_waiters_see_result ... ok
+test time::tests::time_validation ... ok
+test sha256::tests::known_vectors ... ok
+test migration::tests::faults::symlinked_state_backup_pending_or_directory_never_reaches_its_target ... ok
+test migration::tests::faults::corrupt_missing_backup_or_third_state_blocks_all_destructive_recovery ... ok
+test migration::tests::faults::invalid_pending_hashes_names_and_documents_cannot_write_through_the_record ... ok
+test migration::tests::faults::backup_install_and_clear_faults_preserve_the_frozen_preimage_on_reopen ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.76s
+
+     Running tests/acceptance.rs (target/debug/deps/acceptance-4ef7802c06d7cd1a)
+
+running 13 tests
+test ac_u0_02_title_only_draft_cannot_be_committed ... ok
+test ac_u0_03_draft_survives_reopen_with_identical_hash ... ok
+test ac_u0_05_formal_list_excludes_drafts ... ok
+test ac_u0_02b_missing_or_invalid_date_is_rejected ... ok
+test ac_u0_04_commit_creates_formal_record_and_increments_revision ... ok
+test ac_u0_08_pending_edit_draft_does_not_overwrite_formal_view ... ok
+test ac_u0_09_edit_commit_updates_single_entry_with_stable_id ... ok
+test ac_u0_10_future_date_without_time_keeps_null_time ... ok
+test ac_u0_07b_missing_original_blocks_commit ... ok
+test s0_guard_formal_state_never_references_missing_asset ... ok
+test ac_u0_11_manifest_lists_formal_records_and_media_sha ... ok
+test ac_u0_07_clearing_previews_keeps_assets_and_rebuilds_identically ... ok
+test ac_u0_06_two_photos_independent_captions_and_sha_verifiable ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/hotfix07_reopen.rs (target/debug/deps/hotfix07_reopen-338e12476e870fce)
+
+running 7 tests
+test export_then_reopen_keeps_data_and_opens ... ok
+test picker_cancel_touches_nothing ... ok
+test process_killed_during_export_then_reopen ... ok
+test second_entry_in_same_process_reuses_store_instead_of_store_locked ... ok
+test interrupted_export_then_reopen ... ok
+test commands_arriving_before_open_finishes_wait_instead_of_failing ... ok
+test encrypted_export_then_reopen ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/schema6_writer.rs (target/debug/deps/schema6_writer-bc11da1d2e44fb9a)
+
+running 2 tests
+test equal_plain_text_with_different_structure_creates_one_durable_conflict ... ok
+test ordered_draft_publishes_reopens_restores_merges_twice_and_reexports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests/story.rs (target/debug/deps/story-46f349467125cc52)
+
+running 10 tests
+test formal_content_requires_text_or_a_photo_and_empty_text_blocks_still_project_newlines ... ok
+test formal_and_draft_can_describe_the_same_occurrence_with_different_originals ... ok
+test bad_photo_identities_and_cover_references_fail_at_each_entry_point ... ok
+test legacy_empty_whitespace_and_line_endings_preserve_literal_paragraph_boundaries ... ok
+test legacy_content_matches_the_v5_writer_including_repeated_uses_and_non_first_cover ... ok
+test malformed_photo_metadata_cannot_be_silently_dropped ... ok
+test r02_uses_current_blocks_and_marks_even_when_plain_text_is_identical ... ok
+test shared_editor_fixture_round_trips_v5_and_projects_ordered_runs_and_captions ... ok
+test decoder_rejects_unknown_kinds_marks_and_malformed_payloads ... ok
+test decoded_interleaved_story_preserves_all_marks_and_projects_literal_text_and_photos ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit010_faults.rs (target/debug/deps/unit010_faults-19da6dcbdee453a2)
+
+running 3 tests
+test v3_migration_interrupted_at_each_safe_write_stage_leaves_original_reopenable ... ok
+test interrupted_commit_retains_v4_draft_and_old_formal_until_atomic_publication ... ok
+test lock_and_theme_write_failures_never_grant_success_or_lose_existing_content ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.72s
+
+     Running tests/unit010_lock.rs (target/debug/deps/unit010_lock-5641950ae4ec95b6)
+
+running 9 tests
+test real_command_backoff_survives_restart_and_cannot_be_reset_by_set_change_disable ... ok
+test malformed_lock_parameters_fail_closed_without_leaking_hash_or_rewriting_state ... ok
+test theme_persists_without_touching_content_and_stale_store_preserves_lock ... ok
+test argon2id_random_salts_stored_parameters_and_no_plaintext_or_ipc_verifier ... ok
+test crafted_backup_lock_never_overrides_target_lock_in_overwrite_or_merge ... ok
+test v3_restore_retains_existing_lock_and_counter_and_merge_never_imports_settings ... ok
+test default_settings_and_passcode_format_validation_never_echo_inputs ... ok
+test portable_plain_encrypted_backups_omit_lock_and_overwrite_preserves_target_lock ... ok
+test set_verify_change_disable_require_current_and_remain_persisted_after_reopen ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+
+     Running tests/unit010_schema.rs (target/debug/deps/unit010_schema-826608c6f0f528f5)
+
+running 15 tests
+test location_counts_unicode_scalars_without_stripping_and_mood_rejects_unknown_values ... ok
+test frozen_v3_state_migrates_losslessly_once_and_keeps_exact_original ... ok
+test future_schema_and_malformed_v4_fields_are_refused_without_modifying_file ... ok
+test cover_reorder_and_removal_fallback_keep_originals_and_formal_untouched ... ok
+test g01_all_new_fields_isolate_publish_atomically_and_discard_preserves_formal ... ok
+test photo_id_collision_remaps_manual_cover_in_both_slots_and_conflict_snapshot ... ok
+test reorder_of_repeated_identical_photo_uses_is_differing_content ... ok
+test v3_conflict_snapshot_migrates_without_losing_caption_order_or_ownership ... ok
+test equal_revision_differing_new_fields_keep_local_and_exact_incoming_conflict ... ok
+test frozen_v3_wrong_passphrase_is_rejected_without_any_live_changes ... ok
+test v4_plain_and_encrypted_roundtrip_all_new_fields_and_both_snapshot_slots ... ok
+test frozen_v3_plain_and_production_encrypted_backups_restore_without_loss ... ok
+test v3_merge_into_v4_preserves_drafts_trash_tags_favorites_and_is_idempotent ... ok
+test v3_import_into_nonempty_v4_store_keeps_local_new_fields_and_pending_draft ... ok
+test merge_compares_every_new_content_field_keeps_both_versions_and_reimports_idempotently ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+     Running tests/unit010_storage.rs (target/debug/deps/unit010_storage-6a2c024290c6fb9d)
+
+running 2 tests
+test storage_skips_external_internal_and_looping_symlinks ... ok
+test storage_counts_nested_categories_without_changing_data ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit011_faults.rs (target/debug/deps/unit011_faults-66c99b4951574660)
+
+running 4 tests
+test preference_no_ops_skip_writes ... ok
+test hidden_only_backup_merge_failures_roll_back_preferences_and_content ... ok
+test v4_migration_failure_keeps_exact_v4_bytes_and_is_retryable ... ok
+test hiding_unhiding_and_reset_failure_preserve_disk_memory_drafts_and_reopen ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/unit011_museum.rs (target/debug/deps/unit011_museum-c60a1fbb4695b928)
+
+running 9 tests
+test invalid_inputs_reject_without_panics_and_empty_pools_remain_empty ... ok
+test reunion_exact_event_date_prior_years_only_and_m03_shares_eligibility ... ok
+test photo_wall_counts_uses_not_assets_and_keeps_formal_position_context_caption ... ok
+test years_are_real_month_counts_and_featured_rules_are_deterministic ... ok
+test seeded_shuffle_matches_cross_language_vectors_and_avoids_minimum_repeats ... ok
+test reunion_leap_day_century_and_year_boundaries_do_not_shift_or_use_a_window ... ok
+test summaries_empty_single_and_read_only_queries_never_touch_originals_or_drafts ... ok
+test bounded_preview_and_all_reunion_pages_cover_every_year_and_tie ... ok
+test favorites_use_b02_both_directions_and_survive_boundary_deletion ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/unit011_persistence.rs (target/debug/deps/unit011_persistence-317881ad80405158)
+
+running 8 tests
+test v5_flag_is_strictly_boolean_and_future_schema_does_not_write ... ok
+test merge_hidden_union_is_identity_aware_idempotent_and_never_resurrects ... ok
+test hidden_is_independent_g01_metadata_retains_access_and_commits_current_formal_only ... ok
+test store_merge_persists_preference_union_and_second_import_is_no_op ... ok
+test reset_clears_only_preferences_including_trash_and_never_restores_deleted_content ... ok
+test v4_to_current_is_lossless_once_with_exact_backup_and_v3_chain_defaults ... ok
+test actual_v4_backup_verifies_restores_and_merges_with_false_preference ... ok
+test plain_and_encrypted_current_backups_restore_hidden_flags_and_independent_drafts_losslessly ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/unit011_stress.rs (target/debug/deps/unit011_stress-5463d48268167c48)
+
+running 1 test
+test five_thousand_records_each_first_page_is_bounded_without_persisted_views ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s
+
+     Running tests/unit012_search.rs (target/debug/deps/unit012_search-6926373679861cbd)
+
+running 10 tests
+test inclusive_leap_ranges_validation_and_limits ... ok
+test rust_ts_normalized_query_and_formal_source_fingerprint_golden_contract ... ok
+test each_field_literal_unicode_and_unique_record_matching ... ok
+test source_generation_covers_equal_revision_changes_but_ignores_drafts_and_hidden ... ok
+test formal_only_and_metadata_transactions_commit_trash_restore_reopen ... ok
+test failed_metadata_transaction_preserves_search_generation_and_results ... ok
+test all_192_filter_combinations_and_reset ... ok
+test shared_asset_caption_changes_publish_only_on_commit_and_preserve_favorite ... ok
+test same_day_full_m02_ties_both_directions_and_cursor_mismatch ... ok
+test backup_overwrite_merge_reimport_and_deletion_use_current_authority ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/unit012_stress.rs (target/debug/deps/unit012_stress-0d5fd54523cd5049)
+
+running 1 test
+test five_thousand_representative_records_cold_warm_first_and_subsequent_pages ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.65s
+
+     Running tests/unit01_faults.rs (target/debug/deps/unit01_faults-cef8cf35d4f42bd3)
+
+running 7 tests
+test commit_parent_sync_failure_keeps_committed_state ... ok
+test t_f3_temp_sync_failure_keeps_state ... ok
+test t_f2_temp_write_failure_keeps_state ... ok
+test t_f1_temp_create_failure_keeps_state ... ok
+test t_f4_replace_failure_keeps_state ... ok
+test t_b1_commit_replace_failure_keeps_memory_equal_disk ... ok
+test t_f5_parent_sync_failure_reports_uncertain ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit01_safety.rs (target/debug/deps/unit01_safety-8c33a955981991f2)
+
+running 14 tests
+test t_c1_truncated_state_rejected_and_file_untouched ... ok
+test t_a3_attach_missing_record_does_not_bump_seq ... ok
+test t_d2_truncated_asset_blocks_commit ... ok
+test conflict_with_occupied_draft_keeps_disk_and_local_memory ... ok
+test t_a1_invalid_date_does_not_mutate_title_body ... ok
+test t_c2_missing_fields_no_silent_default ... ok
+test transactions_reload_disk_and_reject_corruption_without_changes ... ok
+test t_c4_future_version_refused ... ok
+test t_d1_tampered_asset_blocks_commit ... ok
+test t_a2_failed_edit_draft_does_not_materialize_draft ... ok
+test t_e1_stale_base_revision_conflict ... ok
+test t_e2_clock_does_not_pick_winner ... ok
+test t_c3_out_of_range_or_duplicate_rejected ... ok
+test t_e3_expected_base_mismatch_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/unit02_drafts.rs (target/debug/deps/unit02_drafts-0b31bcd21ca0f0b5)
+
+running 12 tests
+test corrupt_state_blocks_all_new_mutations ... ok
+test conflicting_existing_asset_never_changes_state_or_original_bytes ... ok
+test bytes_and_path_share_assets_but_not_photo_uses ... ok
+test missing_use_and_no_draft_leave_state_unchanged ... ok
+test discard_pure_draft_removes_row_and_formal_draft_keeps_formal ... ok
+test attach_to_formal_materializes_draft_without_changing_formal_or_base ... ok
+test invalid_byte_requests_leave_memory_state_and_media_unchanged ... ok
+test new_mutations_expose_uncertain_after_replace ... ok
+test list_drafts_orders_updates_and_ties_and_includes_formal_edits ... ok
+test new_mutations_persist_failure_keep_state_and_existing_assets ... ok
+test remove_only_draft_use_preserves_formal_shared_and_orphan_assets ... ok
+test exactly_25_mib_is_accepted_and_explicit_type_is_kept ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+
+     Running tests/unit04_conflict.rs (target/debug/deps/unit04_conflict-68b620ac1bffd9bc)
+
+running 5 tests
+test keep_mine_rebases_without_auto_commit_then_user_can_commit ... ok
+test occupied_disk_draft_preserves_local_copy_durably_without_overwriting_slot ... ok
+test restoring_copy_to_occupied_slot_rejects_without_any_change ... ok
+test keep_formal_saves_recoverable_copy_and_restore_uses_current_revision ... ok
+test conflict_copy_only_photo_reference_survives_purge_and_reconcile ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/unit04_faults.rs (target/debug/deps/unit04_faults-e3f3c5f4d4c7982b)
+
+running 3 tests
+test migration_backup_failure_preserves_original_and_leaves_no_backup ... ok
+test after_media_write_failure_leaves_orphan_that_restart_quarantines ... ok
+test migration_write_failure_preserves_original_and_completed_backup ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit04_lock.rs (target/debug/deps/unit04_lock-9e7da06b400e23a3)
+
+running 2 tests
+test exclusive_instances_exclude_each_other_and_drop_releases_lock ... ok
+test rejected_exclusive_open_never_cleans_or_changes_any_file ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unit04_lock_unsupported.rs (target/debug/deps/unit04_lock_unsupported-813f8576e664eb57)
+
+running 6 tests
+test supported_platform_never_creates_portable_owner_file ... ok
+test unsupported_lock_second_instance_on_other_thread_is_rejected ... ok
+test unsupported_lock_takes_over_stale_owner_left_by_crashed_process ... ok
+test unsupported_lock_still_rejects_second_instance_without_touching_files ... ok
+test unsupported_lock_never_blocks_startup_and_writes_work ... ok
+test unsupported_write_lock_held_elsewhere_blocks_commit_without_changes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.02s
+
+     Running tests/unit04_media.rs (target/debug/deps/unit04_media-37fc0c6b087f1aad)
+
+running 7 tests
+test reconciliation_requires_exclusive_instance_and_does_not_touch_files ... ok
+test referenced_missing_original_is_reported_without_record_mutation ... ok
+test orphan_and_partial_originals_move_to_quarantine_with_identical_sha ... ok
+test referenced_same_size_wrong_sha_is_reported_as_corrupt ... ok
+test referenced_wrong_size_is_reported_as_corrupt ... ok
+test editor_unlink_inverse_retains_exact_use_is_scoped_and_never_publishes ... ok
+test references_in_formal_draft_and_trash_are_never_quarantined ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/unit04_schema.rs (target/debug/deps/unit04_schema-d332f7f6e30fed7a)
+
+running 5 tests
+test migration_function_and_table_expose_v1_to_v2 ... ok
+test explicit_v1_uses_same_migration_chain ... ok
+test transaction_reloading_legacy_schema_refuses_to_overwrite ... ok
+test too_new_schema_rejects_without_touching_state_temps_or_directories ... ok
+test missing_schema_is_v1_migrates_and_backs_up_exact_bytes_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit04_trash.rs (target/debug/deps/unit04_trash-c941dec93047bcae)
+
+running 12 tests
+test only_formal_records_can_be_trashed_and_only_trashed_can_be_purged ... ok
+test trash_and_restore_preserve_both_snapshots_revisions_and_survive_restart ... ok
+test trashed_commit_is_write_protected ... ok
+test trashed_attach_is_write_protected ... ok
+test empty_trash_only_deletes_trashed_rows_and_never_auto_purges ... ok
+test trash_list_orders_by_trashed_at_descending ... ok
+test manual_purge_creates_content_free_marker_and_quarantines_original ... ok
+test trashed_create_edit_is_write_protected ... ok
+test trashed_discard_is_write_protected ... ok
+test trashed_save_is_write_protected ... ok
+test trashed_remove_photo_is_write_protected ... ok
+test purge_keeps_original_while_any_formal_draft_or_trash_reference_remains ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/unit05_backup.rs (target/debug/deps/unit05_backup-bc0d573d6f069b1d)
+
+running 35 tests
+test empty_unpersisted_library_roundtrips ... ok
+test absent_reference ... ok
+test absolute ... ok
+test double_dot ... ok
+test dot ... ok
+test backslash ... ok
+test duplicate ... ok
+test encrypted ... ok
+test export_reloads_disk_snapshot_and_reports_corrupt_media ... ok
+test counts ... ok
+test export_is_read_only_including_mtimes_and_refuses_existing_dest ... ok
+test entry_sha ... ok
+test legacy_v1_container_restores_and_migrates_to_v2 ... ok
+test format ... ok
+test invalid_state ... ok
+test long_name ... ok
+test open_removes_only_abandoned_staging_without_journal ... ok
+test malformed_json_and_excessive_nesting_fail_before_any_restore_write ... ok
+test restore_requires_exclusive_and_verify_does_not_create_store ... ok
+test media_outer ... ok
+test missing_field ... ok
+test media_inner ... ok
+test missing_state ... ok
+test restored_seed_is_preserved_across_reopen_and_future_writes ... ok
+test overwrite_keeps_exact_safety_copy_all_originals_and_clears_previews ... ok
+test size ... ok
+test schema ... ok
+test symlink_media_and_journal_escape_never_write_outside_root ... ok
+test traversal_media ... ok
+test large_original_roundtrips_across_multiple_stream_buffers ... ok
+test traversal_state ... ok
+test truncation_and_nonbackup_never_modify_target ... ok
+test rich_roundtrip_preserves_all_state_shared_photos_missing_and_conflicts ... ok
+test streaming_sha256_matches_standard_vectors_at_every_block_boundary ... ok
+test manifest_limits_and_portable_path_aliases_are_rejected_without_writes ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s
+
+     Running tests/unit05_faults.rs (target/debug/deps/unit05_faults-8feb09345a8225fd)
+
+running 15 tests
+test backup_write_cleans_partial_and_preserves_source ... ok
+test backup_finalize_cleans_partial_and_preserves_source ... ok
+test committed_cleanup_is_idempotent_after_old_archive_and_staging_removal ... ok
+test crash_after_media_swap_reopen_exclusive_restores_old ... ok
+test crash_between_media_renames_recovers_old_and_cleans_temps_afterwards ... ok
+test after_commit_plain_open_finishes_new_state ... ok
+test crash_after_media_swap_plain_open_restores_old ... ok
+test after_commit_reopen_exclusive_finishes_new_state ... ok
+test identical_state_crash_before_commit_restores_exact_old_media ... ok
+test identical_state_switch_failure_still_rolls_back_media ... ok
+test portable_locks_support_export_restore_without_nested_write_lock ... ok
+test stage_failure_preserves_target ... ok
+test media_switch_failure_rolls_back ... ok
+test state_switch_failure_rolls_back ... ok
+test safety_failure_cleans_incomplete_copy ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/unit06_crypto.rs (target/debug/deps/unit06_crypto-cf7200b5ceb7e622)
+
+running 6 tests
+test empty_password_and_invalid_kdf_rejected_without_artifacts ... ok
+test untrusted_header_kdf_bounds_and_algorithms_are_rejected_before_plaintext ... ok
+test wrong_password_never_leaks_in_message_debug_or_changes_destination ... ok
+test wrong_password_wrappers_preserve_entire_existing_root ... ok
+test encrypted_roundtrip_password_wrappers_and_required_error ... ok
+test multichunk_tamper_truncation_header_aad_and_reorder_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s
+
+     Running tests/unit06_faults.rs (target/debug/deps/unit06_faults-481646ab1e5d61f1)
+
+running 9 tests
+test encrypt_chunk_cleans_every_plaintext_and_partial ... ok
+test crash_after_merge_media ... ok
+test merge_media ... ok
+test merge_stage ... ok
+test encrypted_export_self_verification_failure_cleans_both_directories ... ok
+test crash_after_commit_reopens_complete_new_state_and_clears_journal ... ok
+test decrypt_chunk_cleans_partial ... ok
+test merge_state ... ok
+test kth_media_and_later_crypto_chunks_rollback_owned_files_only ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.12s
+
+     Running tests/unit06_merge.rs (target/debug/deps/unit06_merge-cf54a21049351133)
+
+running 15 tests
+test merge_requires_exclusive_and_invalid_package_writes_nothing ... ok
+test drafts_preserve_local_import_current_and_conflict_stale ... ok
+test incoming_markers_never_delete_local_and_union_is_idempotent ... ok
+test new_records_preserve_draft_and_trash_and_markers_preserve_local_trash ... ok
+test merge_symlinks_and_malicious_journal_cannot_escape_root ... ok
+test pure_table_revision_status_and_equal_content ... ok
+test collisions_remap_records_photos_conflicts_and_remain_idempotent ... ok
+test strict_validation_covers_conflict_ids_and_logical_photo_ownership ... ok
+test strict_ids_reject_duplicate_records_conflicts_and_cross_record_photo_uses ... ok
+test missing_media_and_hash_collision_preserve_local_original ... ok
+test reexported_collision_merges_back_without_duplicate_photos_or_conflicts ... ok
+test purge_blocks_old_package_but_distinct_creation_imports_and_null_is_conservative ... ok
+test plan_read_only_matches_report_media_deduplicates_and_second_merge_has_no_changes ... ok
+test dedup_same_original_across_distinct_records_and_ignore_orphan_conflicts ... ok
+test synthetic_asset_prefix_collision_preserves_both_snapshots_and_local_bytes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/unit07_backup.rs (target/debug/deps/unit07_backup-8383abef06bcc770)
+
+running 9 tests
+test dictionary_cross_device_collisions_and_reimport_idempotence ... ok
+test independent_revision_winners_equal_local_wins_and_marker_union ... ok
+test incoming_alias_to_locally_deleted_terminal_becomes_tombstone ... ok
+test local_deletion_merge_alias_and_deleted_record_never_resurrect ... ok
+test remapped_identity_survives_merge_delete_and_history_reexport ... ok
+test v3_roundtrip_tags_favorites_aliases_tombs_and_counts ... ok
+test store_merge_metadata_roundtrip_is_byte_identical_on_second_import ... ok
+test actual_v2_package_without_new_fields_verifies_restores_and_merges ... ok
+test cross_device_history_collisions_are_valid_and_idempotent ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/unit07_faults.rs (target/debug/deps/unit07_faults-253e371ea2078c79)
+
+running 3 tests
+test noops_do_not_visit_write_fault_points ... ok
+test migration_faults_keep_original_bytes ... ok
+test every_metadata_mutation_rolls_back_disk_memory_and_reopen ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/unit07_meta.rs (target/debug/deps/unit07_meta-42bef59fdf66fffd)
+
+running 4 tests
+test formal_only_trash_restore_purge_and_missing ... ok
+test draft_tag_creation_detach_cas_commit_and_discard ... ok
+test stale_store_cas_and_content_commit_keep_latest_independent_metadata ... ok
+test metadata_cas_does_not_publish_or_overwrite_drafts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit07_query.rs (target/debug/deps/unit07_query-df7d7e4755ae70ff)
+
+running 5 tests
+test b02_all_ties_time_groups_and_directions ... ok
+test on_this_day_past_only_and_leap_day_exact ... ok
+test filters_formal_projection_calendar_and_date_move ... ok
+test entire_day_is_unbounded_queries_are_read_only_and_false_photo_filter ... ok
+test paging_3000_is_complete_fast_and_insertions_do_not_repeat ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.45s
+
+     Running tests/unit07_schema.rs (target/debug/deps/unit07_schema-3d4ca8995e01534e)
+
+running 2 tests
+test future_schema_and_invalid_metadata_reject_without_writes ... ok
+test migration_chain_defaults_and_exact_backup ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/unit07_tags.rs (target/debug/deps/unit07_tags-55f55a840ee0c0d7)
+
+running 3 tests
+test trimming_precedes_display_name_validation ... ok
+test names_rename_conflicts_and_normalization ... ok
+test merge_delete_atomic_links_alias_chain_and_content_survives ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/unit08_stress.rs (target/debug/deps/unit08_stress-a9541a9987a8be11)
+
+running 1 test
+test synthetic_stress_open_query_export_restore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+     Running tests/v3_golden_generator.rs (target/debug/deps/v3_golden_generator-9aab244d6c53af78)
+
+running 2 tests
+test generate_v3_golden_fixtures ... ignored, writes historical fixtures; run explicitly with the unmodified v3 core
+test frozen_v3_fixtures_have_original_schema_and_complete_media ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/v5_oracle.rs (target/debug/deps/v5_oracle-9808bee210c8a256)
+
+running 4 tests
+test v5_wrong_password_and_changed_bytes_preserve_the_destination ... ok
+test archived_envelopes_decrypt_to_the_exact_plain_package_and_source_files ... ok
+test v5_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+test archived_v3_state_plain_and_encrypted_overwrite_merge_twice_and_reexport ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.74s
+
+   Doc-tests shiguang_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+cargo_fault_exit:0
+=== npm test 2026-11-27T05:15:05+08:00 ===
+
+> shiguang-app@0.1.12 test
+> node --test tests/*.test.ts
+
+✔ 提交传递草稿基线，结构化冲突显示保留草稿提示 (14.631416ms)
+✔ 其它错误不显示版本冲突提示 (0.163266ms)
+✔ 防抖合并所有字段，默认 800ms，首次只 create 一次 (13.497211ms)
+✔ 保存期间排队只发最新值，旧响应不覆盖输入，同一时刻最多一个 save (0.920443ms)
+✔ 首次 create 在途编辑排队，创建完成后用同一 ID 保存最新内容 (6.840058ms)
+✔ 保存失败保留所有输入，retry 成功；失败不会消耗 pending (1.021504ms)
+✔ 在途失败时保留新编辑，排队的自动 flush 不偷偷重试 (0.829915ms)
+✔ 自动保存失败通知 UI，显式 flush 仍拒绝，不吞错误 (0.364355ms)
+✔ 空白输入不落盘，清空已存在草稿仍必须保存 (0.413753ms)
+✔ flush 取消防抖，等待在途与所有最新编辑后才返回 (0.429504ms)
+✔ 前端提交校验先于 commit API，保留草稿并暴露 validation (12.650333ms)
+✔ 全空提交不会创建行，也不会调用 commit API (0.300467ms)
+✔ commit 先 flush，再使用打开草稿的 baseRevision；冲突保留草稿且禁止重试 (1.339688ms)
+✔ 保存响应不能把旧会话的基线悄悄提升为新正式版本 (1.851074ms)
+✔ uncertain 保存和提交暴露给 UI，parentSyncUnsupported 视为已保存 (0.440535ms)
+✔ uncertain 显式 retry 再次写入，成功后更新状态 (0.232741ms)
+✔ 附图先 flush；附图期间编辑保留，后续自动保存不丢照片 (5.342259ms)
+✔ 照片可作为首个输入；附图失败保留已保存文字 (3.95235ms)
+✔ 空照片和无效照片名不会在空会话创建空白草稿 (0.217686ms)
+✔ 提交在途继续输入，已提交版本与下一份草稿分开，后续使用新基线 (0.859184ms)
+✔ 订阅快照隔离，取消订阅有效；有未保存输入时拒绝直接切换 (0.376118ms)
+✔ 恢复优先指定 ID，否则按 updatedAt 与 ID 降序；无草稿返回 null，错误透传 (20.305262ms)
+✔ 已有草稿 save 失败仍保留 recordId、所有字段并可 retry (2.138603ms)
+✔ 排队的 commit 遇前序保存失败立即拒绝，不自动重试或调用 commit API (0.280925ms)
+✔ 真实跨实例冲突经过会话仍保留本地正文，不覆盖另一正式版 (8.197991ms)
+✔ uncertain 提交结果保留目录同步未确认提示 (7.427317ms)
+✔ durability 文案区分系统目录同步支持情况 (0.106858ms)
+✔ 冲突中文提示保留草稿并要求核对，不自动选赢家 (0.783169ms)
+✔ durability uncertain 与系统不支持同步分开提示 (0.141379ms)
+✔ 校验错误提供可操作中文和原始错误码 (0.232322ms)
+✔ 损坏状态明确原文件未覆盖，写入失败提供重试信息与阶段 (0.239536ms)
+✔ 原图安全校验与 IO 错误不吞掉细节 (0.151753ms)
+✔ 未知及非结构化错误也给出失败说明和诊断 (0.161052ms)
+✔ H1 eager open reads and validates once, then counts today's formal, hidden and leap-day rows (34.87858ms)
+✔ H1 deferred preview requires a successful storeStatus and consumes each open once (5.494383ms)
+✔ H1 reads the exact string once, including equal-length replacements and legacy inputs (0.600718ms)
+✔ H1 changed input runs full validation before the domain date check and consumes eligibility (0.989003ms)
+✔ H1 date provider, startup and injected errors, getItem failure and invalid dates retain precedence (2.835072ms)
+✔ H1 missing storage or missing key uses a copy of local state (7.565475ms)
+✔ H1 two instances sharing a key see the latest commit and preserve the reader's local conflict draft (1.860195ms)
+✔ H1 failed writes, no-op writes, reset and local state replacement invalidate identical bytes (5.542068ms)
+✔ H1 failed quarantine and hidden writes keep the opened state isolated from writable reloads (4.696448ms)
+✔ H1 reflects draft publication, photo and tag changes, hiding, trash, restore and purge (44.945973ms)
+✔ H1 import selection, failed safety copy and restoreBackup invalidate the open (7.240191ms)
+✔ H1 import selection, failed safety copy and mergeBackup invalidate the open (2.052693ms)
+✔ 内存 create/save/commit 和正式投影保持双槽语义 (2.673963ms)
+✔ storage 注入模拟重启并按更新时间、ID 恢复排序 (8.861652ms)
+✔ commit 校验错误保留草稿和磁盘；save 校验错误不物化草稿 (2.216157ms)
+✔ 清空 eventTime 与 Tauri null 契约一致 (0.411862ms)
+✔ 同实例错误 expectedBaseRevision 拒绝覆盖，正式版不变 (0.65274ms)
+✔ 跨实例旧基线冲突保留原基线，重启后仍冲突，不按时间裁决 (0.949783ms)
+✔ 磁盘已有另一草稿时冲突不得覆盖磁盘，本地草稿保留 (6.796183ms)
+✔ 照片 data URL、SHA、caption 与 photoUse 独立；移除及丢弃不删原图 (2.217111ms)
+✔ 照片错误校验与 8MB 预览上限，失败状态不变 (1615.614871ms)
+✔ 故障只消费匹配操作下一次调用；uncertain 保留成功结果 (12.081007ms)
+✔ storage 写失败不污染内存，坏文件不自动重置或覆盖 (0.632915ms)
+✔ 纯草稿丢弃删除行；浏览器导出明确报错 (0.23306ms)
+✔ 纯 TS Base64 / SHA 与标准编码逐字节对齐 (1.60639ms)
+✔ Tauri 新命令参数、字节数组与清空时刻契约 (0.637067ms)
+✔ first document and slow store/settings checks are neutral; lock off enters the timeline before media returns (191.814628ms)
+✔ store and settings errors each allow one retry; a double click cannot open the app (69.398691ms)
+✔ resume discards a stale disabled status and waits for the current enabled check and a verified passcode (71.302167ms)
+✔ malformed native status fails closed; an unavailable verifier can be retried without exposing its error (79.878631ms)
+✔ an unreadable preview store stays intact behind Retry and recovers only through the lock check (132.412265ms)
+✔ explicit fixture ?demo=1 preserves the saved lock, backoff and records on launch (155.35075ms)
+✔ explicit fixture ?searchDemo=mixed preserves the saved lock, backoff and records on launch (158.115583ms)
+✔ an explicitly selected empty fixture still resets an unlocked preview and keeps its theme (56.872134ms)
+✔ an old failure-counter read cannot overwrite a newer verification after cancellation (67.150023ms)
+✔ a pending adapter attempt still counts towards backoff after cancellation (237.517084ms)
+✔ a stale privacy-settings read and a delayed passcode change cannot undo a later lock (140.596545ms)
+✔ cancelled verification's late success cannot open the shell, clear new input or replace newer feedback (182.227324ms)
+✔ cancelled verification's late error cannot open the shell, clear new input or replace newer feedback (159.31724ms)
+✔ blur during verification cancels admission; repeated background signals keep the exact 60-second deadline (68.198366ms)
+✔ the five real navigation buttons use the same exact labels, one plus and distinct outline icons (187.713672ms)
+✔ light journal opens with the real cover, date and body; text-only entries have no photo placeholder (75.243607ms)
+✔ dark journal opens with the real cover, date and body; text-only entries have no photo placeholder (89.38754ms)
+✔ sheet supports nested tag management and returns focus after Done, backdrop, cancel and history Back (116.840256ms)
+✔ month cutoff, alternate sort, favorite and each tag can be independently removed outside the sheet (178.872068ms)
+✔ timeline → reading → edit/commit → reading/back restores the source control, conditions, day and offsets (93.799891ms)
+✔ calendar → reading → edit/commit → reading/back restores the source control, conditions, day and offsets (224.260258ms)
+✔ timeline paging appends stable entries; tab changes preserve deep timeline and calendar offsets (124.273624ms)
+✔ timeline search opens the real M05 formal query and large type uses a relative 200% root (126.593374ms)
+✔ fixtures require explicit browser opt-in, repeat exactly, and the empty library has zero records, tags, or media (80.107032ms)
+✔ isolated enabled startup keeps the populated fixture covered until the real preview verifier accepts 0042 (165.823705ms)
+✔ isolated slow startup keeps the populated fixture covered until the real preview verifier accepts 0042 (194.097431ms)
+✔ isolated error startup keeps the populated fixture covered until the real preview verifier accepts 0042 (238.586624ms)
+✔ browser Back from an edited draft returns to formal reading, then to the same dated entry (129.2225ms)
+✔ a formal edit reached through M05 returns to reading and restores the live matching result, keyword and focus (144.126646ms)
+✔ 默认打开时光轴（无参数、无上次页签） (0.664627ms)
+✔ 显式预览参数优先；每次正常启动默认时光轴 (0.15796ms)
+✔ 五个一级页签：时光轴 / 日历 / ＋记录 / 博物馆 / 我的 (0.721327ms)
+✔ 零记录零草稿时，每个视图都显示全部五个页签（无死路） (0.186544ms)
+✔ 二级视图高亮所属页签，且不记为上次页签 (0.128031ms)
+✔ 时光轴空态区分：一条没有 vs 筛选为空 (0.197099ms)
+✔ AC-U0-02 仅标题草稿被拒绝，提示缺正文或照片 (4.544632ms)
+✔ 非空正文可提交 (0.192642ms)
+✔ 仅照片（正文为空）可提交 (0.138903ms)
+✔ 缺少或非法事件日期被拒绝 (0.109365ms)
+✔ 空白 eventTime 合法且不被视为已填 (0.170954ms)
+✔ 非法 eventTime 被拒绝 (0.14771ms)
+✔ 日期/时刻校验与 Rust 规则一致 (0.109331ms)
+✔ startup gate retries 'state not managed' and STORE_STARTING until ready (1.143065ms)
+✔ startup gate stops immediately on a real error (STORE_LOCKED) (0.193202ms)
+✔ startup gate gives up after maxAttempts with the transient code (0.215071ms)
+✔ new record, calendar default, empty preview and opening the tag dialog create no draft (257.05065ms)
+✔ real controls group Chinese composition into one undo, survive autosave, and restore selection and scroll after preview (154.694606ms)
+✔ complex formal edit protects tags, fields, photo actions and publish in quick; preview, reopen and simplification preserve the separate saved draft (248.878271ms)
+✔ formal Edit offers continue, restart with confirmation, or cancel; untouched restart creates no draft (155.537652ms)
+✔ a heading with an interleaved photo reopens from the draft box and publishes with its composed caption (167.585266ms)
+✔ new opens quick; mode, preview and accepting the prefilled date create no record (13.960046ms)
+✔ autosave retains undo/redo and exact legacy text and photo identity after typed, formatted and ordered edits (11.50999ms)
+✔ complex quick protects the whole document and publish, including after navigation or preview (6.135501ms)
+✔ complex changes, including metadata and a contextual new photo, survive draft saves before and after simplification (7.531991ms)
+✔ undo/redo persisted insertion and deletion restore the same occurrence, caption, order and cover (11.993404ms)
+✔ complex transition during an in-flight simple save cannot send a scalar projection or lose newer input (1.804971ms)
+✔ failed durable photo operation retains the working story and a retry is idempotent (2.049067ms)
+✔ late formal publication still uses the revision observed when Edit opened (6.706764ms)
+✔ native undo sends only an editor token and the occurrence ID over the existing unlink command (0.494137ms)
+✔ later scalar acknowledgements keep uncertain durability from the same photo save visible (0.875678ms)
+✔ simplifying a parked story preserves a newer saved draft's photo, caption and cover (0.898968ms)
+✔ ordered story survives a fresh editor, publication, preview backup restore, repeated merge and re-export (34.268152ms)
+✔ Tauri draft and editor photo commands carry typed story and comparison operands intact (0.300479ms)
+✔ shared Rust v5 fixture preserves exact bytes, occurrence order, captions, integrity and non-first cover (1.645877ms)
+✔ shared Rust empty/whitespace/CRLF and photo-only boundaries (8.558129ms)
+✔ shared Rust interleaved marked story projects literal text and independent captions in occurrence order (0.527368ms)
+✔ R02 depends on current order and both marks even when text projections match (0.251856ms)
+✔ empty textual blocks still separate lines and dividers alone do not meet the content minimum (0.146018ms)
+✔ Rust malformed block, run, occurrence, cover and metadata cases are rejected (0.527574ms)
+✔ separate stories can describe independent snapshots of the same occurrence (0.163433ms)
+✔ textarea and UTF-16 selection edits keep untouched CRLF, combining text and independent emphasis (0.430746ms)
+✔ WCAG ratio reference and complete independent light/night token sets (3.567142ms)
+✔ light actual CSS tokens: body/status/button text ≥4.5:1, controls/focus ≥3:1 (7.365068ms)
+✔ night actual CSS tokens: body/status/button text ≥4.5:1, controls/focus ≥3:1 (2.393661ms)
+✔ component paint only references semantic tokens; relative type, visible focus and motion reduction are enforced (3.62484ms)
+✔ touch geometry contract covers icon controls, calendar cells, inputs and checkboxes at 44–48px (15.156104ms)
+✔ static controls have accessible names, dialogs have names/descriptions and previews expose selection (6.390132ms)
+✔ museum text, placards and month bars meet AA in both palettes including spotlight compositing (6.98334ms)
+✔ timeline ink and controls retain contrast through the actual tiled paper and gallery pigments (2.229995ms)
+✔ theme and relative font scale apply before styles/modules: explicit, system, invalid and denied cache (17.132659ms)
+✔ real appearance controller persists all three choices and live system changes never overwrite preference (33.167627ms)
+✔ theme write failure preserves saved style/cache, font sizes stay relative and storage denial stays usable (5.967912ms)
+✔ appearance consumes the unchanged Tauri settings contract and follows restored backend preference (13.028539ms)
+✔ optional native bar paint follows the resolved theme, including live system changes and unavailable chrome (1.289588ms)
+✔ real bootstrap opens timeline, all five navigation actions work, Mine reaches drafts, reading edit preserves formal (306.362113ms)
+✔ app-lock UI enables/confirms, clears every password input, gates restart, rejects wrong code, changes and disables (1389.532963ms)
+✔ Mine privacy museum reset entry restores hidden preferences with honest failure feedback (26.980853ms)
+✔ U010 settings default to system and lock off; format errors never echo submitted values (7.580783ms)
+✔ U010 preview uses actual salted WebCrypto PBKDF2 and never exposes verifier in settings (134.986879ms)
+✔ U010 set/verify/change/disable require current code and survive restart (322.003974ms)
+✔ U010 exponential backoff persists across restart and blocks correct code until expiry (96.808884ms)
+✔ U010 concurrent settings/auth operations preserve counters and concurrent draft writes (83.621196ms)
+✔ U010 settings I/O failures grant no success and preserve credential, content and counters (402.808269ms)
+✔ U010 theme survives restart/overwrite, merge retains local preference and no content publication (43.81362ms)
+✔ U010 portable backup omits credential; crafted incoming lock never overrides local lock or backoff (106.270612ms)
+✔ U010 v3 restore cannot disable existing device lock or reset its waiting counter (38.216158ms)
+✔ U010 corrupt lock fails closed; diagnostics and production sources have no credential logging (30.927956ms)
+✔ U010 Tauri settings/lock commands pass exact arguments and are registered (1.192577ms)
+✔ U010 v3 frozen content migrates defaults and preserves caption/order, draft slots and metadata (4.279925ms)
+✔ U010 all content fields stay in draft until commit, discard leaves formal unchanged (18.89293ms)
+✔ U010 cover fallback and reorder preserve selection, caption and originals (9.463336ms)
+✔ U010 invalid cover/order/location/mood writes are atomic, location preserves text and Unicode (8.742879ms)
+✔ U010 v4 preview backup roundtrip preserves formal and pending draft details (9.403121ms)
+✔ U010 v3 preview backup restores and merges into v4 with default content fields (7.454804ms)
+✔ U010 differing caption produces a recoverable merge conflict and repeated import is idempotent (8.247082ms)
+✔ U010 differing cover produces a recoverable merge conflict and repeated import is idempotent (11.197176ms)
+✔ U010 differing order produces a recoverable merge conflict and repeated import is idempotent (11.332342ms)
+✔ U010 differing location produces a recoverable merge conflict and repeated import is idempotent (2.839856ms)
+✔ U010 differing mood produces a recoverable merge conflict and repeated import is idempotent (5.708285ms)
+✔ U010 Tauri wires all new content operations and explicit mood clearing (0.453856ms)
+✔ U010 DraftSession persists location/mood and keeps automatic cover after attachment (3.039268ms)
+✔ U010 reordering repeated identical photo uses is still differing content (12.861991ms)
+✔ U010 collision remapping keeps one photo-use identity and cover across formal/draft/conflicts (42.857763ms)
+✔ reading renderer uses formal order, literal captions and explicit cover; editing creates draft without publishing (4.931417ms)
+✔ editor session autosaves location/mood, photo captions, cover and order; failures retain photo writes for retry (2.949287ms)
+✔ storage view rows include every category and total; native command agrees with TS contract (0.650179ms)
+✔ lock lifecycle starts locked, short resume remains open, repeated hidden signals do not extend timeout (0.311132ms)
+✔ UI navigation wires drafts under Mine, museum has its own region, reading edit and numeric password controls exist (0.936821ms)
+✔ M04 home has four real area entries and previews; no draft, trashed or F07 entry (92.881945ms)
+✔ M04 new-user and draft-only empty states offer gentle, working record guidance in all areas (59.331482ms)
+✔ M04 lists and photo wall page incrementally through IntersectionObserver without duplicates (183.34512ms)
+✔ M04 photo viewer preserves per-use caption/context, arrows, Escape and focus return (66.605085ms)
+✔ M04 photo wall uses fallback alt for untitled uses and preserves HEIC failure context (25.814752ms)
+✔ M04 reading and nested year back restore area, order, loaded pages, scroll and focus (57.211636ms)
+✔ M04 hide, undo, failure and reset keep originals and active-browsing areas available (53.171611ms)
+M04 5000-record home render: 553.4ms, 7 bounded thumbnail requests (no layout/decoding)
+✔ M04 reshuffle prefers unseen records and resume reflects changed formal projections (10.13593ms)
+✔ M04 MemoryAdapter-driven home renders 5000 synthetic formal records within 1000ms and bounded DOM/media work (753.084112ms)
+✔ M04 year rooms load incrementally and preserve the expanded year list on return (84.198801ms)
+✔ M04 viewer continues into the next photo page and boundary keys remain safe (30.542719ms)
+✔ M04 failed next page keeps the loaded exhibition and a manual retry without an auto-retry loop (44.309294ms)
+✔ M04 a failed photo sort keeps the current tiles usable; the viewer cannot open over an inert app lock (28.088084ms)
+✔ U011 exact event month/day, prior years, formal-only and M03 share eligibility (13.794028ms)
+✔ U011 leap day, century and year boundaries never shift or widen dates (2.64017ms)
+✔ U011 bounded reunion preview and all pages preserve every year and sorting tie (69.83352ms)
+✔ U011 favourites in both directions include text, hidden and future records; stable cursor survives removal (202.921857ms)
+✔ U011 photo wall pages use formal photo positions with independent captions and shared thumbnail keys (1.972902ms)
+✔ U011 actual years, 12 month counts, year pagination and deterministic featured priority (17.999372ms)
+✔ U011 seeded shuffle matches Rust vectors independent of storage order and minimises repeats (9.691269ms)
+✔ U011 hide persists independent G01 metadata; formal projections change only after explicit commit (29.582816ms)
+✔ U011 reset clears hidden flags including trash and never restores deleted records (2.035826ms)
+✔ U011 failed hide or reset keeps persisted and reopened state unchanged (0.844305ms)
+✔ U011 lossless v4 to v5 and v3 chain preserve formal, draft, photo and independent metadata (15.678323ms)
+✔ U011 schema v5 requires boolean flag and future schema rejects without writes (0.710706ms)
+✔ U011 current plain and password preview backups roundtrip hidden flags with active edit draft (35.839012ms)
+✔ U011 old v4 and v3 preview backups restore and merge with default false without clearing local hidden (41.222523ms)
+✔ U011 merge unions hidden by identity, is idempotent, may re-hide after reset and never resurrects (8.003133ms)
+✔ U011 home counts empty, single, future, hidden and trash consistently without writes or media reads (9.267261ms)
+✔ U011 invalid dates, limits, cursors, years and seeds reject without changing state (2.215311ms)
+✔ U011 Tauri adapter wires every museum command, injected date, order, cursor and uint32 seed (0.621684ms)
+✔ U011 5000-record domain and MemoryAdapter first-page budgets with no persisted projections (574.933289ms)
+ℹ {"records":5000,"photoUses":5000,"timingsMs":{"domain.homeSummary":4.301,"adapter.homeSummary":1.966,"domain.reunionPreview":9.1,"adapter.reunionPreview":39.72,"domain.reunionPage":0.889,"adapter.reunionPage":25.47,"domain.favoritesFirst":4.345,"adapter.favoritesFirst":22.666,"domain.photosFirst":7.447,"adapter.photosFirst":29.041,"domain.years":1.412,"adapter.years":18.1,"domain.yearRoomFirst":2.542,"adapter.yearRoomFirst":43.597,"domain.reshuffle":8.201,"adapter.reshuffle":37.843,"adapter.photosNext.asc":58.009,"adapter.photosNext.desc":31.038}}
+✔ U012 demo requires an explicit recognized browser-only query parameter (4.876251ms)
+✔ U012 demo is repeatable byte-for-byte and leaves the ordinary preview store intact (132.712617ms)
+✔ U012 demo field fixtures reach title, long body, non-cover caption, location and live tag (67.869122ms)
+✔ U012 demo has reproducible OR/AND, inclusive dates, photo counts and bounded pages (56.187835ms)
+✔ U012 demo preserves hidden searchability and favorite/formal/draft isolation (48.513642ms)
+✔ U012 empty demo is genuinely empty and does not write fabricated content (0.318538ms)
+✔ U012 demo refuses any existing formal, draft, trash or tag without modifying it (5.95039ms)
+✔ M05 independent search route adds no mobile tab and retains favorites/tag routes (5.86754ms)
+✔ M05 empty and mixed states contain only active formal records, including museum-hidden (18.725889ms)
+✔ M05 tag OR and cross-dimension AND use inclusive event dates and M02 ordering (32.720121ms)
+✔ M05 without-photo filter and no-match reset are real query results (7.491461ms)
+✔ M05 IME composition never searches partial input, debounce is cancellable and submit is explicit (24.560021ms)
+✔ M05 new input invalidates an in-flight IPC result before the next debounce dispatch (1.613665ms)
+✔ M05 reversed response delivery and a late failure cannot overwrite current results/status (13.782038ms)
+✔ M05 source-stale cursor discards accumulated pages and restarts at the first page (49.991087ms)
+✔ M05 invalid/mismatched cursor recovers once without infinite automatic retry (27.239585ms)
+✔ M05 invalid dates and backend errors expose actionable accessible retry states (11.207409ms)
+✔ M05 literal highlight builds text/mark nodes for script, regexp metacharacters and ASCII case (0.420652ms)
+✔ M05 excerpts locate formal body, non-cover caption, location and current tags without draft leaks (1.907526ms)
+✔ M05 late excerpt hydration cannot replace a newer query's card (15.727494ms)
+✔ M05 late-body-only and non-cover-caption-only hits hydrate useful literal summaries (14.927037ms)
+✔ M05 load-more stays bounded and reading/back preserves conditions, loaded results, scroll and focus (62.785924ms)
+✔ M05 reading edit commit refreshes membership while keeping search context and loaded depth (49.951451ms)
+✔ M05 favorite control uses durable formal metadata, preserves draft and links museum favorites (16.232584ms)
+✔ M05 tag rename/merge/delete and re-entry refresh current dictionary without creating records (2.267485ms)
+✔ M05 deleting a selected tag keeps a removable condition instead of silently broadening (6.583057ms)
+✔ M05 re-entry observes trash, restore, backup overwrite and merge from authority (12.512486ms)
+✔ M05 mutation observer refreshes only successful authority writes and never publishes drafts (2.458655ms)
+✔ M05 returning to unchanged cached results resumes interrupted hit hydration (11.471375ms)
+✔ M05 interrupted multi-page refresh never reuses an unrendered staged first page (42.766728ms)
+✔ M05 tag query completion and durable favorite refresh retain connected keyboard focus (18.51312ms)
+✔ M05 long literal hits remain visibly marked in bounded excerpts; no cross-tag invented hit (4.154128ms)
+✔ M05 whitespace-normalized body and generated ellipsis never get highlighted as literal hits (0.365922ms)
+✔ M05 hydrated record changed after the page read restarts instead of combining stale projection and fresh body (20.79207ms)
+✔ M05 favorite feedback preserves uncertain and unsupported-sync durability without publishing draft (14.755302ms)
+✔ U012 each field is literal, trimmed, English-insensitive; no cross-field or image inference (19.92335ms)
+✔ U012 Unicode and regex/script-looking input remain contiguous plain data (8.183837ms)
+✔ U012 exhaustive 192 combinations: keyword, OR tags, date, favorite, photo and order (148.261452ms)
+✔ U012 leap dates, inclusive/open ranges, invalid ranges and bounded paging (5.885188ms)
+✔ U012 FORMAL only, hidden active records included, no-title/no-photo and no source writes (4.463777ms)
+✔ U012 same-day pagination reuses full M02 order in both directions without gaps (209.184192ms)
+✔ U012 cursor rejects each changed query dimension, corrupt/oversize cursor and changed day (1.158158ms)
+✔ U012 every source field invalidates cursor even with equal revisions; drafts/hidden do not (1.692002ms)
+✔ U012 G01 real mutations keep drafts private and use current favorite/tag authority (28.888412ms)
+✔ U012 failed metadata writes preserve results and valid cursors (2.128366ms)
+✔ U012 backup overwrite/merge immediately rebuild queries and cannot revive deleted records (56.314326ms)
+✔ U012 Tauri adapter transports defaults, all dimensions, cursor and errors unchanged (0.830265ms)
+✔ U012 equivalent normalized tag sets accept cursor; nonmatching source edits invalidate it (4.57527ms)
+✔ U012 shared-asset captions belong to FORMAL photo uses until explicit commit (12.519512ms)
+✔ U012 Rust/TS normalized query and formal-source fingerprint golden contract (0.207227ms)
+✔ U04 trash/restore 保留双槽、修订号，列表过滤并可重启 (8.467872ms)
+✔ U04 listTrash 按移入时间倒序；打开不会自动永久删除 (10.445708ms)
+✔ U04 trashed save 返回 RECORD_TRASHED 且存储不变 (2.181796ms)
+✔ U04 trashed attach 返回 RECORD_TRASHED 且存储不变 (0.557654ms)
+✔ U04 trashed commit 返回 RECORD_TRASHED 且存储不变 (2.925796ms)
+✔ U04 trashed create 返回 RECORD_TRASHED 且存储不变 (0.972771ms)
+✔ U04 trashed discard 返回 RECORD_TRASHED 且存储不变 (2.633723ms)
+✔ U04 纯草稿不可入回收站，active 不可 purge (0.959748ms)
+✔ U04 purge 写无个人内容的 DeletionMarker、RECORD_DELETED、ID 不复用 (3.015463ms)
+✔ U04 emptyTrash 只永久删除回收站，保留 active 与纯草稿 (8.120414ms)
+✔ U04 resolveConflict keepMine 只改基线，不自动提交 (0.696801ms)
+✔ U04 keepFormal 保存可恢复副本，restore 使用最新正式基线 (0.748378ms)
+✔ U04 磁盘草稿槽占用时本地草稿持久化到 conflictCopies (0.543775ms)
+✔ U04 describeError STORE_LOCKED 提供明确中文提示与诊断 (0.383861ms)
+✔ U04 describeError STORE_BUSY 提供明确中文提示与诊断 (0.090638ms)
+✔ U04 describeError SCHEMA_TOO_NEW 提供明确中文提示与诊断 (0.060727ms)
+✔ U04 describeError RECORD_TRASHED 提供明确中文提示与诊断 (0.045097ms)
+✔ U04 describeError RECORD_DELETED 提供明确中文提示与诊断 (0.037198ms)
+✔ U04 describeError MIGRATION_BACKUP_FAILED 提供明确中文提示与诊断 (0.071672ms)
+✔ U04 describeError MIGRATION_FAILED 提供明确中文提示与诊断 (0.050515ms)
+✔ U05 导出只读：存储字节不变，摘要计数正确，能力如实报告未实现项 (19.042266ms)
+✔ U05 往返：导出→改动→覆盖恢复后状态与导出时一致；留安全副本；墓碑随包恢复 (7.301176ms)
+✔ U05 corrupt 包被拒（BACKUP_CORRUPT），当前数据不变 (7.288125ms)
+✔ U05 truncated 包被拒（BACKUP_TRUNCATED），当前数据不变 (2.487263ms)
+✔ U05 schemaTooNew 包被拒（BACKUP_SCHEMA_TOO_NEW），当前数据不变 (1.997926ms)
+✔ U05 encrypted 包被拒（BACKUP_ENCRYPTED_UNSUPPORTED），当前数据不变 (7.299767ms)
+✔ U05 notBackup 包被拒（BACKUP_INVALID），当前数据不变 (1.817263ms)
+✔ U05 恢复中途失败（安全副本写入失败）→ 当前数据不变 (7.082098ms)
+✔ U05 空库导出与恢复 (3.638729ms)
+✔ U05 未导出过时预览选择返回 cancelled (0.657922ms)
+✔ U05 所有备份/恢复错误码都有中文文案 (2.360334ms)
+✔ U06 防复活：本机永久删除后，合并旧备份不会带回该记录 (53.968918ms)
+✔ U06 回收站中的记录不会被旧备份里的活动版本拉回 (2.161517ms)
+✔ U06 同记录：较新的 contentRevision 胜出，本机旧版保留为冲突副本（不静默覆盖） (9.029453ms)
+✔ U06 同修订号不同内容：保留本机版本，备份版本存为冲突副本 (9.332592ms)
+✔ U06 跨设备撞号：不同记录同 recordId 改号新增，重复导入幂等 (25.478174ms)
+✔ U06 合并时备份里的删除标记：本机仍在的记录保持不动，并在计划里列出 (7.887571ms)
+✔ U06 合并：安全副本写不进去就整体中止，当前数据不变 (1.597681ms)
+✔ U06 加密：导出包不含明文；缺口令/错口令/篡改一律拒绝且当前数据不变；对口令可合并 (2.091981ms)
+✔ U06 新错误码都有中文说明，且说明当前数据未改动 (7.768461ms)
+✔ U07 B02：同日有时刻组在前、无时刻组在后（两个方向）；同时刻/无时刻按 createdAt，再按 id (1.362439ms)
+✔ U07 时光轴只含正式记录：纯草稿与回收站不出现；带修改草稿时显示旧正式版 (0.584171ms)
+✔ U07 分页：3000 条合成记录 limit=50 翻完不重不漏，与一次性全量顺序一致；翻页间插入不重复 (105.022193ms)
+✔ U07 筛选：珍藏 AND 标签 OR AND 日期范围 AND 含照片 (0.394389ms)
+✔ U07 日历：真实条数、照片数、珍藏提示；空月为空；非法年月报错；远年/未来可用 (1.143963ms)
+✔ U07 那年今日：只含往年同月同日；排除今年与未来；闰日只匹配 2-29 (0.443234ms)
+✔ U07 月历网格：周一起始、42 格、不涉及时区 (4.48138ms)
+✔ U07 年/月/日分组保持输入顺序；未来时光标记 (0.280559ms)
+✔ U07 G01：旧草稿存在时切换珍藏，不发布草稿、不改正文修订；随后提交草稿保留最新珍藏 (2.263196ms)
+✔ U07 G01：CAS 冲突不写盘；值未变不写盘；回收站/纯草稿拒绝 (5.449551ms)
+✔ U07 标签：去空白/大小写同名冲突；改名冲突提示合并且不覆盖 (12.024899ms)
+✔ U07 标签合并：一次性改写关联并去重、回收站记录也改、留别名；删除只解除关联不删记录 (8.498483ms)
+✔ U07 标签事务原子性：写盘失败时内存与存储都不变（无半套关联） (1.32059ms)
+✔ U07 时光轴 + 日历联动：改日期提交后旧日 -1 新日 +1，无重复；草稿不计数 (4.683136ms)
+✔ U07 备份往返：标签、珍藏、别名、墓碑完整；覆盖恢复后一致 (18.777932ms)
+✔ U07 合并导入：同名标签跨设备映射；本机已删标签不复活；本机已合并标签重映射；珍藏按修订胜出；二次合并幂等 (10.803282ms)
+✔ U07 迁移：v2 预览状态 → v4 默认值；v5 拒绝 (0.586012ms)
+✔ U07 严格校验：悬空标签引用 → STATE_CORRUPT（预览状态不被静默修复） (0.202371ms)
+✔ tests/unit08.test.ts (318.142179ms)
+✔ AC-U0-05 正式列表排除纯草稿 (0.678544ms)
+✔ AC-U0-08 修改草稿不覆盖正式阅读视图 (0.135276ms)
+✔ AC-U0-09 提交编辑后单一条目、ID 稳定、revision 递增 (1.575763ms)
+✔ AC-U0-10 缺时刻只显示日期，不伪造 00:00 (0.18011ms)
+✔ 正式列表按事件日期倒序排列 (39.821386ms)
+ℹ tests 323
+ℹ suites 0
+ℹ pass 323
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3728.164907
+npm_test_exit:0
+=== typecheck 2026-11-27T05:15:09+08:00 ===
+
+> shiguang-app@0.1.12 typecheck
+> tsc -p tsconfig.json
+
+typecheck_exit:0
+=== build 2026-11-27T05:15:13+08:00 ===
+
+> shiguang-app@0.1.12 build
+> tsc -p tsconfig.build.json && node scripts/copy-ui.mjs
+
+copied /workspace/shiguang-app/src/ui/index.html -> /workspace/shiguang-app/dist/index.html
+build_exit:0

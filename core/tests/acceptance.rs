@@ -103,7 +103,7 @@ fn ac_u0_03_draft_survives_reopen_with_identical_hash() {
             .create_draft(None, "草稿标题", "重启前写入的正文", "2026-11-09", None)
             .unwrap();
         let draft = row.draft.unwrap();
-        (row.record_id, draft.content_hash(), draft.body)
+        (row.record_id, draft.content_hash(), draft.body.clone())
     }; // 模拟进程退出
 
     let store = Store::open(tmp.path()).unwrap();

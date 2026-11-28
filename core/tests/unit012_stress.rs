@@ -18,13 +18,13 @@ fn five_thousand_representative_records_cold_warm_first_and_subsequent_pages() {
     let mut rows=synthetic_rows(5000);
     for (i,r) in rows.iter_mut().enumerate() {
         let f=r.formal.as_mut().unwrap();f.title=format!("合成旅程 Synthetic memory {}",i+1);
-        f.body="合成日记：今天走过河边，与朋友记录一段普通生活。 English readable paragraph. ".repeat(24)
-            + if i%5==0 {" UniqueNeedle 第一次坐火车。"}else{" 普通结尾。"};
+        edit_simple(f, |f| f.body="合成日记：今天走过河边，与朋友记录一段普通生活。 English readable paragraph. ".repeat(24)
+            + if i%5==0 {" UniqueNeedle 第一次坐火车。"}else{" 普通结尾。"});
         f.location="合成地点 Synthetic station".into();r.tag_ids=vec![if i%2==0 {a.tag_id.clone()}else{b.tag_id.clone()}];
         r.favorite=i%3==0;r.museum_hidden=i%37==0;
-        if i%4!=0 {for j in 0..(i%2+1) {let mut p=original.clone();p.photo_use_id=format!("pu-{:06}",20000+i*2+j);
+        if i%4!=0 {edit_simple(f, |f| {for j in 0..(i%2+1) {let mut p=original.clone();p.photo_use_id=format!("pu-{:06}",20000+i*2+j);
             p.caption=format!("合成照片说明 {j} Sunny trip. ").repeat(4);f.photos.push(p);}
-            f.cover_photo_use_id=f.photos.last().map(|p|p.photo_use_id.clone());}
+            f.cover_photo_use_id=f.photos.last().map(|p|p.photo_use_id.clone());});}
     }
     let state=with_rows(&seed,&rows);let snapshot=state.to_json(seed.seed()).dump();drop(seed);
     fs::write(t.0.join("state.json"),&snapshot).unwrap();

@@ -1,0 +1,2 @@
+# Preserve frozen plan, source hashes and raw diagnostic bytes across OS checkouts.
+* -text

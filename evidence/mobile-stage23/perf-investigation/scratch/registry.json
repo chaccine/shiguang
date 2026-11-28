@@ -1,0 +1,908 @@
+{
+  "order": [
+    "P",
+    "I",
+    "I",
+    "P",
+    "P",
+    "I",
+    "I",
+    "P",
+    "P",
+    "I"
+  ],
+  "limitSeconds": 2700,
+  "timeoutSeconds": 90,
+  "failedAttemptCap": 3,
+  "failedAttempts": 0,
+  "diagnosticBreaches": 0,
+  "failedPlainValidations": 0,
+  "launches": [
+    {
+      "run": "run-01-P",
+      "kind": "P",
+      "pair": 1,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15503891274706,
+        "load": [
+          "0.41",
+          "0.63",
+          "0.77"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:13:18.291+08:00",
+      "status": "exited",
+      "pid": 29,
+      "startNs": 15503891562309,
+      "after": {
+        "atNs": 15505976413269,
+        "load": [
+          "0.41",
+          "0.63",
+          "0.77"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15505976169587,
+      "end": "2026-11-25T23:13:20.376+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 2.084607278,
+      "monitorPolls": 268,
+      "monitorCpuMs": 67.112077,
+      "samplesSha256": "95c57104cc9a3b680562175ada535b7dcbe55002ddcd78911b150c85118786ba",
+      "consoleSha256": "3cfcecd8deddecbbcfec689d57b00c6c206aa641c0e102ac06469f803e2c83d8",
+      "assessment": "run-01-P/assessment.json",
+      "breaches": {},
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [
+        "Original case census differs or unavailable",
+        "Original case counts incomplete",
+        "Missing worker registry"
+      ],
+      "reconciled": "run-01-P/reconciled.json"
+    },
+    {
+      "run": "run-02-I",
+      "kind": "I",
+      "pair": 1,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/unit011-museum.test.ts"
+      ],
+      "before": {
+        "atNs": 15770509338272,
+        "load": [
+          "0.23",
+          "0.45",
+          "0.66"
+        ],
+        "runnableAndTotal": "3/1598",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:44.909+08:00",
+      "status": "exited",
+      "pid": 16,
+      "startNs": 15770509816242,
+      "after": {
+        "atNs": 15771401224257,
+        "load": [
+          "0.23",
+          "0.45",
+          "0.66"
+        ],
+        "runnableAndTotal": "1/1598",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15771400967568,
+      "end": "2026-11-25T23:17:45.801+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 0.891151326,
+      "monitorPolls": 123,
+      "monitorCpuMs": 14.327434,
+      "samplesSha256": "99dcc1cf363c56e0538a50b39ddd8ecdc7fa90f0e06beac335dd1fc06e9a5140",
+      "consoleSha256": "24ee305737e9e61c0ab8dc983cbd7404e21f2652163e4193db92ce93a1315418",
+      "reconciled": "run-02-I/reconciled.json",
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-03-I",
+      "kind": "I",
+      "pair": 2,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/unit011-museum.test.ts"
+      ],
+      "before": {
+        "atNs": 15771446674029,
+        "load": [
+          "0.23",
+          "0.45",
+          "0.66"
+        ],
+        "runnableAndTotal": "1/1598",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:45.847+08:00",
+      "status": "exited",
+      "pid": 55,
+      "startNs": 15771447419715,
+      "after": {
+        "atNs": 15772302122219,
+        "load": [
+          "0.23",
+          "0.45",
+          "0.66"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15772301874183,
+      "end": "2026-11-25T23:17:46.702+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 0.854454468,
+      "monitorPolls": 118,
+      "monitorCpuMs": 14.288488,
+      "samplesSha256": "d0ad52fd5b7aacb7a5089b04bee866920c66ce6d6a456d6ffb9edafc7e2ff9f0",
+      "consoleSha256": "a36fe4958edaa45c0c04dfeedb79a9c85f9e8f8cdbbf4b43523555e866d1f6c3",
+      "reconciled": "run-03-I/reconciled.json",
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-04-P",
+      "kind": "P",
+      "pair": 2,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15772348681319,
+        "load": [
+          "0.23",
+          "0.45",
+          "0.66"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:46.749+08:00",
+      "status": "exited",
+      "pid": 94,
+      "startNs": 15772349258752,
+      "after": {
+        "atNs": 15774586666349,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "2/1596",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15774586400802,
+      "end": "2026-11-25T23:17:48.987+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 2.23714205,
+      "monitorPolls": 286,
+      "monitorCpuMs": 71.112586,
+      "samplesSha256": "957b62c4ee0e8862237739ccfb76eb35da7a9e96af6acddcd5c5d4a11c920c41",
+      "consoleSha256": "29bdbd3cb0dd5b7038531acadadd135b5dfd5e4cce2b6d85b5fd0684dde4683c",
+      "reconciled": "run-04-P/reconciled.json",
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-05-P",
+      "kind": "P",
+      "pair": 3,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15774643377909,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "3/1596",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:49.043+08:00",
+      "status": "exited",
+      "pid": 338,
+      "startNs": 15774643941178,
+      "after": {
+        "atNs": 15776651208723,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "3/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15776650990935,
+      "end": "2026-11-25T23:17:51.051+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 2.007049757,
+      "monitorPolls": 257,
+      "monitorCpuMs": 59.132316,
+      "samplesSha256": "99bb59b259dff7d44e177c08dcb9b0f5787403f2005274141450b6ce58c64940",
+      "consoleSha256": "83108096398c2d2983c594c1e5348a0b44adaa6ab5311291d97e8934ec5ab35e",
+      "reconciled": "run-05-P/reconciled.json",
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-06-I",
+      "kind": "I",
+      "pair": 3,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/unit011-museum.test.ts"
+      ],
+      "before": {
+        "atNs": 15776709761074,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "4/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:51.110+08:00",
+      "status": "exited",
+      "pid": 582,
+      "startNs": 15776710304478,
+      "after": {
+        "atNs": 15777550354478,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15777550096131,
+      "end": "2026-11-25T23:17:51.950+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 0.839791653,
+      "monitorPolls": 116,
+      "monitorCpuMs": 13.565606,
+      "samplesSha256": "9d9fea3db1df9f9fb664b1a75e3f8bca340395a56aa2bf17feafbcbae1e465c1",
+      "consoleSha256": "2f4b805b869c7b05e738ca9b3b665fa88a4e60d956ec906578c7df080ad41d76",
+      "reconciled": "run-06-I/reconciled.json",
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-07-I",
+      "kind": "I",
+      "pair": 4,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/unit011-museum.test.ts"
+      ],
+      "before": {
+        "atNs": 15777598165594,
+        "load": [
+          "1.89",
+          "0.79",
+          "0.77"
+        ],
+        "runnableAndTotal": "2/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:51.998+08:00",
+      "status": "exited",
+      "pid": 621,
+      "startNs": 15777598609228,
+      "after": {
+        "atNs": 15778459345982,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "2/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15778459118153,
+      "end": "2026-11-25T23:17:52.859+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 0.860508925,
+      "monitorPolls": 119,
+      "monitorCpuMs": 15.165392,
+      "samplesSha256": "0ecdd5fb832802cef1a704f5f7fded11090a1553eae81ac9115f8197c8ea8603",
+      "consoleSha256": "5882152c1d7cec83b053c5babe701bdc8d6e9eaa2c7af0431f878524f2acce59",
+      "reconciled": "run-07-I/reconciled.json",
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-08-P",
+      "kind": "P",
+      "pair": 4,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15778504803989,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:52.905+08:00",
+      "status": "exited",
+      "pid": 660,
+      "startNs": 15778505348126,
+      "after": {
+        "atNs": 15780504207694,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "2/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15780503889324,
+      "end": "2026-11-25T23:17:54.904+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 1.998541198,
+      "monitorPolls": 258,
+      "monitorCpuMs": 59.348611,
+      "samplesSha256": "c23d059ae602e7d111fcf455033320a692edf35dba9877ccd6421f2087e69e37",
+      "consoleSha256": "e0ba5b7a3583f7322b4a28934598883745d917d15dd69aa399b9a40ba4f8250f",
+      "reconciled": "run-08-P/reconciled.json",
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-09-P",
+      "kind": "P",
+      "pair": 5,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/conflict.test.ts",
+        "tests/draft-session.test.ts",
+        "tests/durability.test.ts",
+        "tests/errors.test.ts",
+        "tests/memory-adapter.test.ts",
+        "tests/mobile-startup.test.ts",
+        "tests/mobile-visual.test.ts",
+        "tests/navigation.test.ts",
+        "tests/rules.test.ts",
+        "tests/startup.test.ts",
+        "tests/unit010-accessibility.test.ts",
+        "tests/unit010-appearance.test.ts",
+        "tests/unit010-boot.test.ts",
+        "tests/unit010-lock-ui.test.ts",
+        "tests/unit010-lock.test.ts",
+        "tests/unit010-schema.test.ts",
+        "tests/unit010-ui.test.ts",
+        "tests/unit011-museum-ui.test.ts",
+        "tests/unit011-museum.test.ts",
+        "tests/unit012-search-demo.test.ts",
+        "tests/unit012-search-ui.test.ts",
+        "tests/unit012-search.test.ts",
+        "tests/unit04.test.ts",
+        "tests/unit05.test.ts",
+        "tests/unit06.test.ts",
+        "tests/unit07.test.ts",
+        "tests/unit08.test.ts",
+        "tests/view.test.ts"
+      ],
+      "before": {
+        "atNs": 15780568072315,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:54.968+08:00",
+      "status": "exited",
+      "pid": 904,
+      "startNs": 15780568749860,
+      "after": {
+        "atNs": 15782606097824,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15782605871420,
+      "end": "2026-11-25T23:17:57.006+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 2.03712156,
+      "monitorPolls": 264,
+      "monitorCpuMs": 61.495367,
+      "samplesSha256": "25d101129234f9f96ec07384eb64d882e6b89c750d77415a57d973e336ecf0a0",
+      "consoleSha256": "594f13b4944fc0273f7ed2a5c96fa1e876bdd12a4e81a8c855a705aeb02b40b5",
+      "reconciled": "run-09-P/reconciled.json",
+      "totals": {
+        "tests": 28,
+        "suites": 0,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    },
+    {
+      "run": "run-10-I",
+      "kind": "I",
+      "pair": 5,
+      "args": [
+        "node",
+        "--import",
+        "/workspace/shiguang-app/evidence/mobile-stage23/perf-investigation/scratch/observe.mjs",
+        "--test",
+        "tests/unit011-museum.test.ts"
+      ],
+      "before": {
+        "atNs": 15782661272224,
+        "load": [
+          "2.06",
+          "0.85",
+          "0.78"
+        ],
+        "runnableAndTotal": "1/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "at": "2026-11-25T23:17:57.061+08:00",
+      "status": "exited",
+      "pid": 1148,
+      "startNs": 15782662014492,
+      "after": {
+        "atNs": 15783514870285,
+        "load": [
+          "2.30",
+          "0.92",
+          "0.81"
+        ],
+        "runnableAndTotal": "2/1597",
+        "cgroup": "/sys/fs/cgroup/agent",
+        "effectiveCpuset": "0-7",
+        "quotaPeriod": "max 100000",
+        "cpuStat": {
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0
+        }
+      },
+      "endNs": 15783514648624,
+      "end": "2026-11-25T23:17:57.915+08:00",
+      "exit": 0,
+      "timeout": false,
+      "seconds": 0.852634132,
+      "monitorPolls": 118,
+      "monitorCpuMs": 14.453268,
+      "samplesSha256": "bd5d5deab5513062d93afefe4b2042c56d2599e9a792fcdea0309997e6c05884",
+      "consoleSha256": "f399e9d0f767e4a1afbb6f5c14e6edf19fb67fd22d8b189a597affeec2e10822",
+      "reconciled": "run-10-I/reconciled.json",
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "issues": [],
+      "breaches": {}
+    }
+  ],
+  "harnessSha256": {
+    "HYPOTHESIS_MILESTONE.md": "dbe8b28e79f3aaabc67fe1b5795e92315ea292b285efdfd37bc1b5ab008394a3",
+    "scratch/fixture.mjs": "8cd771e5825c174b3097deea796752670d5bd6fccee726c3dace96c7700e6718",
+    "scratch/hooks.mjs": "39033dbd5c6837b16e55a3e282843684b4486ea0d6f8627e39407b34df0e3e2f",
+    "scratch/input.json": "bfab0f0daacb503c37f0bccc3319b3627e90f4c4725fdf849530902a3d62d032",
+    "scratch/inspect_run.py": "283eee18e92a516150867a1947c3db0ba436ff7e93b03f4226898dca4f301316",
+    "scratch/integrity.py": "fe08cf4334b7eb7c5d4b60c014a31f3a13b39aaa92cd6d2b5bb7774ca0a2617b",
+    "scratch/launch.py": "c2d318a579db8aca861b7ebcb9113943f86587cfca47a9c3907d316d30979061",
+    "scratch/lifecycle.mjs": "5aa50a86185a35ccd4eab6112b76a7f7da4c10c2ec5bbc94107deaf1f3f7b59e",
+    "scratch/observe.mjs": "ef9d768f5cf37230e67c07a8399acea3ea06dba6f80f676f1707a6fb11197ed3",
+    "scratch/preflight.json": "e943bb01c649ba837e6fa6868e08a604f3a61fa2088eafc6b24945eb5cf859c9",
+    "scratch/preflight.mjs": "94c2ee6c861366cad397163b2572029cf4113779aba02fb2e359d0c575af049a",
+    "scratch/probes.mjs": "512c74fd41bc10c2772cb1818eb82313651888116d68df11fa65b01add861fa2",
+    "scratch/profile.mjs": "9cab6ba82d7da3f43f30b4ae89977c3bd3f07dcfdd1a859f019b77af9aec4e87",
+    "scratch/target.mjs": "452ed4ecf5ee21619c5654f5059dcffdf6fae47be757d6d0743aaa0084211223",
+    "scratch/work.mjs": "f2a37fe7184dafcff59c91884b307b689ceaa0cae1d95136ff036f3dc183c3a3"
+  },
+  "stop": "Scheduled series complete",
+  "firstLaunchNs": 15503891562309,
+  "finished": "2026-11-25T23:17:57.941+08:00",
+  "elapsedSecondsFromFirstLaunch": 279.649330217,
+  "firstAssessmentPause": {
+    "reason": "Fidelity/correctness stop: Original case census differs or unavailable; Original case counts incomplete; Missing worker registry",
+    "time": "2026-11-25T23:13:20.410+08:00",
+    "original": "reconcile/initial-registry.json",
+    "resolution": "run-01-P/reconciled.json",
+    "resumedAt": "2026-11-25T23:17:44.884+08:00",
+    "elapsedSecondsSinceFirst": 266.59234396
+  },
+  "analysisSha256": {
+    "scratch/reconcile/cases.json": "40ad659f4e4ec5dadd5faa9a52b3321678e920290866e888e780765ddad99c4a",
+    "scratch/reconcile/cases.mjs": "288ceef0860fbba5379575d189d723c5462c02b6301ad4effbb5b12f96307e5f",
+    "scratch/reconcile/continue_series.py": "d99c6c617d648ba4e893f32d4cd64d22415ed61fe0e8d9800471e48a395ccca7",
+    "scratch/reconcile/audit.py": "30d44a554d4b99b5ecf9cc29dd61db40c14d4a1820e1d7706044346b7d0094ef",
+    "scratch/reconcile/initial-registry.json": "79a7189fdebcebf6592ff009a61767552614f887364f8e3d85aa88fe4cdea7fb"
+  }
+}
