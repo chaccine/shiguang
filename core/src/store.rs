@@ -1579,7 +1579,7 @@ impl Store {
     pub fn preview_path(&self, asset_id: &str) -> PathBuf {
         self.root
             .join(PREVIEW_DIR)
-            .join(format!("{asset_id}.thumb-v2.png"))
+            .join(format!("{asset_id}.thumb-v3.png"))
     }
 
     /// 生成缺失的预览；已有预览不重复写。返回本次生成的 assetId。

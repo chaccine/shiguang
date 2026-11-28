@@ -54,7 +54,7 @@ export function museumPhotosPage(rows: readonly RecordRow[], order: SortOrder, c
       if(items.length>=limit) {more=true;break;}
       const f=r.formal,p=f.photos[index]!;
       items.push({recordId:r.recordId,title:f.title.length>0?f.title:null,eventDate:f.eventDate,eventTime:f.eventTime,
-        isFuture:f.eventDate>today,photoIndex:index,photoUseId:p.photoUseId,assetId:p.assetId,caption:p.caption,thumbnailKey:`${p.assetId}.thumb-v2.png`});
+        isFuture:f.eventDate>today,photoIndex:index,photoUseId:p.photoUseId,assetId:p.assetId,caption:p.caption,thumbnailKey:`${p.assetId}.thumb-v3.png`});
       last={row:r,index};
     }
   }

@@ -713,8 +713,9 @@ button { cursor: pointer; }
 .entry-read .timeline-cover {
   display: grid;
   place-items: center;
-  aspect-ratio: 4 / 3;
-  max-height: 30rem;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  max-height: 33dvh;
   min-height: 0;
   margin: 0 0 var(--space-3);
   padding: 0;

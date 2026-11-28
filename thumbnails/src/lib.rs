@@ -1,6 +1,11 @@
 //! Bounded real image decoding, outside the domain core. Originals are read-only.
 use std::{io::Cursor, path::Path};
 
+/// Long-edge cap for cached previews, sized for a near-full-width phone
+/// timeline cover at typical device pixel ratios. Not an original copy.
+pub const MAX_EDGE: u32 = 1080;
+
+
 fn portable(source: &Path, target: &Path) -> Result<(), String> {
     if std::fs::metadata(source).map_err(|e| e.to_string())?.len() > 128 * 1024 * 1024 {
         return Err("source exceeds decode budget".into());
@@ -15,7 +20,7 @@ fn portable(source: &Path, target: &Path) -> Result<(), String> {
     limits.max_image_height = Some(32000);
     reader.limits(limits);
     let decoded = reader.decode().map_err(|e| e.to_string())?;
-    let thumb = decoded.thumbnail(320, 320);
+    let thumb = decoded.thumbnail(MAX_EDGE, MAX_EDGE);
     let mut bytes = Cursor::new(Vec::new());
     thumb
         .write_to(&mut bytes, image::ImageFormat::Png)
@@ -51,10 +56,12 @@ fn native(source: &Path, target: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let temporary = target.with_extension("native.png");
     #[cfg(target_os = "macos")]
+    let max_edge = MAX_EDGE.to_string();
+    #[cfg(target_os = "macos")]
     let mut command = {
         // sips uses the system ImageIO codecs, including HEIF where supported.
         let mut c = Command::new("/usr/bin/sips");
-        c.args(["-s", "format", "png", "-Z", "320"])
+        c.args(["-s", "format", "png", "-Z", &max_edge])
             .arg(source)
             .arg("--out")
             .arg(&temporary);
@@ -73,7 +80,7 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName PresentationCore
 $b=New-Object Windows.Media.Imaging.BitmapImage
 $b.BeginInit(); $b.CacheOption=[Windows.Media.Imaging.BitmapCacheOption]::OnLoad
-$b.DecodePixelWidth=320; $b.UriSource=New-Object Uri($env:SHIGUANG_THUMB_SOURCE); $b.EndInit()
+$b.DecodePixelWidth=1080; $b.UriSource=New-Object Uri($env:SHIGUANG_THUMB_SOURCE); $b.EndInit()
 $e=New-Object Windows.Media.Imaging.PngBitmapEncoder
 $e.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($b))
 $f=[IO.File]::Create($env:SHIGUANG_THUMB_TARGET)
@@ -149,8 +156,8 @@ mod tests {
             let cache = store.preview_path(&photo.asset_id);
             let cached = std::fs::read(&cache).unwrap();
             let decoded_cache = image::open(&cache).unwrap();
-            assert!(decoded_cache.width() <= 320 && decoded_cache.height() <= 320);
-            // 有损 WebP 把合成花纹压得很小，可能小于 320px PNG 预览；尺寸上限才是硬约束。
+            assert!(decoded_cache.width() <= MAX_EDGE && decoded_cache.height() <= MAX_EDGE);
+            // 有损 WebP 把合成花纹压得很小，可能小于 1080px PNG 预览；尺寸上限才是硬约束。
             assert!(
                 cached.len() < original.len() || original.len() < 64 * 1024,
                 "{extension} original={} cached={}",
@@ -177,10 +184,10 @@ mod tests {
             generate(&source, &target).unwrap();
             let first = std::fs::read(&target).unwrap();
             let decoded_first = image::open(&target).unwrap();
-            assert!(decoded_first.width() <= 320 && decoded_first.height() <= 320);
+            assert!(decoded_first.width() <= MAX_EDGE && decoded_first.height() <= MAX_EDGE);
             assert!(first.len() < original.len() || original.len() < 64 * 1024);
             let decoded = image::open(&target).unwrap();
-            assert!(decoded.width() <= 320 && decoded.height() <= 320);
+            assert!(decoded.width() <= MAX_EDGE && decoded.height() <= MAX_EDGE);
             std::fs::remove_file(&target).unwrap();
             generate(&source, &target).unwrap();
             assert_eq!(std::fs::read(&target).unwrap(), first);

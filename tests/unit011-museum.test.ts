@@ -115,7 +115,7 @@ test("U011 photo wall pages use formal photo positions with independent captions
     assert.equal(new Set(tiles.map((p) => p.assetId)).size, 1);
     for (const tile of tiles) {
       const f = rows.find((r) => r.recordId === tile.recordId)!.formal!, photo = f.photos[tile.photoIndex]!;
-      assert.equal(tile.caption, photo.caption); assert.equal(tile.thumbnailKey, "ast-shared.thumb-v2.png");
+      assert.equal(tile.caption, photo.caption); assert.equal(tile.thumbnailKey, "ast-shared.thumb-v3.png");
       assert.equal(tile.eventDate, f.eventDate); assert.equal(tile.title, f.title || null);
       assert.equal(tile.isFuture, f.eventDate > TODAY);
     }

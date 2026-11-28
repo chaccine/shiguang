@@ -764,7 +764,7 @@ export class MemoryAdapter implements ShiguangApi {
         return img;
       });
       try {
-        const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+        const scale = Math.min(1, 1080 / Math.max(bitmap.width, bitmap.height)); // matches thumbnails::MAX_EDGE
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(bitmap.width * scale));
         canvas.height = Math.max(1, Math.round(bitmap.height * scale));

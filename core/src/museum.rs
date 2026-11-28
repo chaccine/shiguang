@@ -34,7 +34,7 @@ pub struct PhotoTile {
     pub photo_use_id: String,
     pub asset_id: String,
     pub caption: String,
-    /// Existing previews/{assetId}.thumb-v2.png cache; never an original copy.
+    /// Existing previews/{assetId}.thumb-v3.png cache; never an original copy.
     pub thumbnail_key: String,
 }
 #[derive(Clone, Debug)]
@@ -239,7 +239,7 @@ pub fn photos_page(s: &State, order: Order, cursor: Option<String>, limit: usize
         PhotoTile { record_id:r.record_id.clone(), title:(!f.title.is_empty()).then(|| f.title.clone()),
             event_date:f.event_date.clone(), event_time:f.event_time.clone(), is_future:f.event_date.as_str()>today,
             photo_index:i, photo_use_id:p.photo_use_id.clone(), asset_id:p.asset_id.clone(), caption:p.caption.clone(),
-            thumbnail_key:format!("{}.thumb-v2.png",p.asset_id) }
+            thumbnail_key:format!("{}.thumb-v3.png",p.asset_id) }
     }).collect();
     Ok(PhotoPage { items, next_cursor, total })
 }

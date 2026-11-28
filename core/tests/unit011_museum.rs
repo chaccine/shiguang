@@ -116,7 +116,7 @@ fn photo_wall_counts_uses_not_assets_and_keeps_formal_position_context_caption()
         assert_eq!(tiles.iter().map(|p|&p.asset_id).collect::<BTreeSet<_>>().len(),1);
         for tile in tiles {
             let row=r.iter().find(|r|r.record_id==tile.record_id).unwrap();let f=row.formal.as_ref().unwrap();let p=&f.photos[tile.photo_index];
-            assert_eq!(tile.caption,p.caption);assert_eq!(tile.thumbnail_key,"ast-shared.thumb-v2.png");
+            assert_eq!(tile.caption,p.caption);assert_eq!(tile.thumbnail_key,"ast-shared.thumb-v3.png");
             assert_eq!(tile.event_date,f.event_date);assert_eq!(tile.title,(!f.title.is_empty()).then(||f.title.clone()));
             assert_eq!(tile.is_future,f.event_date.as_str()>DAY);
         }
